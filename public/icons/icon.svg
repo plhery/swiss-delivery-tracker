@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Swiss-red rounded tile -->
+  <rect width="512" height="512" rx="116" fill="#dc0018"/>
+  <!-- Parcel -->
+  <g>
+    <rect x="126" y="166" width="260" height="220" rx="26" fill="#fff"/>
+    <!-- lid shading -->
+    <rect x="126" y="166" width="260" height="58" rx="26" fill="#f1e9e0"/>
+    <rect x="126" y="198" width="260" height="26" fill="#f1e9e0"/>
+    <!-- tape -->
+    <rect x="236" y="166" width="40" height="220" fill="#e0d5c8"/>
+    <!-- Swiss cross on the parcel -->
+    <g fill="#dc0018">
+      <rect x="238" y="262" width="36" height="92" rx="8"/>
+      <rect x="210" y="290" width="92" height="36" rx="8"/>
+    </g>
+  </g>
+</svg>
