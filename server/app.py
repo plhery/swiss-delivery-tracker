@@ -116,12 +116,15 @@ class Handler(BaseHTTPRequestHandler):
         self._security_headers()
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header(
-            "Cache-Control",
-            "public, max-age=31536000, immutable"
-            if candidate.parent.name == "assets"
-            else "no-cache",
-        )
+        if candidate.parent.name == "assets":
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        else:
+            # HTML, the service worker and its registration script must always be
+            # re-fetched. A stale app shell can point at an obsolete JavaScript
+            # bundle and make durable server data appear to have disappeared.
+            self.send_header("Cache-Control", "no-store, max-age=0, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         self.end_headers()
         if not head_only:
             self.wfile.write(body)
