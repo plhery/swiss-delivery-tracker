@@ -42,6 +42,9 @@ export function ParcelCard({
             {carrier.name} · {formatTrackingNumber(parcel.trackingNumber)}
           </span>
         </div>
+        {parcel.syncStatus === 'error' && (
+          <p className="parcel-card__sync-error">Sync needs attention</p>
+        )}
         <ProgressTrack stage={last?.stage ?? null} />
       </div>
       <div className="parcel-card__chevron" aria-hidden="true">

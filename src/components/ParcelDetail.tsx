@@ -40,6 +40,17 @@ export function ParcelDetail({
         <p className="detail__tracking">
           {carrier.name} · {formatTrackingNumber(parcel.trackingNumber)}
         </p>
+        {parcel.expectedDelivery && (
+          <p className="detail__meta">Expected: {parcel.expectedDelivery}</p>
+        )}
+        {parcel.lastSyncedAt && (
+          <p className="detail__meta">
+            Last checked: {new Date(parcel.lastSyncedAt).toLocaleString('de-CH')}
+          </p>
+        )}
+        {parcel.syncError && (
+          <p className="detail__sync-error" role="status">{parcel.syncError}</p>
+        )}
         {trackingUrl && (
           <a
             className="detail__carrier-link"

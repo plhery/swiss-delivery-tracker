@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSupabaseRepo } from './supabaseRepo';
 
 const packageRow = {
@@ -51,6 +51,10 @@ function fakeClient(overrides: { session?: object | null } = {}) {
 }
 
 describe('createSupabaseRepo', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('maps package and event rows to the app model', async () => {
     const { client } = fakeClient();
     const repo = createSupabaseRepo(client);
@@ -75,10 +79,10 @@ describe('createSupabaseRepo', () => {
     expect(spies.signInAnonymously).not.toHaveBeenCalled();
   });
 
-  it('signs in anonymously when there is no session', async () => {
+  it('requires an explicit session instead of silently creating an anonymous identity', async () => {
     const { client, spies } = fakeClient({ session: null });
-    await createSupabaseRepo(client).list();
-    expect(spies.signInAnonymously).toHaveBeenCalledTimes(1);
+    await expect(createSupabaseRepo(client).list()).rejects.toThrow(/sign in/i);
+    expect(spies.signInAnonymously).not.toHaveBeenCalled();
   });
 
   it('normalises the tracking number and detects the carrier on insert', async () => {
@@ -98,5 +102,19 @@ describe('createSupabaseRepo', () => {
     const { client, spies } = fakeClient();
     await createSupabaseRepo(client).remove('pkg-1');
     expect(spies.eq).toHaveBeenCalledWith('id', 'pkg-1');
+  });
+
+  it('requests an authenticated server-side sync before reloading', async () => {
+    const { client } = fakeClient({ session: { access_token: 'session-token' } });
+    const fetch = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetch);
+
+    const parcels = await createSupabaseRepo(client).refresh();
+
+    expect(fetch).toHaveBeenCalledWith('/api/sync', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer session-token' },
+    });
+    expect(parcels).toHaveLength(1);
   });
 });

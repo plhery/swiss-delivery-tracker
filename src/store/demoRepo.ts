@@ -98,6 +98,7 @@ function seedParcels(now: number): ParcelWithEvents[] {
     label: 'Coffee beans ☕',
     carrier: 'swiss-post',
     createdAt: iso(72 * HOUR),
+    syncStatus: 'ok',
     events: [],
   };
   coffee.events = [
@@ -114,6 +115,7 @@ function seedParcels(now: number): ParcelWithEvents[] {
     label: 'New sneakers 👟',
     carrier: 'dhl',
     createdAt: iso(30 * HOUR),
+    syncStatus: 'ok',
     events: [],
   };
   sneakers.events = [
@@ -129,6 +131,7 @@ function seedParcels(now: number): ParcelWithEvents[] {
     label: 'Birthday gift 🎁',
     carrier: 'intl-post',
     createdAt: iso(50 * HOUR),
+    syncStatus: 'ok',
     events: [],
   };
   gift.events = [
@@ -191,8 +194,9 @@ export function createDemoRepo(
         id: uid(),
         trackingNumber,
         label: input.label,
-        carrier: detectCarrier(trackingNumber),
+        carrier: input.carrier ?? detectCarrier(trackingNumber),
         createdAt,
+        syncStatus: 'ok',
         events: [],
       };
       parcel.events = [event(parcel.id, 'registered', createdAt)];

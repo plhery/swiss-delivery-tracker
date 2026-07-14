@@ -68,6 +68,16 @@ describe('createDemoRepo', () => {
     );
   });
 
+  it('keeps a manually selected carrier when the number is ambiguous', async () => {
+    const parcel = await createDemoRepo(window.localStorage).add({
+      trackingNumber: 'ABC123456',
+      label: 'Quickpac parcel',
+      carrier: 'quickpac',
+    });
+
+    expect(parcel.carrier).toBe('quickpac');
+  });
+
   it('removes a parcel', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Bye' });

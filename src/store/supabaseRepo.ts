@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { detectCarrier, normalizeTrackingNumber } from '../lib/carriers';
 import type {
+  CarrierId,
   NewParcelInput,
   ParcelRepo,
   ParcelWithEvents,
@@ -14,6 +15,11 @@ interface PackageRow {
   label: string;
   carrier: string;
   created_at: string;
+  expected_delivery: string | null;
+  last_status_text: string | null;
+  last_synced_at: string | null;
+  sync_status: string | null;
+  sync_error: string | null;
   tracking_events: EventRow[] | null;
 }
 
@@ -42,18 +48,22 @@ function toParcel(row: PackageRow): ParcelWithEvents {
     id: row.id,
     trackingNumber: row.tracking_number,
     label: row.label,
-    carrier: detectCarrier(row.tracking_number),
+    carrier: (row.carrier || detectCarrier(row.tracking_number)) as CarrierId,
     createdAt: row.created_at,
+    expectedDelivery: row.expected_delivery ?? undefined,
+    lastStatusText: row.last_status_text ?? undefined,
+    lastSyncedAt: row.last_synced_at ?? undefined,
+    syncStatus: (row.sync_status ?? 'pending') as ParcelWithEvents['syncStatus'],
+    syncError: row.sync_error ?? undefined,
     events: (row.tracking_events ?? []).map(toEvent),
   };
 }
 
-/** Signs in anonymously on first use so RLS has a user to scope rows to. */
+/** Data access always requires an explicit permanent or legacy anonymous session. */
 async function ensureSession(supabase: SupabaseClient): Promise<void> {
   const { data } = await supabase.auth.getSession();
   if (data.session) return;
-  const { error } = await supabase.auth.signInAnonymously();
-  if (error) throw new Error(`Supabase sign-in failed: ${error.message}`);
+  throw new Error('Sign in to access your deliveries.');
 }
 
 export function createSupabaseRepo(supabase: SupabaseClient): ParcelRepo {
@@ -74,12 +84,13 @@ export function createSupabaseRepo(supabase: SupabaseClient): ParcelRepo {
     async add(input: NewParcelInput): Promise<ParcelWithEvents> {
       await ensureSession(supabase);
       const trackingNumber = normalizeTrackingNumber(input.trackingNumber);
+      const carrier = input.carrier ?? detectCarrier(trackingNumber);
       const { data, error } = await supabase
         .from('packages')
         .insert({
           tracking_number: trackingNumber,
           label: input.label,
-          carrier: detectCarrier(trackingNumber),
+          carrier,
         })
         .select('*, tracking_events(*)')
         .single();
@@ -92,7 +103,22 @@ export function createSupabaseRepo(supabase: SupabaseClient): ParcelRepo {
       if (error) throw new Error(error.message);
     },
 
-    refresh: list,
+    async refresh(): Promise<ParcelWithEvents[]> {
+      await ensureSession(supabase);
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return list();
+
+      const response = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? `Tracking sync failed (${response.status})`);
+      }
+      return list();
+    },
 
     subscribe(onChange: () => void): () => void {
       const channel = supabase

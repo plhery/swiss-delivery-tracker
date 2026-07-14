@@ -51,7 +51,7 @@ describe('App', () => {
       '99.34.111111.22222222',
     );
     expect(
-      within(sheet).getByText(/looks like a swiss post parcel/i),
+      within(sheet).getByText(/swiss post will sync automatically/i),
     ).toBeInTheDocument();
 
     await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));

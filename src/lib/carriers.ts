@@ -6,6 +6,8 @@ export interface CarrierInfo {
   /** Accent used for the carrier chip in the UI. */
   color: string;
   trackingUrl?: (trackingNumber: string) => string;
+  /** Whether the deployed worker can fetch this carrier without private credentials. */
+  automatic: boolean;
 }
 
 export const CARRIERS: Record<CarrierId, CarrierInfo> = {
@@ -14,7 +16,61 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     name: 'Swiss Post',
     color: '#ffcc00',
     trackingUrl: (n) =>
-      `https://service.post.ch/ekp-web/ui/entry/search/${encodeURIComponent(n)}`,
+      `https://www.post.ch/en/receiving-mail/track-consignments?formattedParcelCodes=${encodeURIComponent(n)}`,
+    automatic: true,
+  },
+  quickpac: {
+    id: 'quickpac',
+    name: 'Quickpac',
+    color: '#ed1c24',
+    trackingUrl: (n) => `https://quickpac.ch/en/tracking?parcel=${encodeURIComponent(n)}`,
+    automatic: true,
+  },
+  planzer: {
+    id: 'planzer',
+    name: 'Planzer',
+    color: '#e30613',
+    trackingUrl: (n) => `https://planzer.ch/en/package-tracking/?tracking=${encodeURIComponent(n)}`,
+    automatic: true,
+  },
+  aliexpress: {
+    id: 'aliexpress',
+    name: 'AliExpress / Cainiao',
+    color: '#ff4747',
+    trackingUrl: (n) => `https://global.cainiao.com/detail.htm?mailNoList=${encodeURIComponent(n)}`,
+    automatic: true,
+  },
+  sunyou: {
+    id: 'sunyou',
+    name: 'SunYou',
+    color: '#f39800',
+    trackingUrl: (n) => `https://sypost.net/search?trackNumber=${encodeURIComponent(n)}`,
+    automatic: true,
+  },
+  hermes: {
+    id: 'hermes',
+    name: 'Hermes',
+    color: '#0091cd',
+    automatic: true,
+  },
+  'spring-gds': {
+    id: 'spring-gds',
+    name: 'Spring GDS',
+    color: '#ef7d00',
+    trackingUrl: (n) => `https://postnl.post/details/${encodeURIComponent(n)}`,
+    automatic: true,
+  },
+  postlogistics: {
+    id: 'postlogistics',
+    name: 'PostLogistics',
+    color: '#ffcc00',
+    automatic: true,
+  },
+  dachser: {
+    id: 'dachser',
+    name: 'Dachser',
+    color: '#005ca9',
+    automatic: false,
   },
   dhl: {
     id: 'dhl',
@@ -22,6 +78,7 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     color: '#ffcc00',
     trackingUrl: (n) =>
       `https://www.dhl.com/ch-en/home/tracking.html?tracking-id=${encodeURIComponent(n)}`,
+    automatic: false,
   },
   ups: {
     id: 'ups',
@@ -29,6 +86,7 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     color: '#351c15',
     trackingUrl: (n) =>
       `https://www.ups.com/track?tracknum=${encodeURIComponent(n)}`,
+    automatic: false,
   },
   fedex: {
     id: 'fedex',
@@ -36,6 +94,7 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     color: '#4d148c',
     trackingUrl: (n) =>
       `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(n)}`,
+    automatic: false,
   },
   dpd: {
     id: 'dpd',
@@ -43,18 +102,27 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     color: '#dc0032',
     trackingUrl: (n) =>
       `https://tracking.dpd.de/status/en_CH/parcel/${encodeURIComponent(n)}`,
+    automatic: false,
+  },
+  shipup: {
+    id: 'shipup',
+    name: 'ShipUp',
+    color: '#5c4ee5',
+    automatic: false,
   },
   'intl-post': {
     id: 'intl-post',
     name: 'International Post',
     color: '#2c6fb5',
     trackingUrl: (n) =>
-      `https://service.post.ch/ekp-web/ui/entry/search/${encodeURIComponent(n)}`,
+      `https://www.post.ch/en/receiving-mail/track-consignments?formattedParcelCodes=${encodeURIComponent(n)}`,
+    automatic: false,
   },
   unknown: {
     id: 'unknown',
     name: 'Carrier',
     color: '#8e8e93',
+    automatic: false,
   },
 };
 
@@ -104,3 +172,7 @@ export function formatTrackingNumber(raw: string): string {
 export function carrierInfo(id: CarrierId): CarrierInfo {
   return CARRIERS[id] ?? CARRIERS.unknown;
 }
+
+export const SELECTABLE_CARRIERS = Object.values(CARRIERS).filter(
+  (carrier) => carrier.id !== 'unknown' && carrier.id !== 'intl-post',
+);

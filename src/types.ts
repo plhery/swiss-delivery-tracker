@@ -1,11 +1,22 @@
 export type CarrierId =
   | 'swiss-post'
+  | 'quickpac'
+  | 'planzer'
+  | 'aliexpress'
+  | 'sunyou'
+  | 'hermes'
+  | 'spring-gds'
+  | 'postlogistics'
+  | 'dachser'
   | 'dhl'
   | 'ups'
   | 'fedex'
   | 'dpd'
+  | 'shipup'
   | 'intl-post'
   | 'unknown';
+
+export type SyncStatus = 'pending' | 'syncing' | 'ok' | 'waiting' | 'error' | 'unsupported';
 
 /**
  * The lifecycle of a parcel. The first five are the "happy path" in order;
@@ -28,6 +39,11 @@ export interface Parcel {
   label: string;
   carrier: CarrierId;
   createdAt: string; // ISO timestamp
+  expectedDelivery?: string;
+  lastStatusText?: string;
+  lastSyncedAt?: string;
+  syncStatus: SyncStatus;
+  syncError?: string;
 }
 
 export interface TrackingEvent {
@@ -46,6 +62,7 @@ export interface ParcelWithEvents extends Parcel {
 export interface NewParcelInput {
   trackingNumber: string;
   label: string;
+  carrier?: CarrierId;
 }
 
 /** Storage backends: Supabase when configured, local demo otherwise. */

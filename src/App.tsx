@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { AddParcelSheet } from './components/AddParcelSheet';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
@@ -6,7 +6,7 @@ import { isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
 
-export default function App() {
+export default function App({ accountControl }: { accountControl?: ReactNode }) {
   const { parcels, loading, refreshing, error, mode, addParcel, removeParcel, refresh } =
     useParcels();
   const [adding, setAdding] = useState(false);
@@ -34,17 +34,20 @@ export default function App() {
       <header className="app__header">
         <div className="app__header-row">
           <h1 className="app__title">My Deliveries</h1>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Refresh tracking"
-            onClick={() => void refresh()}
-            disabled={refreshing}
-          >
-            <span className={refreshing ? 'spin' : undefined} aria-hidden="true">
-              ⟳
-            </span>
-          </button>
+          <div className="app__header-actions">
+            {accountControl}
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Refresh tracking"
+              onClick={() => void refresh()}
+              disabled={refreshing}
+            >
+              <span className={refreshing ? 'spin' : undefined} aria-hidden="true">
+                ⟳
+              </span>
+            </button>
+          </div>
         </div>
         <p className="app__subtitle">
           {loading

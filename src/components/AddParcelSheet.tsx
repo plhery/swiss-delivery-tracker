@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { carrierInfo, detectCarrier } from '../lib/carriers';
-import type { NewParcelInput } from '../types';
+import { carrierInfo, detectCarrier, SELECTABLE_CARRIERS } from '../lib/carriers';
+import type { CarrierId, NewParcelInput } from '../types';
 
 export function AddParcelSheet({
   onAdd,
@@ -11,11 +11,13 @@ export function AddParcelSheet({
 }) {
   const [label, setLabel] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [selectedCarrier, setSelectedCarrier] = useState<CarrierId | 'auto'>('auto');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const detectedCarrier = trackingNumber.trim() ? detectCarrier(trackingNumber) : 'unknown';
   const carrier = trackingNumber.trim()
-    ? carrierInfo(detectCarrier(trackingNumber))
+    ? carrierInfo(selectedCarrier === 'auto' ? detectedCarrier : selectedCarrier)
     : null;
 
   async function handleSubmit(e: FormEvent) {
@@ -24,7 +26,11 @@ export function AddParcelSheet({
     setSaving(true);
     setError(null);
     try {
-      await onAdd({ trackingNumber: trackingNumber.trim(), label: label.trim() });
+      await onAdd({
+        trackingNumber: trackingNumber.trim(),
+        label: label.trim(),
+        carrier: selectedCarrier === 'auto' ? detectedCarrier : selectedCarrier,
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add the parcel');
@@ -69,11 +75,28 @@ export function AddParcelSheet({
               required
             />
           </label>
+          <label className="field">
+            <span className="field__label">Carrier</span>
+            <select
+              className="field__input"
+              value={selectedCarrier}
+              onChange={(e) => setSelectedCarrier(e.target.value as CarrierId | 'auto')}
+            >
+              <option value="auto">Detect automatically</option>
+              {SELECTABLE_CARRIERS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}{option.automatic ? '' : ' (link only)'}
+                </option>
+              ))}
+            </select>
+          </label>
           {carrier && (
             <p className="sheet__carrier-hint">
               {carrier.id === 'unknown'
-                ? "We couldn't recognise this format — we'll still track it."
-                : `Looks like a ${carrier.name} parcel 🎉`}
+                ? "We couldn't recognise this format. Choose the carrier to enable syncing."
+                : carrier.automatic
+                  ? `${carrier.name} will sync automatically.`
+                  : `${carrier.name} is saved with a link; automatic syncing needs a supported adapter.`}
             </p>
           )}
           {error && (
