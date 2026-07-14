@@ -24,8 +24,8 @@ class FakeClient:
         self.updates = []
         self.events = []
 
-    def list_active_packages(self, user_id=None):
-        return [p for p in self.packages if user_id is None or p["user_id"] == user_id]
+    def list_active_packages(self):
+        return list(self.packages)
 
     def update_package(self, package_id, values):
         self.updates.append((package_id, values))
@@ -87,7 +87,7 @@ class TrackingSyncTests(unittest.TestCase):
             now=lambda: datetime(2026, 7, 14, 9, tzinfo=timezone.utc),
         )
 
-        summary = service.sync("user-1")
+        summary = service.sync()
 
         self.assertEqual(summary.updated, 1)
         self.assertEqual(len(client.events), 1)

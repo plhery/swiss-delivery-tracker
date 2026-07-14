@@ -101,8 +101,7 @@ button:disabled {
   gap: 11px;
 }
 
-.app__brand-mark,
-.auth-card__mark {
+.app__brand-mark {
   position: relative;
   display: grid;
   place-items: center;
@@ -114,8 +113,7 @@ button:disabled {
   background: var(--ink);
 }
 
-.app__brand-mark::before,
-.auth-card__mark::before {
+.app__brand-mark::before {
   content: "";
   width: 22px;
   height: 15px;
@@ -123,8 +121,7 @@ button:disabled {
   border-radius: 2px;
 }
 
-.app__brand-mark span,
-.auth-card__mark span {
+.app__brand-mark span {
   position: absolute;
   top: 15px;
   width: 17px;
@@ -136,7 +133,6 @@ button:disabled {
 .app__eyebrow,
 .sheet__eyebrow,
 .detail__eyebrow,
-.auth-card__eyebrow,
 .empty-state__eyebrow,
 .detail__section-heading p {
   margin: 0;
@@ -163,8 +159,7 @@ button:disabled {
   gap: 8px;
 }
 
-.icon-button,
-.account-button {
+.icon-button {
   height: 40px;
   border: 1px solid rgba(25, 25, 22, 0.16);
   background: rgba(255, 255, 255, 0.34);
@@ -191,20 +186,6 @@ button:disabled {
 
 .icon-button:disabled {
   opacity: 0.55;
-}
-
-.account-button {
-  min-width: 40px;
-  padding: 0 11px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 760;
-}
-
-.account-button--warning {
-  border-color: var(--orange);
-  background: var(--orange);
-  color: white;
 }
 
 .spin {
@@ -730,8 +711,7 @@ button:disabled {
   cursor: pointer;
 }
 
-.sheet__intro,
-.sheet__copy {
+.sheet__intro {
   margin: 8px 0 20px;
   color: var(--ink-soft);
   font-size: 13px;
@@ -785,8 +765,7 @@ button:disabled {
 }
 
 .sheet__carrier-hint,
-.sheet__error,
-.sheet__success {
+.sheet__error {
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
@@ -801,11 +780,6 @@ button:disabled {
 
 .sheet__error {
   color: #8a481f;
-}
-
-.sheet__success {
-  margin-top: 12px;
-  color: var(--green);
 }
 
 .sheet__actions {
@@ -844,73 +818,6 @@ button:disabled {
   border-color: color-mix(in srgb, var(--orange) 40%, var(--line));
   background: var(--orange-soft);
   color: #7d3c16;
-}
-
-.account-sheet__signout {
-  width: 100%;
-  margin-top: 18px;
-}
-
-.auth-screen {
-  min-height: 100dvh;
-  display: grid;
-  padding: calc(28px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
-  place-items: center;
-  background: var(--yellow);
-}
-
-.auth-card {
-  display: flex;
-  width: min(100%, 410px);
-  padding: 28px;
-  flex-direction: column;
-  gap: 15px;
-  border: 1px solid rgba(25, 25, 22, 0.13);
-  border-radius: 22px;
-  background: var(--paper);
-  box-shadow: 0 22px 55px rgba(25, 25, 22, 0.18);
-}
-
-.auth-card--centered {
-  color: var(--ink-soft);
-  text-align: center;
-}
-
-.auth-card__mark {
-  width: 50px;
-  height: 50px;
-  margin-bottom: 2px;
-}
-
-.auth-card__eyebrow {
-  margin-bottom: -12px;
-  color: var(--orange);
-}
-
-.auth-card h1,
-.auth-card p {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-.auth-card h1 {
-  font-size: 30px;
-  letter-spacing: -0.045em;
-}
-
-.auth-card > p:not(.auth-card__eyebrow) {
-  color: var(--ink-soft);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.auth-card__switch {
-  border: 0;
-  background: transparent;
-  color: #a64b18;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .detail {

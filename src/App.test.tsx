@@ -183,7 +183,7 @@ describe('App', () => {
 
   it('shows initial-load and refresh failures', async () => {
     const failingRepo: ParcelRepo = {
-      mode: 'supabase',
+      mode: 'api',
       list: vi.fn().mockRejectedValue(new Error('Could not load deliveries')),
       add: vi.fn(),
       remove: vi.fn(),
@@ -214,7 +214,7 @@ describe('App', () => {
       events: [],
     };
     const repo: ParcelRepo = {
-      mode: 'supabase',
+      mode: 'api',
       list: vi.fn().mockResolvedValue([parcel]),
       add: vi.fn(),
       remove: vi.fn(),

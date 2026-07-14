@@ -72,17 +72,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build production image
-        run: >-
-          docker build
-          --build-arg VITE_SUPABASE_URL=https://supabase.example.test
-          --build-arg VITE_SUPABASE_ANON_KEY=test-anon-key
-          -t delivery-tracker:test .
+        run: docker build -t delivery-tracker:test .
       - name: Start and verify the application port
         run: |
           set -euo pipefail
           docker run -d --name delivery-tracker-test -p 127.0.0.1:3000:3000 \
             -e SUPABASE_URL=http://supabase.invalid \
-            -e SUPABASE_ANON_KEY=test-anon-key \
             -e SUPABASE_SERVICE_ROLE_KEY=test-service-key \
             delivery-tracker:test
           trap 'docker logs delivery-tracker-test; docker rm -f delivery-tracker-test' EXIT

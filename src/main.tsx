@@ -1,35 +1,19 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { AuthGate } from './auth/AuthGate';
-import { getSupabase } from './lib/supabase';
+import { createApiRepo } from './store/apiRepo';
 import { createDemoRepo } from './store/demoRepo';
 import { ParcelsProvider } from './store/ParcelsContext';
-import { createSupabaseRepo } from './store/supabaseRepo';
 import './styles.css';
 
-const supabase = getSupabase();
 const root = createRoot(document.getElementById('root')!);
+const useDemo = import.meta.env.DEV && import.meta.env.VITE_USE_API !== 'true';
+const repo = useDemo ? createDemoRepo() : createApiRepo();
 
-if (supabase) {
-  const repo = createSupabaseRepo(supabase);
-  root.render(
-    <StrictMode>
-      <AuthGate supabase={supabase}>
-        {(accountControl) => (
-          <ParcelsProvider repo={repo}>
-            <App accountControl={accountControl} />
-          </ParcelsProvider>
-        )}
-      </AuthGate>
-    </StrictMode>,
-  );
-} else {
-  root.render(
-    <StrictMode>
-      <ParcelsProvider repo={createDemoRepo()}>
-        <App />
-      </ParcelsProvider>
-    </StrictMode>,
-  );
-}
+root.render(
+  <StrictMode>
+    <ParcelsProvider repo={repo}>
+      <App />
+    </ParcelsProvider>
+  </StrictMode>,
+);

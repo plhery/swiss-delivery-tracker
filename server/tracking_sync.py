@@ -181,10 +181,10 @@ class TrackingSyncService:
         self.now = now
         self.lock = threading.Lock()
 
-    def sync(self, user_id: str | None = None) -> SyncSummary:
+    def sync(self) -> SyncSummary:
         summary = SyncSummary()
         with self.lock:
-            for package in self.client.list_active_packages(user_id):
+            for package in self.client.list_active_packages():
                 summary.checked += 1
                 outcome = self._sync_package(package)
                 setattr(summary, outcome, getattr(summary, outcome) + 1)

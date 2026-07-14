@@ -65,14 +65,14 @@ export interface NewParcelInput {
   carrier?: CarrierId;
 }
 
-/** Storage backends: Supabase when configured, local demo otherwise. */
+/** Storage backends: the shared server API in production, local demo in development. */
 export interface ParcelRepo {
-  readonly mode: 'supabase' | 'demo';
+  readonly mode: 'api' | 'demo';
   list(): Promise<ParcelWithEvents[]>;
   add(input: NewParcelInput): Promise<ParcelWithEvents>;
   remove(id: string): Promise<void>;
   /** Re-sync tracking; in demo mode this advances the simulation. */
   refresh(): Promise<ParcelWithEvents[]>;
-  /** Optional live updates (Supabase realtime). Returns unsubscribe. */
+  /** Optional shared-data polling. Returns unsubscribe. */
   subscribe?(onChange: () => void): () => void;
 }

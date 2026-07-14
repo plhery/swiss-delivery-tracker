@@ -10,13 +10,14 @@ from typing import Any
 
 
 class SupabaseError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 class SupabaseServiceClient:
-    def __init__(self, url: str, anon_key: str, service_role_key: str, timeout: int = 20):
+    def __init__(self, url: str, service_role_key: str, timeout: int = 20):
         self.url = url.rstrip("/")
-        self.anon_key = anon_key
         self.service_role_key = service_role_key
         self.timeout = timeout
 
@@ -26,13 +27,12 @@ class SupabaseServiceClient:
         *,
         method: str = "GET",
         body: Any = None,
-        token: str | None = None,
         prefer: str | None = None,
     ) -> Any:
         headers = {
             "Accept": "application/json",
             "apikey": self.service_role_key,
-            "Authorization": f"Bearer {token or self.service_role_key}",
+            "Authorization": f"Bearer {self.service_role_key}",
         }
         data = None
         if body is not None:
@@ -54,27 +54,72 @@ class SupabaseServiceClient:
                 message = json.loads(payload).get("message") or payload
             except json.JSONDecodeError:
                 message = payload
-            raise SupabaseError(f"Supabase {method} {path} failed ({exc.code}): {message}") from exc
+            raise SupabaseError(
+                f"Supabase {method} {path} failed ({exc.code}): {message}",
+                status=exc.code,
+            ) from exc
         except urllib.error.URLError as exc:
             raise SupabaseError(f"Supabase is unreachable: {exc.reason}") from exc
 
-    def auth_user(self, access_token: str) -> dict[str, Any]:
-        request = urllib.request.Request(
-            f"{self.url}/auth/v1/user",
-            headers={
-                "Accept": "application/json",
-                "apikey": self.anon_key,
-                "Authorization": f"Bearer {access_token}",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as exc:
-            exc.read()
-            raise SupabaseError("The delivery session is invalid or expired") from exc
+    def list_packages(self) -> list[dict[str, Any]]:
+        params = [
+            (
+                "select",
+                "id,tracking_number,label,carrier,created_at,expected_delivery,"
+                "last_status_text,last_synced_at,sync_status,sync_error,"
+                "tracking_events(id,package_id,stage,description,location,occurred_at)",
+            ),
+            ("archived_at", "is.null"),
+            ("order", "created_at.desc"),
+        ]
+        query = urllib.parse.urlencode(params, safe="().,*")
+        return self._request(f"/rest/v1/packages?{query}") or []
 
-    def list_active_packages(self, user_id: str | None = None) -> list[dict[str, Any]]:
+    def get_package(self, package_id: str) -> dict[str, Any] | None:
+        params = [
+            (
+                "select",
+                "id,tracking_number,label,carrier,created_at,expected_delivery,"
+                "last_status_text,last_synced_at,sync_status,sync_error,"
+                "tracking_events(id,package_id,stage,description,location,occurred_at)",
+            ),
+            ("id", f"eq.{package_id}"),
+            ("limit", "1"),
+        ]
+        query = urllib.parse.urlencode(params, safe="().,*")
+        rows = self._request(f"/rest/v1/packages?{query}") or []
+        return rows[0] if rows else None
+
+    def create_package(
+        self, tracking_number: str, label: str, carrier: str
+    ) -> dict[str, Any]:
+        rows = self._request(
+            "/rest/v1/packages",
+            method="POST",
+            body={
+                "user_id": None,
+                "tracking_number": tracking_number,
+                "label": label,
+                "carrier": carrier,
+            },
+            prefer="return=representation",
+        ) or []
+        if not rows:
+            raise SupabaseError("Supabase did not return the new package")
+        package = self.get_package(str(rows[0]["id"]))
+        if not package:
+            raise SupabaseError("The new package could not be reloaded")
+        return package
+
+    def delete_package(self, package_id: str) -> None:
+        query = urllib.parse.urlencode({"id": f"eq.{package_id}"})
+        self._request(
+            f"/rest/v1/packages?{query}",
+            method="DELETE",
+            prefer="return=minimal",
+        )
+
+    def list_active_packages(self) -> list[dict[str, Any]]:
         params: list[tuple[str, str]] = [
             (
                 "select",
@@ -84,8 +129,6 @@ class SupabaseServiceClient:
             ("current_stage", "not.in.(delivered,returned)"),
             ("order", "created_at.asc"),
         ]
-        if user_id:
-            params.append(("user_id", f"eq.{user_id}"))
         query = urllib.parse.urlencode(params, safe="().,*")
         return self._request(f"/rest/v1/packages?{query}") or []
 

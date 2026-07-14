@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import threading
 import time
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+from uuid import UUID
 
 from .supabase_client import SupabaseError, SupabaseServiceClient
 from .tracking_sync import TrackingSyncService
@@ -18,15 +21,20 @@ from .tracking_sync import TrackingSyncService
 DIST = Path(os.environ.get("STATIC_DIR", "/app/dist")).resolve()
 PORT = int(os.environ.get("PORT", "3000"))
 SYNC_INTERVAL = max(60, int(os.environ.get("SYNC_INTERVAL_SECONDS", "900")))
+MAX_JSON_BODY = 16_384
+VALID_CARRIERS = {
+    "swiss-post", "quickpac", "planzer", "aliexpress", "sunyou", "hermes",
+    "spring-gds", "postlogistics", "dachser", "dhl", "ups", "fedex", "dpd",
+    "shipup", "intl-post", "unknown",
+}
 
 
 def build_service() -> TrackingSyncService | None:
     url = os.environ.get("SUPABASE_URL", "")
-    anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-    if not all((url, anon_key, service_key)):
+    if not all((url, service_key)):
         return None
-    return TrackingSyncService(SupabaseServiceClient(url, anon_key, service_key))
+    return TrackingSyncService(SupabaseServiceClient(url, service_key))
 
 
 SERVICE = build_service()
@@ -70,6 +78,15 @@ class Handler(BaseHTTPRequestHandler):
             healthy = SERVICE is not None
             self._json(200 if healthy else 503, {"ok": healthy, **STATE})
             return
+        if path == "/api/packages":
+            if not SERVICE:
+                self._json(503, {"error": "The delivery database is not configured"})
+                return
+            try:
+                self._json(200, {"packages": SERVICE.client.list_packages()})
+            except SupabaseError as exc:
+                self._json(502, {"error": str(exc)})
+            return
         self._serve_static(path)
 
     def do_HEAD(self) -> None:  # noqa: N802
@@ -80,24 +97,79 @@ class Handler(BaseHTTPRequestHandler):
         self._serve_static(urlparse(self.path).path, head_only=True)
 
     def do_POST(self) -> None:  # noqa: N802
-        if urlparse(self.path).path != "/api/sync":
+        path = urlparse(self.path).path
+        if not SERVICE:
+            self._json(503, {"error": "The delivery database is not configured"})
+            return
+
+        if path == "/api/sync":
+            try:
+                self._json(200, SERVICE.sync().to_dict())
+            except Exception as exc:
+                self._json(502, {"error": str(exc)[:500]})
+            return
+
+        if path != "/api/packages":
             self._json(404, {"error": "Not found"})
             return
+
+        try:
+            payload = self._read_json()
+            raw_tracking = payload.get("trackingNumber", "")
+            label = payload.get("label", "")
+            carrier = payload.get("carrier", "unknown")
+            if not all(isinstance(value, str) for value in (raw_tracking, label, carrier)):
+                raise ValueError("Tracking number, label and carrier must be text")
+            tracking_number = re.sub(r"[\s.\-]", "", raw_tracking).upper()
+            if not 4 <= len(tracking_number) <= 40:
+                raise ValueError("Enter a tracking number between 4 and 40 characters")
+            if len(label) > 80:
+                raise ValueError("Parcel names can be at most 80 characters")
+            if carrier not in VALID_CARRIERS:
+                raise ValueError("Choose a supported carrier")
+            package = SERVICE.client.create_package(
+                tracking_number, label.strip(), carrier
+            )
+            self._json(HTTPStatus.CREATED, package)
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+        except SupabaseError as exc:
+            if exc.status == HTTPStatus.CONFLICT:
+                self._json(409, {"error": "This tracking number is already in your delivery box"})
+            else:
+                self._json(502, {"error": str(exc)})
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path
         if not SERVICE:
-            self._json(503, {"error": "The tracking worker is not configured"})
+            self._json(503, {"error": "The delivery database is not configured"})
             return
-        authorization = self.headers.get("Authorization", "")
-        if not authorization.startswith("Bearer "):
-            self._json(401, {"error": "Sign in before syncing deliveries"})
+        if not path.startswith("/api/packages/"):
+            self._json(404, {"error": "Not found"})
             return
         try:
-            user = SERVICE.client.auth_user(authorization.removeprefix("Bearer ").strip())
-            summary = SERVICE.sync(str(user["id"]))
-            self._json(200, summary.to_dict())
+            package_id = str(UUID(path.removeprefix("/api/packages/")))
+            SERVICE.client.delete_package(package_id)
+            self._json(200, {"ok": True})
+        except ValueError:
+            self._json(400, {"error": "Invalid package id"})
         except SupabaseError as exc:
-            self._json(401, {"error": str(exc)})
-        except Exception as exc:
-            self._json(502, {"error": str(exc)[:500]})
+            self._json(502, {"error": str(exc)})
+
+    def _read_json(self) -> dict[str, object]:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ValueError("Invalid request size") from exc
+        if length <= 0 or length > MAX_JSON_BODY:
+            raise ValueError("Invalid request size")
+        try:
+            payload = json.loads(self.rfile.read(length))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Send a valid JSON object") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("Send a valid JSON object")
+        return payload
 
     def _serve_static(self, path: str, head_only: bool = False) -> None:
         relative = unquote(path).lstrip("/") or "index.html"

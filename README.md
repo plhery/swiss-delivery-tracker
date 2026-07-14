@@ -1,166 +1,130 @@
 # Swiss Delivery Tracker
 
-A friendly, iPhone-first progressive web app to follow your package
-deliveries through every stage of their journey — announced, posted,
-in transit, out for delivery, delivered — with exceptions like customs
-holds, missed deliveries and pickup notices along the way.
+An iPhone-first PWA for following parcels from announcement to delivery, with
+special handling for customs, failed attempts and pickup notices.
 
-Built with **React + Vite + TypeScript**, backed by **Supabase**
-(Postgres, Auth, row-level security, realtime), and installable on an
-iPhone home screen as a PWA. A small Python service serves the built app
-and polls carriers in the background.
+The production app uses one deliberately simple security model:
+
+1. Cloudflare Access authenticates the only allowed user at the tunnel.
+2. The browser calls the same-origin Python API; it never connects to Supabase.
+3. The Python service uses a server-only Supabase service role to manage one
+   shared parcel collection.
+
+There is no second login, anonymous browser identity, Protect flow or recovery
+code. Every device admitted by Cloudflare Access sees the same packages.
 
 ## Features
 
-- 🚚 **Stage timeline** — every parcel shows its full journey, newest
-  update first, with a 5-step progress track on each card.
-- 🇨🇭 **Swiss-first carrier support** — automatic adapters for Swiss
-  Post, Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS
-  and PostLogistics; carrier links for DHL, UPS, FedEx and DPD.
-- 🔄 **Real server-side synchronization** — a scheduled worker checks active
-  parcels every 15 minutes, while the refresh button requests an immediate
-  authenticated check. Sync time and carrier failures are visible in the UI.
-- ☁️ **Durable Supabase storage** — parcels and deduplicated events live in
-  Postgres, protected per account through RLS and pushed through realtime.
-- 🔐 **Durable accounts** — new users sign in with email and password.
-  Existing anonymous sessions can be converted in place, and a one-time
-  recovery code can transfer legacy parcels after browser storage was lost.
-- 🧪 **Zero-setup demo mode** — without Supabase credentials the app
-  runs entirely on-device (localStorage) with a small delivery
-  simulation, so you can try it immediately.
-- 📱 **iPhone PWA** — standalone display, home-screen icon, safe-area
-  aware layout, dark mode, offline shell via a service worker.
+- **Shared delivery box** — packages live in Postgres and appear on every
+  authorized device. Open tabs poll for changes and refresh when they become
+  visible again.
+- **Server-side synchronization** — a worker checks active parcels every 15
+  minutes, and the refresh button triggers an immediate shared sync.
+- **Swiss-first carrier support** — automatic adapters for Swiss Post,
+  Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS and
+  PostLogistics; carrier links for DHL, UPS, FedEx and DPD.
+- **Durable history** — provider events are deduplicated and carrier failures
+  remain visible without deleting the parcel.
+- **Installable PWA** — standalone home-screen display, safe-area layout and an
+  automatically updating offline shell.
+- **Local demo mode** — Vite development uses local sample data unless
+  `VITE_USE_API=true` is set.
 
-## Getting started
+## Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the printed URL — with no configuration you'll be in demo mode.
-
-### Connect Supabase for development
-
-1. Create a project at [supabase.com](https://supabase.com).
-2. Apply both files in `supabase/migrations/` in filename order (or run
-   `supabase db push` with the CLI).
-3. Enable email/password sign-up. Anonymous sign-ins are only needed while
-   migrating installations that already created anonymous users.
-4. Copy `.env.example` to `.env` and fill in your project URL and anon
-   key from **Project Settings → API**.
-5. Restart `npm run dev` — the demo banner disappears and your parcels
-   now sync through Supabase.
-
-With Vite alone, the UI and database work but automatic polling does not.
-Run the production container to include the carrier worker:
+The Vite development server starts in demo mode. To exercise the real API,
+build and run the production container with a Supabase database:
 
 ```bash
-docker build \
-  --build-arg VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
-  --build-arg VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
-  -t swiss-delivery-tracker .
-
-docker run --rm -p 3000:3000 --env-file .env swiss-delivery-tracker
+docker build -t swiss-delivery-tracker .
+docker run --rm -p 3000:3000 \
+  -e SUPABASE_URL=https://supabase.example.com \
+  -e SUPABASE_SERVICE_ROLE_KEY=server-only-key \
+  swiss-delivery-tracker
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` is server-only and must never use the `VITE_`
-prefix. The `/api/sync` endpoint validates the caller's Supabase access token
-and only polls that user's parcels. The scheduled worker uses the service
-role to poll all non-completed parcels.
+Apply every file in `supabase/migrations/` in filename order before running the
+container. `SUPABASE_SERVICE_ROLE_KEY` must remain server-only; there are no
+`VITE_SUPABASE_*` build variables.
+
+The backend endpoints are:
+
+- `GET /api/packages`
+- `POST /api/packages`
+- `DELETE /api/packages/:id`
+- `POST /api/sync`
+- `GET /health`
+
+They intentionally rely on the deployment's Cloudflare Access boundary. Do not
+expose the application origin directly to the public internet.
 
 ## Carrier engine
 
-The worker installs
+The production image installs
 [`blue-plhery-assistant/swiss-delivery-tracker`](https://github.com/blue-plhery-assistant/swiss-delivery-tracker)
-at pinned commit `62ae24f5677b3ff2d1af5d08574dc544c365a14d`. This keeps its carrier
-adapters reusable while this repository owns the web UI, persistence,
-scheduling, authentication and deployment behavior.
+at pinned commit `62ae24f5677b3ff2d1af5d08574dc544c365a14d`. This repository owns the UI,
+persistence, API, scheduling and deployment boundary; the upstream project owns
+the reusable carrier adapters.
 
-Carrier adapters scrape public tracking pages and can temporarily fail when
-a carrier changes its site or enters maintenance. Those failures are kept on
-the parcel as diagnostics and retried; they do not delete the parcel. For a
-long-term Swiss Post integration, use its authenticated business tracking API
-and replace the scraper adapter.
-
-Email/password sign-up can be auto-confirmed on a private deployment. Configure
-SMTP before offering password-reset emails or exposing sign-up beyond a trusted
-access layer.
-
-### Install on your iPhone
-
-1. Deploy the app over HTTPS (`npm run build`, then host `dist/` — e.g.
-   Vercel, Netlify, or Cloudflare Pages) and open it in Safari.
-2. Tap **Share → Add to Home Screen**.
-3. Launch it from the icon — it runs full-screen like a native app.
+Carrier sites can temporarily return maintenance pages or change markup. Those
+failures are stored on the package and retried. A long-term Swiss Post setup
+should replace scraping with its authenticated business tracking API.
 
 ## Testing
 
 ```bash
 npm ci
 npm run test:coverage
-npm run build && npm run test:pwa
-```
+npm run build
+npm run test:pwa
 
-Vitest enforces global thresholds of 85% for statements, functions and lines,
-and 80% for branches. It covers carrier detection, stage/progress logic,
-authentication and recovery failures, date formatting, the demo simulation,
-the Supabase repository, realtime subscriptions and full UI flows.
-
-```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m coverage run -m unittest discover -s server/tests -v
 .venv/bin/python -m coverage report
 ```
 
-Python coverage is branch-aware and fails below 85%. Tests exercise the real
-HTTP handler, authenticated sync endpoint, scheduler, Supabase transport,
-carrier event mapping, failure isolation and the pinned upstream adapter
-boundary.
+Vitest enforces 85% statement/function/line coverage and 80% branch coverage.
+Python coverage is branch-aware and fails below 85%.
 
-Migration, trigger, RLS, realtime-publication and one-time recovery behavior is
-tested against PostgreSQL 16:
+Database migrations, service-role CRUD, browser-role denial, constraints and
+event deduplication are tested against PostgreSQL 16:
 
 ```bash
 TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/delivery_test \
   scripts/test-migrations.sh
 ```
 
-GitHub Actions runs all three suites on every push and pull request, builds the
-production image and verifies both `/health` and a unique uncached SPA route on
-port `3000`. The generated-PWA contract also checks that the current hashed
-bundle is precached, new workers skip the waiting phase, claim clients and clean
-obsolete caches.
+GitHub Actions runs frontend tests on Node 22 and 24, Python tests, migration
+assertions, npm audit, PWA validation and a production-container smoke test.
 
 ## Project layout
 
-```
+```text
 src/
-  auth/       durable login and legacy-account recovery UI
-  lib/        carriers, stages, formatting, supabase client
-  store/      data layer: Supabase repo, local demo repo, React context
-  components/ cards, timeline, bottom sheet, progress track, detail view
-server/       static web server, scheduler and pinned carrier adapter
+  lib/        carrier, stage and formatting helpers
+  store/      shared API repo, local demo repo and React context
+  components/ cards, timeline, add sheet, progress and detail views
+server/       shared HTTP API, static server, scheduler and carrier adapter
 supabase/
-  migrations/ Postgres schema + RLS policies + realtime publication
-  tests/      PostgreSQL integration bootstrap and security assertions
-scripts/      migrations, origin smoke checks and PWA icon generation
+  migrations/ Postgres schema and shared-backend transition
+  tests/      PostgreSQL integration and security assertions
+scripts/      migrations, origin smoke checks and PWA validation
 ```
 
 ## Production operations
 
-- Deploy the included `Dockerfile` with port `3000` and health check `/health`.
-- Supply both browser build arguments and the three server-side Supabase
-  variables from `.env.example`.
-- Back up the Postgres service independently of the application container and
-  test restoration periodically.
-- The service only mutates `sync_*`, carrier metadata and tracking events;
-  carrier failures never remove package rows.
-- Verify the actual reverse-proxy route after deployment—not only the container
-  health check. For a public deployment run `scripts/smoke-url.sh URL`. For this
-  Cloudflare Access deployment, set `CF_ACCESS_CLIENT_ID` and
-  `CF_ACCESS_CLIENT_SECRET` first. The manual `Production origin smoke` workflow
-  uses repository secrets `DELIVERY_CF_ACCESS_CLIENT_ID` and
-  `DELIVERY_CF_ACCESS_CLIENT_SECRET` and deliberately requests a unique path so
-  a service worker or CDN shell cannot hide an origin failure.
+- Deploy the Dockerfile on port `3000` with `/health` as the health check.
+- Supply only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to the server.
+- Keep the hostname behind Cloudflare Access and require Access validation in
+  the tunnel ingress rule.
+- Back up Postgres independently and verify the reverse-proxy route after every
+  deploy with `scripts/smoke-url.sh`.
+- The manual `Production origin smoke` workflow supports Cloudflare Access
+  service-token secrets and requests a unique path so a service worker cannot
+  hide an origin failure.

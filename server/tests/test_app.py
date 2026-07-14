@@ -12,28 +12,53 @@ from server.supabase_client import SupabaseError
 from server.tracking_sync import SyncSummary
 
 
+PACKAGE = {
+    "id": "40000000-0000-0000-0000-000000000004",
+    "tracking_number": "993412345612345678",
+    "label": "Coffee",
+    "carrier": "swiss-post",
+    "created_at": "2026-07-15T00:00:00Z",
+    "expected_delivery": None,
+    "last_status_text": None,
+    "last_synced_at": None,
+    "sync_status": "pending",
+    "sync_error": None,
+    "tracking_events": [],
+}
+
+
 class QuietHandler(app.Handler):
     def log_message(self, format, *args):
         return
 
 
 class FakeService:
-    def __init__(self, user=None, summary=None, error=None):
-        self.user = user or {"id": "user-1"}
+    def __init__(self, summary=None, error=None):
         self.summary = summary or SyncSummary(checked=1, updated=1)
         self.error = error
         self.client = Mock()
-        self.client.auth_user.side_effect = self._auth_user
+        self.client.list_packages.side_effect = self._list_packages
+        self.client.create_package.side_effect = self._create_package
+        self.client.delete_package.side_effect = self._delete_package
         self.sync = Mock(side_effect=self._sync)
 
-    def _auth_user(self, token):
-        if self.error and isinstance(self.error, SupabaseError):
+    def _maybe_raise(self):
+        if self.error:
             raise self.error
-        return self.user
 
-    def _sync(self, user_id=None):
-        if self.error and not isinstance(self.error, SupabaseError):
-            raise self.error
+    def _list_packages(self):
+        self._maybe_raise()
+        return [PACKAGE]
+
+    def _create_package(self, tracking_number, label, carrier):
+        self._maybe_raise()
+        return {**PACKAGE, "tracking_number": tracking_number, "label": label, "carrier": carrier}
+
+    def _delete_package(self, package_id):
+        self._maybe_raise()
+
+    def _sync(self):
+        self._maybe_raise()
         return self.summary
 
 
@@ -65,12 +90,17 @@ class AppHttpTests(unittest.TestCase):
         app.STATE.clear()
         app.STATE.update(self.original_state)
 
-    def request(self, method, path, headers=None):
+    def request(self, method, path, headers=None, payload=None, raw_body=None):
         connection = http.client.HTTPConnection(*self.server.server_address, timeout=3)
-        connection.request(method, path, headers=headers or {})
+        body = raw_body
+        request_headers = dict(headers or {})
+        if payload is not None:
+            body = json.dumps(payload).encode()
+            request_headers["Content-Type"] = "application/json"
+        connection.request(method, path, body=body, headers=request_headers)
         response = connection.getresponse()
-        body = response.read()
-        result = (response.status, dict(response.getheaders()), body)
+        response_body = response.read()
+        result = (response.status, dict(response.getheaders()), response_body)
         connection.close()
         return result
 
@@ -114,46 +144,111 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(headers["Content-Length"], str(len(b"<html>current shell</html>")))
         self.assertEqual(body, b"")
 
-    def test_sync_endpoint_requires_service_and_authentication(self):
-        status, _, body = self.request("POST", "/not-sync")
+    def test_shared_package_list_create_and_delete(self):
+        status, _, body = self.request("GET", "/api/packages")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["packages"][0]["id"], PACKAGE["id"])
+
+        status, _, body = self.request(
+            "POST",
+            "/api/packages",
+            payload={
+                "trackingNumber": "99.34.123456.12345678",
+                "label": " Coffee beans ",
+                "carrier": "swiss-post",
+            },
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body)["tracking_number"], "993412345612345678")
+        app.SERVICE.client.create_package.assert_called_once_with(
+            "993412345612345678", "Coffee beans", "swiss-post"
+        )
+
+        status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["ok"])
+        app.SERVICE.client.delete_package.assert_called_once_with(PACKAGE["id"])
+
+    def test_api_requires_configuration_and_valid_routes(self):
+        app.SERVICE = None
+        for method, path in (
+            ("GET", "/api/packages"),
+            ("POST", "/api/sync"),
+            ("DELETE", f"/api/packages/{PACKAGE['id']}"),
+        ):
+            status, _, body = self.request(method, path)
+            self.assertEqual(status, 503)
+            self.assertIn("not configured", json.loads(body)["error"])
+
+        app.SERVICE = FakeService()
+        status, _, body = self.request("POST", "/not-an-api")
+        self.assertEqual(status, 404)
+        self.assertEqual(json.loads(body), {"error": "Not found"})
+        status, _, body = self.request("DELETE", "/not-an-api")
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body), {"error": "Not found"})
 
-        app.SERVICE = None
-        status, _, body = self.request("POST", "/api/sync")
-        self.assertEqual(status, 503)
-        self.assertIn("not configured", json.loads(body)["error"])
+    def test_create_validates_json_fields_and_duplicate_tracking(self):
+        invalid_requests = [
+            ({}, "between 4 and 40"),
+            ({"trackingNumber": ["bad"], "label": "", "carrier": "unknown"}, "must be text"),
+            ({"trackingNumber": "1234", "label": "x" * 81, "carrier": "unknown"}, "at most 80"),
+            ({"trackingNumber": "1234", "label": "", "carrier": "invented"}, "supported carrier"),
+        ]
+        for payload, message in invalid_requests:
+            status, _, body = self.request("POST", "/api/packages", payload=payload)
+            self.assertEqual(status, 400)
+            self.assertIn(message, json.loads(body)["error"])
 
-        app.SERVICE = FakeService()
-        status, _, body = self.request("POST", "/api/sync")
-        self.assertEqual(status, 401)
-        self.assertIn("Sign in", json.loads(body)["error"])
+        for raw_body in (b"not-json", b"[]", b""):
+            status, _, body = self.request("POST", "/api/packages", raw_body=raw_body)
+            self.assertEqual(status, 400)
+            self.assertIn("valid JSON object" if raw_body else "request size", json.loads(body)["error"])
 
-    def test_sync_endpoint_scopes_work_to_the_authenticated_user(self):
-        service = FakeService(user={"id": "user-42"})
+        app.SERVICE = FakeService(error=SupabaseError("duplicate", status=409))
+        status, _, body = self.request(
+            "POST",
+            "/api/packages",
+            payload={"trackingNumber": "1234", "label": "", "carrier": "unknown"},
+        )
+        self.assertEqual(status, 409)
+        self.assertIn("already", json.loads(body)["error"])
+
+    def test_sync_is_shared_and_maps_worker_failures(self):
+        service = FakeService(summary=SyncSummary(checked=2, waiting=2))
         app.SERVICE = service
-        status, _, body = self.request(
-            "POST", "/api/sync", {"Authorization": "Bearer valid-token"}
-        )
+        status, _, body = self.request("POST", "/api/sync")
         self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body)["updated"], 1)
-        service.client.auth_user.assert_called_once_with("valid-token")
-        service.sync.assert_called_once_with("user-42")
-
-    def test_sync_endpoint_maps_auth_and_worker_failures(self):
-        app.SERVICE = FakeService(error=SupabaseError("expired"))
-        status, _, body = self.request(
-            "POST", "/api/sync", {"Authorization": "Bearer expired-token"}
-        )
-        self.assertEqual(status, 401)
-        self.assertEqual(json.loads(body), {"error": "expired"})
+        self.assertEqual(json.loads(body)["waiting"], 2)
+        service.sync.assert_called_once_with()
 
         app.SERVICE = FakeService(error=RuntimeError("carrier exploded"))
-        status, _, body = self.request(
-            "POST", "/api/sync", {"Authorization": "Bearer valid-token"}
-        )
+        status, _, body = self.request("POST", "/api/sync")
         self.assertEqual(status, 502)
         self.assertEqual(json.loads(body), {"error": "carrier exploded"})
+
+    def test_database_errors_and_invalid_delete_ids_are_reported(self):
+        app.SERVICE = FakeService(error=SupabaseError("database offline"))
+        status, _, body = self.request("GET", "/api/packages")
+        self.assertEqual(status, 502)
+        self.assertIn("database offline", json.loads(body)["error"])
+
+        status, _, body = self.request(
+            "POST",
+            "/api/packages",
+            payload={"trackingNumber": "1234", "label": "", "carrier": "unknown"},
+        )
+        self.assertEqual(status, 502)
+
+        app.SERVICE = FakeService()
+        status, _, body = self.request("DELETE", "/api/packages/not-a-uuid")
+        self.assertEqual(status, 400)
+        self.assertIn("Invalid", json.loads(body)["error"])
+
+        app.SERVICE = FakeService(error=SupabaseError("delete failed"))
+        status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
+        self.assertEqual(status, 502)
+        self.assertIn("delete failed", json.loads(body)["error"])
 
 
 class AppLifecycleTests(unittest.TestCase):
@@ -166,7 +261,7 @@ class AppLifecycleTests(unittest.TestCase):
         app.STATE.clear()
         app.STATE.update(self.original_state)
 
-    def test_build_service_requires_all_three_supabase_values(self):
+    def test_build_service_requires_server_only_supabase_values(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertIsNone(app.build_service())
 
@@ -175,7 +270,6 @@ class AppLifecycleTests(unittest.TestCase):
                 os.environ,
                 {
                     "SUPABASE_URL": "http://supabase",
-                    "SUPABASE_ANON_KEY": "anon",
                     "SUPABASE_SERVICE_ROLE_KEY": "service",
                 },
                 clear=True,
@@ -184,7 +278,7 @@ class AppLifecycleTests(unittest.TestCase):
             patch("server.app.TrackingSyncService") as service_class,
         ):
             self.assertIs(app.build_service(), service_class.return_value)
-            client_class.assert_called_once_with("http://supabase", "anon", "service")
+            client_class.assert_called_once_with("http://supabase", "service")
             service_class.assert_called_once_with(client_class.return_value)
 
     def test_scheduler_records_success_and_top_level_failures(self):

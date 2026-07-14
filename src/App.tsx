@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { AddParcelSheet } from './components/AddParcelSheet';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
@@ -6,7 +6,7 @@ import { isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
 
-export default function App({ accountControl }: { accountControl?: ReactNode }) {
+export default function App() {
   const { parcels, loading, refreshing, error, mode, addParcel, removeParcel, refresh } =
     useParcels();
   const [adding, setAdding] = useState(false);
@@ -51,7 +51,6 @@ export default function App({ accountControl }: { accountControl?: ReactNode }) 
             </div>
           </div>
           <div className="app__header-actions">
-            {accountControl}
             <button
               type="button"
               className="icon-button"

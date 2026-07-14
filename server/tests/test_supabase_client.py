@@ -25,7 +25,7 @@ class Response:
 class SupabaseServiceClientTests(unittest.TestCase):
     def setUp(self):
         self.client = SupabaseServiceClient(
-            "https://supabase.example.test/", "anon-key", "service-key", timeout=7
+            "https://supabase.example.test/", "service-key", timeout=7
         )
 
     @patch("server.supabase_client.urllib.request.urlopen")
@@ -36,7 +36,6 @@ class SupabaseServiceClientTests(unittest.TestCase):
             "/rest/v1/packages",
             method="POST",
             body={"label": "Grüezi"},
-            token="user-token",
             prefer="return=minimal",
         )
 
@@ -45,7 +44,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://supabase.example.test/rest/v1/packages")
         self.assertEqual(request.method, "POST")
         self.assertEqual(json.loads(request.data), {"label": "Grüezi"})
-        self.assertEqual(request.get_header("Authorization"), "Bearer user-token")
+        self.assertEqual(request.get_header("Authorization"), "Bearer service-key")
         self.assertEqual(request.get_header("Apikey"), "service-key")
         self.assertEqual(request.get_header("Prefer"), "return=minimal")
         urlopen.assert_called_once_with(request, timeout=7)
@@ -62,8 +61,9 @@ class SupabaseServiceClientTests(unittest.TestCase):
         )
         self.addCleanup(conflict.close)
         urlopen.side_effect = conflict
-        with self.assertRaisesRegex(SupabaseError, r"\(409\): Duplicate"):
+        with self.assertRaisesRegex(SupabaseError, r"\(409\): Duplicate") as raised:
             self.client._request("/rest/v1/packages", method="POST")
+        self.assertEqual(raised.exception.status, 409)
 
         gateway = urllib.error.HTTPError(
             "https://example.test", 502, "Bad Gateway", {}, BytesIO(b"gateway down")
@@ -77,41 +77,72 @@ class SupabaseServiceClientTests(unittest.TestCase):
         with self.assertRaisesRegex(SupabaseError, "unreachable: connection refused"):
             self.client._request("/rest/v1/packages")
 
-    @patch("server.supabase_client.urllib.request.urlopen")
-    def test_auth_user_uses_the_anon_key_and_maps_expired_tokens(self, urlopen):
-        urlopen.return_value = Response(b'{"id":"user-1"}')
-        self.assertEqual(self.client.auth_user("access-token"), {"id": "user-1"})
-        request = urlopen.call_args.args[0]
-        self.assertEqual(request.full_url, "https://supabase.example.test/auth/v1/user")
-        self.assertEqual(request.get_header("Apikey"), "anon-key")
-        self.assertEqual(request.get_header("Authorization"), "Bearer access-token")
-
-        unauthorized = urllib.error.HTTPError(
-            "https://example.test", 401, "Unauthorized", {}, BytesIO(b"expired")
-        )
-        self.addCleanup(unauthorized.close)
-        urlopen.side_effect = unauthorized
-        with self.assertRaisesRegex(SupabaseError, "invalid or expired"):
-            self.client.auth_user("expired-token")
-
-    def test_package_queries_and_writes_use_expected_postgrest_contract(self):
+    def test_package_queries_and_writes_use_shared_postgrest_contract(self):
         self.client._request = Mock(return_value=[{"id": "pkg-1"}])
-        rows = self.client.list_active_packages("user-1")
-        self.assertEqual(rows, [{"id": "pkg-1"}])
+        self.assertEqual(self.client.list_packages(), [{"id": "pkg-1"}])
         path = self.client._request.call_args.args[0]
         parsed = urllib.parse.urlsplit(path)
         query = urllib.parse.parse_qs(parsed.query)
         self.assertEqual(parsed.path, "/rest/v1/packages")
-        self.assertEqual(query["user_id"], ["eq.user-1"])
+        self.assertNotIn("user_id", query)
         self.assertEqual(query["archived_at"], ["is.null"])
+        self.assertEqual(query["order"], ["created_at.desc"])
+        self.assertIn("tracking_events", query["select"][0])
+
+        self.client._request.reset_mock()
+        self.client.get_package("pkg-1")
+        self.assertIn("id=eq.pkg-1", self.client._request.call_args.args[0])
+
+        self.client._request.return_value = []
+        self.assertIsNone(self.client.get_package("missing"))
+
+    def test_create_and_delete_package(self):
+        self.client._request = Mock(side_effect=[[{"id": "pkg-1"}], [{"id": "pkg-1"}]])
+        package = self.client.create_package("TRACKING1", "Coffee", "swiss-post")
+        self.assertEqual(package, {"id": "pkg-1"})
+        create = self.client._request.call_args_list[0]
+        self.assertEqual(create.args[0], "/rest/v1/packages")
+        self.assertEqual(create.kwargs["method"], "POST")
+        self.assertEqual(
+            create.kwargs["body"],
+            {
+                "user_id": None,
+                "tracking_number": "TRACKING1",
+                "label": "Coffee",
+                "carrier": "swiss-post",
+            },
+        )
+
+        self.client._request = Mock()
+        self.client.delete_package("pkg/1")
+        delete = self.client._request.call_args
+        self.assertIn("id=eq.pkg%2F1", delete.args[0])
+        self.assertEqual(delete.kwargs["method"], "DELETE")
+
+    def test_create_package_requires_insert_and_reload_results(self):
+        self.client._request = Mock(return_value=[])
+        with self.assertRaisesRegex(SupabaseError, "did not return"):
+            self.client.create_package("TRACKING1", "", "unknown")
+
+        self.client._request = Mock(side_effect=[[{"id": "pkg-1"}], []])
+        with self.assertRaisesRegex(SupabaseError, "could not be reloaded"):
+            self.client.create_package("TRACKING1", "", "unknown")
+
+    def test_sync_queries_and_writes_use_expected_contract(self):
+        self.client._request = Mock(return_value=[{"id": "pkg-1"}])
+        rows = self.client.list_active_packages()
+        self.assertEqual(rows, [{"id": "pkg-1"}])
+        path = self.client._request.call_args.args[0]
+        parsed = urllib.parse.urlsplit(path)
+        query = urllib.parse.parse_qs(parsed.query)
         self.assertEqual(query["current_stage"], ["not.in.(delivered,returned)"])
+        self.assertNotIn("user_id", query)
 
         self.client._request.reset_mock()
         self.client.update_package("pkg/1", {"sync_status": "ok"})
         update = self.client._request.call_args
         self.assertIn("id=eq.pkg%2F1", update.args[0])
         self.assertEqual(update.kwargs["method"], "PATCH")
-        self.assertEqual(update.kwargs["prefer"], "return=minimal")
 
     def test_event_inserts_are_idempotent_and_empty_batches_are_skipped(self):
         self.client._request = Mock()
@@ -124,7 +155,6 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertIn("on_conflict=package_id,provider_event_id", call.args[0])
         self.assertEqual(call.kwargs["method"], "POST")
         self.assertEqual(call.kwargs["body"], events)
-        self.assertEqual(call.kwargs["prefer"], "resolution=ignore-duplicates,return=minimal")
 
 
 if __name__ == "__main__":
