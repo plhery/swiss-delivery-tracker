@@ -75,8 +75,11 @@ function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
   return (
     <main className="auth-screen">
       <form className="auth-card" onSubmit={submit}>
-        <div className="auth-card__emoji" aria-hidden="true">📦</div>
-        <h1>My Deliveries</h1>
+        <div className="auth-card__mark" aria-hidden="true">
+          <span />
+        </div>
+        <p className="auth-card__eyebrow">Delivery desk</p>
+        <h1>Parcel post</h1>
         <p>
           {mode === 'sign-in'
             ? 'Sign in to see the same parcels on every device.'

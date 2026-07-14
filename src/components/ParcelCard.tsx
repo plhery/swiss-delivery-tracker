@@ -18,28 +18,32 @@ export function ParcelCard({
   return (
     <button
       type="button"
-      className="parcel-card"
+      className={`parcel-card parcel-card--${meta?.tone ?? 'ok'}`}
       onClick={() => onOpen(parcel)}
       aria-label={`${parcel.label || 'Parcel'} — ${meta?.label ?? 'no updates yet'}`}
     >
-      <div className="parcel-card__emoji" aria-hidden="true">
-        {meta?.emoji ?? '📦'}
+      <div className="parcel-card__stamp" aria-hidden="true">
+        <svg viewBox="0 0 32 32">
+          <path d="m6 10 10-5 10 5-10 5-10-5Z" />
+          <path d="M6 10v12l10 5 10-5V10M16 15v12" />
+        </svg>
       </div>
       <div className="parcel-card__body">
         <div className="parcel-card__top">
-          <span className="parcel-card__label">{parcel.label || 'Parcel'}</span>
+          <span className="parcel-card__carrier">{carrier.name}</span>
           <span className="parcel-card__time">
             {last ? relativeTime(last.occurredAt) : ''}
           </span>
         </div>
+        <span className="parcel-card__label">{parcel.label || 'Parcel'}</span>
+        <span className="parcel-card__tracking">
+          {formatTrackingNumber(parcel.trackingNumber)}
+        </span>
         <div className="parcel-card__status">
           <span
             className={`status-badge status-badge--${meta?.tone ?? 'ok'}`}
           >
             {meta?.label ?? 'Waiting for updates'}
-          </span>
-          <span className="parcel-card__carrier">
-            {carrier.name} · {formatTrackingNumber(parcel.trackingNumber)}
           </span>
         </div>
         {parcel.syncStatus === 'error' && (
@@ -48,7 +52,7 @@ export function ParcelCard({
         <ProgressTrack stage={last?.stage ?? null} />
       </div>
       <div className="parcel-card__chevron" aria-hidden="true">
-        ›
+        <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
       </div>
     </button>
   );

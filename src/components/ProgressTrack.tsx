@@ -14,7 +14,7 @@ export function ProgressTrack({ stage }: { stage: Stage | null }) {
 
   return (
     <div
-      className={`progress-track${meta?.tone === 'warn' ? ' progress-track--warn' : ''}`}
+      className={`progress-track${meta ? ` progress-track--${meta.tone}` : ''}`}
       role="img"
       aria-label={label}
     >

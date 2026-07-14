@@ -31,6 +31,13 @@ function fakeClient(overrides: { session?: object | null } = {}) {
     select: vi.fn().mockReturnValue({ single }),
   });
   const eq = vi.fn().mockResolvedValue({ error: null });
+  const subscribe = vi.fn();
+  const on = vi.fn();
+  const channelObject = { on, subscribe };
+  on.mockReturnValue(channelObject);
+  subscribe.mockReturnValue(channelObject);
+  const channel = vi.fn().mockReturnValue(channelObject);
+  const removeChannel = vi.fn();
 
   const client = {
     auth: {
@@ -44,10 +51,24 @@ function fakeClient(overrides: { session?: object | null } = {}) {
       insert,
       delete: vi.fn().mockReturnValue({ eq }),
     }),
-    channel: vi.fn(),
-    removeChannel: vi.fn(),
+    channel,
+    removeChannel,
   };
-  return { client: client as unknown as SupabaseClient, spies: { signInAnonymously, insert, eq } };
+  return {
+    client: client as unknown as SupabaseClient,
+    spies: {
+      signInAnonymously,
+      order,
+      single,
+      insert,
+      eq,
+      channel,
+      on,
+      subscribe,
+      removeChannel,
+      channelObject,
+    },
+  };
 }
 
 describe('createSupabaseRepo', () => {
@@ -71,6 +92,43 @@ describe('createSupabaseRepo', () => {
       location: 'Härkingen',
       occurredAt: '2026-06-29T08:00:00.000Z',
     });
+  });
+
+  it('maps optional sync metadata and carrier fallbacks', async () => {
+    const { client, spies } = fakeClient();
+    spies.order.mockResolvedValueOnce({
+      data: [
+        {
+          ...packageRow,
+          carrier: '',
+          expected_delivery: '2026-07-20',
+          last_status_text: 'At customs',
+          last_synced_at: '2026-07-14T12:00:00Z',
+          sync_status: 'error',
+          sync_error: 'Maintenance',
+          tracking_events: null,
+        },
+      ],
+      error: null,
+    });
+
+    const [parcel] = await createSupabaseRepo(client).list();
+
+    expect(parcel).toMatchObject({
+      carrier: 'swiss-post',
+      expectedDelivery: '2026-07-20',
+      lastStatusText: 'At customs',
+      lastSyncedAt: '2026-07-14T12:00:00Z',
+      syncStatus: 'error',
+      syncError: 'Maintenance',
+      events: [],
+    });
+  });
+
+  it('surfaces package query failures', async () => {
+    const { client, spies } = fakeClient();
+    spies.order.mockResolvedValueOnce({ data: null, error: { message: 'Database offline' } });
+    await expect(createSupabaseRepo(client).list()).rejects.toThrow('Database offline');
   });
 
   it('reuses an existing session without signing in again', async () => {
@@ -98,10 +156,35 @@ describe('createSupabaseRepo', () => {
     });
   });
 
+  it('keeps a manually selected carrier and reports insert failures', async () => {
+    const { client, spies } = fakeClient();
+    await createSupabaseRepo(client).add({
+      trackingNumber: 'ambiguous-123',
+      label: 'Desk',
+      carrier: 'planzer',
+    });
+    expect(spies.insert).toHaveBeenCalledWith({
+      tracking_number: 'AMBIGUOUS123',
+      label: 'Desk',
+      carrier: 'planzer',
+    });
+
+    spies.single.mockResolvedValueOnce({ data: null, error: { message: 'Duplicate parcel' } });
+    await expect(
+      createSupabaseRepo(client).add({ trackingNumber: 'another', label: '' }),
+    ).rejects.toThrow('Duplicate parcel');
+  });
+
   it('deletes by id', async () => {
     const { client, spies } = fakeClient();
     await createSupabaseRepo(client).remove('pkg-1');
     expect(spies.eq).toHaveBeenCalledWith('id', 'pkg-1');
+  });
+
+  it('reports delete failures', async () => {
+    const { client, spies } = fakeClient();
+    spies.eq.mockResolvedValueOnce({ error: { message: 'Delete denied' } });
+    await expect(createSupabaseRepo(client).remove('pkg-1')).rejects.toThrow('Delete denied');
   });
 
   it('requests an authenticated server-side sync before reloading', async () => {
@@ -116,5 +199,61 @@ describe('createSupabaseRepo', () => {
       headers: { Authorization: 'Bearer session-token' },
     });
     expect(parcels).toHaveLength(1);
+  });
+
+  it('reloads without calling sync when the session has no access token', async () => {
+    const { client } = fakeClient({ session: {} });
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+
+    const parcels = await createSupabaseRepo(client).refresh();
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(parcels).toHaveLength(1);
+  });
+
+  it('surfaces JSON and status-only sync failures', async () => {
+    const { client } = fakeClient({ session: { access_token: 'session-token' } });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: vi.fn().mockResolvedValue({ error: 'Carrier unavailable' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: vi.fn().mockRejectedValue(new Error('not JSON')),
+      });
+    vi.stubGlobal('fetch', fetch);
+    const repo = createSupabaseRepo(client);
+
+    await expect(repo.refresh()).rejects.toThrow('Carrier unavailable');
+    await expect(repo.refresh()).rejects.toThrow('Tracking sync failed (503)');
+  });
+
+  it('subscribes to both realtime tables and removes the channel', () => {
+    const { client, spies } = fakeClient();
+    const onChange = vi.fn();
+    const unsubscribe = createSupabaseRepo(client).subscribe?.(onChange);
+
+    expect(spies.channel).toHaveBeenCalledWith('parcel-changes');
+    expect(spies.on).toHaveBeenCalledTimes(2);
+    expect(spies.on).toHaveBeenNthCalledWith(
+      1,
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'tracking_events' },
+      onChange,
+    );
+    expect(spies.on).toHaveBeenNthCalledWith(
+      2,
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'packages' },
+      onChange,
+    );
+
+    unsubscribe?.();
+    expect(spies.removeChannel).toHaveBeenCalledWith(spies.channelObject);
   });
 });

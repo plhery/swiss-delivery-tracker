@@ -21,6 +21,14 @@ export default function App({ accountControl }: { accountControl?: ReactNode }) 
     () => parcels.filter((p) => !isDelivered(p.events)).length,
     [parcels],
   );
+  const activeParcels = useMemo(
+    () => parcels.filter((p) => !isDelivered(p.events)),
+    [parcels],
+  );
+  const deliveredParcels = useMemo(
+    () => parcels.filter((p) => isDelivered(p.events)),
+    [parcels],
+  );
 
   async function handleDelete(parcel: ParcelWithEvents) {
     const name = parcel.label || 'this parcel';
@@ -32,8 +40,16 @@ export default function App({ accountControl }: { accountControl?: ReactNode }) 
   return (
     <div className="app">
       <header className="app__header">
-        <div className="app__header-row">
-          <h1 className="app__title">My Deliveries</h1>
+        <div className="app__masthead">
+          <div className="app__brand">
+            <span className="app__brand-mark" aria-hidden="true">
+              <span />
+            </span>
+            <div>
+              <p className="app__eyebrow">Delivery desk</p>
+              <h1 className="app__title">Parcel post</h1>
+            </div>
+          </div>
           <div className="app__header-actions">
             {accountControl}
             <button
@@ -43,51 +59,107 @@ export default function App({ accountControl }: { accountControl?: ReactNode }) 
               onClick={() => void refresh()}
               disabled={refreshing}
             >
-              <span className={refreshing ? 'spin' : undefined} aria-hidden="true">
-                ⟳
-              </span>
+              <svg
+                className={refreshing ? 'spin' : undefined}
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+              >
+                <path d="M19 8a7.5 7.5 0 1 0 .2 7.6M19 4v4h-4" />
+              </svg>
             </button>
           </div>
         </div>
-        <p className="app__subtitle">
-          {loading
-            ? 'Loading…'
-            : activeCount === 0
-              ? 'Nothing on the way right now'
-              : `${activeCount} parcel${activeCount === 1 ? '' : 's'} on the way 🚚`}
-        </p>
+        <div className="app__summary" aria-live="polite">
+          <div className="app__summary-count">
+            <strong>{loading ? '—' : activeCount}</strong>
+            <span>
+              {activeCount === 1 ? 'parcel' : 'parcels'}
+              <br />
+              on the way
+            </span>
+          </div>
+          <p className="app__subtitle">
+            {loading
+              ? 'Opening your delivery box…'
+              : activeCount === 0
+                ? 'Nothing on the way right now'
+                : 'Every shipment, from announcement to arrival.'}
+          </p>
+        </div>
       </header>
 
-      {mode === 'demo' && (
-        <div className="demo-banner">
-          🧪 Demo mode — data stays on this device. Connect Supabase to sync
-          across devices (see README).
-        </div>
-      )}
+      <main className="app__content">
+        {mode === 'demo' && (
+          <div className="demo-banner">
+            <span className="demo-banner__stamp">Demo mode</span>
+            <span>These sample parcels stay on this device.</span>
+          </div>
+        )}
 
-      {error && (
-        <div className="error-banner" role="alert">
-          {error}
-        </div>
-      )}
+        {error && (
+          <div className="error-banner" role="alert">
+            <strong>Tracking is taking a break.</strong>
+            <span>{error}</span>
+          </div>
+        )}
 
-      <main className="app__list">
+        {loading && (
+          <div className="parcel-grid" aria-label="Loading parcels">
+            <div className="parcel-card parcel-card--skeleton" />
+            <div className="parcel-card parcel-card--skeleton" />
+          </div>
+        )}
+
         {!loading && parcels.length === 0 && (
           <div className="empty-state">
-            <div className="empty-state__emoji" aria-hidden="true">
-              🕊️
-            </div>
+            <div className="empty-state__mailbox" aria-hidden="true"><span /></div>
+            <p className="empty-state__eyebrow">Delivery box empty</p>
             <h2>No parcels yet</h2>
             <p>Add a tracking number and follow every step of the journey.</p>
           </div>
         )}
-        {parcels.map((parcel) => (
-          <ParcelCard
-            key={parcel.id}
-            parcel={parcel}
-            onOpen={(p) => setOpenParcelId(p.id)}
-          />
-        ))}
+
+        {!loading && activeParcels.length > 0 && (
+          <section
+            className="parcel-section"
+            aria-labelledby="active-parcels-title"
+          >
+            <div className="parcel-section__heading">
+              <h2 id="active-parcels-title">On the way</h2>
+              <span>{activeParcels.length}</span>
+            </div>
+            <div className="parcel-grid">
+              {activeParcels.map((parcel) => (
+                <ParcelCard
+                  key={parcel.id}
+                  parcel={parcel}
+                  onOpen={(p) => setOpenParcelId(p.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loading && deliveredParcels.length > 0 && (
+          <section
+            className="parcel-section parcel-section--past"
+            aria-labelledby="past-parcels-title"
+          >
+            <div className="parcel-section__heading">
+              <h2 id="past-parcels-title">Past deliveries</h2>
+              <span>{deliveredParcels.length}</span>
+            </div>
+            <div className="parcel-grid">
+              {deliveredParcels.map((parcel) => (
+                <ParcelCard
+                  key={parcel.id}
+                  parcel={parcel}
+                  onOpen={(p) => setOpenParcelId(p.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
       <button
@@ -96,7 +168,8 @@ export default function App({ accountControl }: { accountControl?: ReactNode }) 
         aria-label="Add a parcel"
         onClick={() => setAdding(true)}
       >
-        +
+        <span aria-hidden="true">+</span>
+        Add parcel
       </button>
 
       {adding && (

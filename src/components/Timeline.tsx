@@ -26,9 +26,7 @@ export function Timeline({ events }: { events: TrackingEvent[] }) {
             <span
               className={`timeline__dot timeline__dot--${meta.tone}`}
               aria-hidden="true"
-            >
-              {meta.emoji}
-            </span>
+            />
             <div className="timeline__content">
               <div className="timeline__stage">{meta.label}</div>
               <div className="timeline__description">{event.description}</div>

@@ -47,15 +47,31 @@ export function AddParcelSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet__grabber" aria-hidden="true" />
-        <h2 className="sheet__title">Track a new parcel 📦</h2>
+        <div className="sheet__heading">
+          <div>
+            <p className="sheet__eyebrow">New shipment</p>
+            <h2 className="sheet__title">Add a parcel</h2>
+          </div>
+          <button
+            type="button"
+            className="sheet__close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+        <p className="sheet__intro">
+          Paste the tracking number from your receipt or shipping email.
+        </p>
         <form onSubmit={handleSubmit} className="sheet__form">
           <label className="field">
-            <span className="field__label">What's inside?</span>
+            <span className="field__label">What's inside? <small>Optional</small></span>
             <input
               className="field__input"
               type="text"
               value={label}
-              placeholder="e.g. New headphones"
+              placeholder="Coffee beans, new shoes…"
               onChange={(e) => setLabel(e.target.value)}
               maxLength={80}
             />
@@ -66,7 +82,7 @@ export function AddParcelSheet({
               className="field__input"
               type="text"
               value={trackingNumber}
-              placeholder="99.34.123456.12345678"
+              placeholder="e.g. 99.34.123456.12345678"
               onChange={(e) => setTrackingNumber(e.target.value)}
               autoCapitalize="characters"
               autoCorrect="off"

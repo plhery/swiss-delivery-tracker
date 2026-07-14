@@ -97,17 +97,41 @@ access layer.
 ## Testing
 
 ```bash
-npm test
+npm ci
+npm run test:coverage
+npm run build && npm run test:pwa
 ```
 
-Vitest covers carrier detection, stage/progress logic, authentication, date
-formatting, the demo simulation, the Supabase repository and full UI flows.
-Python unit tests cover event mapping, deduplication, unsupported carriers and
-failure isolation.
+Vitest enforces global thresholds of 85% for statements, functions and lines,
+and 80% for branches. It covers carrier detection, stage/progress logic,
+authentication and recovery failures, date formatting, the demo simulation,
+the Supabase repository, realtime subscriptions and full UI flows.
 
 ```bash
-python3 -m unittest discover -s server/tests -v
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m coverage run -m unittest discover -s server/tests -v
+.venv/bin/python -m coverage report
 ```
+
+Python coverage is branch-aware and fails below 85%. Tests exercise the real
+HTTP handler, authenticated sync endpoint, scheduler, Supabase transport,
+carrier event mapping, failure isolation and the pinned upstream adapter
+boundary.
+
+Migration, trigger, RLS, realtime-publication and one-time recovery behavior is
+tested against PostgreSQL 16:
+
+```bash
+TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/delivery_test \
+  scripts/test-migrations.sh
+```
+
+GitHub Actions runs all three suites on every push and pull request, builds the
+production image and verifies both `/health` and a unique uncached SPA route on
+port `3000`. The generated-PWA contract also checks that the current hashed
+bundle is precached, new workers skip the waiting phase, claim clients and clean
+obsolete caches.
 
 ## Project layout
 
@@ -120,7 +144,8 @@ src/
 server/       static web server, scheduler and pinned carrier adapter
 supabase/
   migrations/ Postgres schema + RLS policies + realtime publication
-scripts/      PWA icon generation from the SVG source
+  tests/      PostgreSQL integration bootstrap and security assertions
+scripts/      migrations, origin smoke checks and PWA icon generation
 ```
 
 ## Production operations
@@ -132,3 +157,10 @@ scripts/      PWA icon generation from the SVG source
   test restoration periodically.
 - The service only mutates `sync_*`, carrier metadata and tracking events;
   carrier failures never remove package rows.
+- Verify the actual reverse-proxy route after deployment—not only the container
+  health check. For a public deployment run `scripts/smoke-url.sh URL`. For this
+  Cloudflare Access deployment, set `CF_ACCESS_CLIENT_ID` and
+  `CF_ACCESS_CLIENT_SECRET` first. The manual `Production origin smoke` workflow
+  uses repository secrets `DELIVERY_CF_ACCESS_CLIENT_ID` and
+  `DELIVERY_CF_ACCESS_CLIENT_SECRET` and deliberately requests a unique path so
+  a service worker or CDN shell cannot hide an origin failure.

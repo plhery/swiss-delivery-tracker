@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CARRIERS,
+  SELECTABLE_CARRIERS,
+  carrierInfo,
   detectCarrier,
   formatTrackingNumber,
   normalizeTrackingNumber,
@@ -67,5 +70,21 @@ describe('formatTrackingNumber', () => {
   it('leaves other numbers as-is (normalised)', () => {
     expect(formatTrackingNumber('ra123456789ch')).toBe('RA123456789CH');
     expect(formatTrackingNumber('1Z999AA10123456784')).toBe('1Z999AA10123456784');
+  });
+});
+
+describe('carrier metadata', () => {
+  it('builds encoded tracking links for every linked carrier', () => {
+    const linked = Object.values(CARRIERS).filter((carrier) => carrier.trackingUrl);
+    expect(linked.length).toBeGreaterThan(0);
+    for (const carrier of linked) {
+      expect(carrier.trackingUrl?.('AB 12/3')).toContain('AB%2012%2F3');
+    }
+  });
+
+  it('excludes fallback carriers from the manual selector', () => {
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('unknown');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('intl-post');
+    expect(carrierInfo('planzer')).toBe(CARRIERS.planzer);
   });
 });
