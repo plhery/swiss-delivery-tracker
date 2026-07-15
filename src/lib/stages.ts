@@ -2,6 +2,7 @@ import type { Stage, TrackingEvent } from '../types';
 
 /** The happy path, in order. Progress is measured against these. */
 export const CORE_STAGES: readonly Stage[] = [
+  'pending',
   'registered',
   'accepted',
   'in_transit',
@@ -19,30 +20,31 @@ export interface StageMeta {
 }
 
 export const STAGE_META: Record<Stage, StageMeta> = {
-  registered: { label: 'Announced', emoji: '📝', tone: 'ok', progress: 0 },
-  accepted: { label: 'Posted', emoji: '📮', tone: 'ok', progress: 1 },
-  in_transit: { label: 'In transit', emoji: '🚚', tone: 'ok', progress: 2 },
-  customs: { label: 'At customs', emoji: '🛃', tone: 'warn', progress: 2 },
+  pending: { label: 'Not announced yet', emoji: '🔎', tone: 'ok', progress: 0 },
+  registered: { label: 'Announced', emoji: '📝', tone: 'ok', progress: 1 },
+  accepted: { label: 'Posted', emoji: '📮', tone: 'ok', progress: 2 },
+  in_transit: { label: 'In transit', emoji: '🚚', tone: 'ok', progress: 3 },
+  customs: { label: 'At customs', emoji: '🛃', tone: 'warn', progress: 3 },
   out_for_delivery: {
     label: 'Out for delivery',
     emoji: '🛵',
     tone: 'ok',
-    progress: 3,
+    progress: 4,
   },
   failed_attempt: {
     label: 'Delivery attempted',
     emoji: '📪',
     tone: 'warn',
-    progress: 3,
+    progress: 4,
   },
   ready_for_pickup: {
     label: 'Ready for pickup',
     emoji: '🏤',
     tone: 'warn',
-    progress: 3,
+    progress: 4,
   },
-  delivered: { label: 'Delivered', emoji: '✅', tone: 'done', progress: 4 },
-  returned: { label: 'Returned to sender', emoji: '↩️', tone: 'warn', progress: 4 },
+  delivered: { label: 'Delivered', emoji: '✅', tone: 'done', progress: 5 },
+  returned: { label: 'Returned to sender', emoji: '↩️', tone: 'warn', progress: 5 },
 };
 
 export function stageMeta(stage: Stage): StageMeta {
@@ -65,7 +67,7 @@ export function currentStage(events: TrackingEvent[]): Stage | null {
   return latestEvent(events)?.stage ?? null;
 }
 
-/** 0..4 position on the happy path; -1 when there are no events yet. */
+/** 0..5 position on the happy path; -1 when there are no events yet. */
 export function progressIndex(events: TrackingEvent[]): number {
   const stage = currentStage(events);
   return stage === null ? -1 : STAGE_META[stage].progress;

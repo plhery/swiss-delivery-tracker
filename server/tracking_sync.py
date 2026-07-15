@@ -103,7 +103,7 @@ def result_stage(result: dict[str, Any]) -> str | None:
     status = str(result.get("status") or "unknown")
     text = str(result.get("last_status_text") or "")
     mapping = {
-        "pending": "registered",
+        "pending": infer_stage(text, "pending"),
         "in_transit": "in_transit",
         "out_for_delivery": "out_for_delivery",
         "delivered": "delivered",
@@ -231,7 +231,10 @@ class TrackingSyncService:
             events = build_events(package, result, now)
             self.client.insert_events(events)
             stage = result_stage(result)
-            has_update = bool(stage or events)
+            has_update = bool(
+                (stage and stage != "pending")
+                or any(event["stage"] != "pending" for event in events)
+            )
             values: dict[str, Any] = {
                 "last_synced_at": now.isoformat(),
                 "sync_status": "ok" if has_update else "waiting",

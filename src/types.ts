@@ -19,10 +19,11 @@ export type CarrierId =
 export type SyncStatus = 'pending' | 'syncing' | 'ok' | 'waiting' | 'error' | 'unsupported';
 
 /**
- * The lifecycle of a parcel. The first five are the "happy path" in order;
+ * The lifecycle of a parcel. The first six are the "happy path" in order;
  * the rest are exceptions that can happen along the way.
  */
 export type Stage =
+  | 'pending'
   | 'registered'
   | 'accepted'
   | 'in_transit'

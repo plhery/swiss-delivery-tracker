@@ -15,6 +15,9 @@ const HOUR = 3_600_000;
 
 /** What the simulated carrier says at each stage. */
 const SIMULATED_UPDATES: Record<Stage, { description: string; location?: string }> = {
+  pending: {
+    description: 'Tracking added; the carrier has not announced it yet',
+  },
   registered: {
     description: 'The sender announced the parcel',
   },
@@ -53,6 +56,8 @@ const SIMULATED_UPDATES: Record<Stage, { description: string; location?: string 
 /** Where the simulation goes next from a given stage. */
 export function nextStage(stage: Stage): Stage | null {
   switch (stage) {
+    case 'pending':
+      return 'registered';
     case 'registered':
       return 'accepted';
     case 'accepted':
@@ -199,7 +204,7 @@ export function createDemoRepo(
         syncStatus: 'ok',
         events: [],
       };
-      parcel.events = [event(parcel.id, 'registered', createdAt)];
+      parcel.events = [event(parcel.id, 'pending', createdAt)];
       save(storage, [...parcels, parcel]);
       return parcel;
     },

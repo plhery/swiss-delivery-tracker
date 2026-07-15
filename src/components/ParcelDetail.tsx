@@ -69,7 +69,7 @@ export function ParcelDetail({
         <h1 className="detail__title">{parcel.label || 'Parcel'}</h1>
         <p className="detail__status">
           <span className={`status-badge status-badge--${meta?.tone ?? 'ok'}`}>
-            {meta?.label ?? 'Waiting for updates'}
+            {meta?.label ?? 'Not announced yet'}
           </span>
         </p>
         <ProgressTrack stage={last?.stage ?? null} />

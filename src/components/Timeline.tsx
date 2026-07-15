@@ -9,7 +9,7 @@ export function Timeline({ events }: { events: TrackingEvent[] }) {
   if (sorted.length === 0) {
     return (
       <p className="timeline-empty">
-        No tracking events yet — check back soon! 🕊️
+        The carrier hasn’t announced this shipment yet — check back soon! 🕊️
       </p>
     );
   }

@@ -30,7 +30,8 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     id: 'planzer',
     name: 'Planzer',
     color: '#e30613',
-    trackingUrl: (n) => `https://planzer.ch/en/package-tracking/?tracking=${encodeURIComponent(n)}`,
+    trackingUrl: (n) =>
+      `https://tracking.app.planzer.ch/delivery/info?deliveryNumber=${encodeURIComponent(n)}`,
     automatic: true,
   },
   aliexpress: {
@@ -151,6 +152,7 @@ export function detectCarrier(raw: string): CarrierId {
   if (/^(JJD|JVGL)[A-Z0-9]{8,}$/.test(n)) return 'dhl';
 
   // Numeric barcodes, longest first to avoid ambiguity.
+  if (/^\d{20}$/.test(n)) return 'planzer';
   if (/^\d{18}$/.test(n)) return 'swiss-post'; // 99.xx.xxxxxx.xxxxxxxx
   if (/^\d{15}$/.test(n)) return 'fedex';
   if (/^\d{14}$/.test(n)) return 'dpd';

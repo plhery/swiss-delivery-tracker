@@ -23,7 +23,7 @@ export function ParcelCard({
       type="button"
       className={`parcel-card parcel-card--${meta?.tone ?? 'ok'}`}
       onClick={() => onOpen(parcel)}
-      aria-label={`${parcel.label || 'Parcel'} — ${meta?.label ?? 'no updates yet'}${expectedDelivery ? ` — expected ${expectedDelivery}` : ''}`}
+      aria-label={`${parcel.label || 'Parcel'} — ${meta?.label ?? 'not announced yet'}${expectedDelivery ? ` — expected ${expectedDelivery}` : ''}`}
     >
       <div className="parcel-card__stamp" aria-hidden="true">
         <svg viewBox="0 0 32 32">
@@ -46,7 +46,7 @@ export function ParcelCard({
           <span
             className={`status-badge status-badge--${meta?.tone ?? 'ok'}`}
           >
-            {meta?.label ?? 'Waiting for updates'}
+            {meta?.label ?? 'Not announced yet'}
           </span>
         </div>
         {expectedDelivery && (

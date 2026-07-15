@@ -93,6 +93,7 @@ describe('App', () => {
     await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
 
     expect(await screen.findByText('Fondue set 🫕')).toBeInTheDocument();
+    expect(screen.getByText('Not announced yet')).toBeInTheDocument();
     expect(
       screen.queryByRole('dialog', { name: /add a parcel/i }),
     ).not.toBeInTheDocument();
@@ -114,6 +115,32 @@ describe('App', () => {
 
     expect(add).toHaveBeenCalledWith({
       trackingNumber: 'ambiguous-123',
+      label: '',
+      carrier: 'planzer',
+    });
+  });
+
+  it('automatically detects a Planzer delivery number', async () => {
+    const base = createDemoRepo(window.localStorage);
+    const add = vi.fn(base.add);
+    const user = userEvent.setup();
+    renderApp({ ...base, add });
+    await screen.findByText('Coffee beans ☕');
+
+    await user.click(screen.getByRole('button', { name: /add a parcel/i }));
+    const sheet = screen.getByRole('dialog', { name: /add a parcel/i });
+    await user.type(
+      within(sheet).getByLabelText(/tracking number/i),
+      '91346097020038089282',
+    );
+
+    expect(
+      within(sheet).getByText(/Planzer will sync automatically/i),
+    ).toBeInTheDocument();
+    await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
+
+    expect(add).toHaveBeenCalledWith({
+      trackingNumber: '91346097020038089282',
       label: '',
       carrier: 'planzer',
     });
@@ -294,9 +321,13 @@ describe('App', () => {
     renderApp(repo);
 
     expect(await screen.findByText('Sync needs attention')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Parcel — no updates yet/i }));
+    await user.click(
+      screen.getByRole('button', { name: /Parcel — not announced yet/i }),
+    );
     expect(screen.getByRole('status')).toHaveTextContent('Carrier maintenance');
-    expect(screen.getByText(/no tracking events yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/carrier hasn’t announced this shipment yet/i),
+    ).toBeInTheDocument();
   });
 
   it('shows a friendly empty state when there are no parcels', async () => {

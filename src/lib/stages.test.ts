@@ -23,8 +23,9 @@ function makeEvent(overrides: Partial<TrackingEvent>): TrackingEvent {
 }
 
 describe('CORE_STAGES', () => {
-  it('goes from announcement to delivery in order', () => {
+  it('goes from pre-announcement to delivery in order', () => {
     expect(CORE_STAGES).toEqual([
+      'pending',
       'registered',
       'accepted',
       'in_transit',
@@ -90,14 +91,14 @@ describe('currentStage / progressIndex', () => {
       makeEvent({ id: 'b', stage: 'out_for_delivery', occurredAt: '2026-06-03T08:00:00.000Z' }),
     ];
     expect(currentStage(events)).toBe('out_for_delivery');
-    expect(progressIndex(events)).toBe(3);
+    expect(progressIndex(events)).toBe(4);
   });
 
   it('keeps progress at in-transit level while at customs', () => {
     const events = [
       makeEvent({ id: 'a', stage: 'customs', occurredAt: '2026-06-03T08:00:00.000Z' }),
     ];
-    expect(progressIndex(events)).toBe(2);
+    expect(progressIndex(events)).toBe(3);
   });
 });
 

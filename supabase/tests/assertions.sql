@@ -9,9 +9,15 @@ begin
   select count(*) into initial_events
   from public.tracking_events
   where package_id = '40000000-0000-0000-0000-000000000004'
-    and provider_event_id = 'app:registered';
+    and provider_event_id = 'app:pending'
+    and stage = 'pending';
   if initial_events <> 1 then
-    raise exception 'initial tracking event trigger produced % rows', initial_events;
+    raise exception 'pending tracking event migration produced % rows', initial_events;
+  end if;
+
+  if (select current_stage from public.packages where id = '40000000-0000-0000-0000-000000000004')
+      <> 'pending' then
+    raise exception 'package was announced before the carrier reported it';
   end if;
 
   if (select user_id from public.packages where id = '40000000-0000-0000-0000-000000000004')

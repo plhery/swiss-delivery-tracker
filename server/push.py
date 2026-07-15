@@ -13,6 +13,7 @@ from .supabase_client import SupabaseServiceClient
 
 
 STAGE_LABELS = {
+    "pending": "Not announced yet",
     "registered": "Shipment announced",
     "accepted": "Parcel accepted",
     "in_transit": "Parcel in transit",

@@ -2,7 +2,7 @@ import { CORE_STAGES, stageMeta } from '../lib/stages';
 import type { Stage } from '../types';
 
 /**
- * Five little steps from "announced" to "delivered", filled up to the
+ * Six little steps from "not announced yet" to "delivered", filled up to the
  * parcel's current position.
  */
 export function ProgressTrack({ stage }: { stage: Stage | null }) {
@@ -10,7 +10,7 @@ export function ProgressTrack({ stage }: { stage: Stage | null }) {
   const position = meta?.progress ?? -1;
   const label = meta
     ? `Step ${position + 1} of ${CORE_STAGES.length}: ${meta.label}`
-    : 'No tracking events yet';
+    : 'Not announced yet';
 
   return (
     <div

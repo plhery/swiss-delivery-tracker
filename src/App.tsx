@@ -94,7 +94,7 @@ export default function App() {
               ? 'Opening your delivery box…'
               : activeCount === 0
                 ? 'Nothing on the way right now'
-                : 'Every shipment, from announcement to arrival.'}
+                : 'Every shipment, from first lookup to arrival.'}
           </p>
         </div>
       </header>

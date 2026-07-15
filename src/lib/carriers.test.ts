@@ -18,6 +18,11 @@ describe('normalizeTrackingNumber', () => {
 });
 
 describe('detectCarrier', () => {
+  it('recognises Planzer 20-digit delivery numbers', () => {
+    expect(detectCarrier('91346097020038089282')).toBe('planzer');
+    expect(detectCarrier('91346 09702 00380 89282')).toBe('planzer');
+  });
+
   it('recognises Swiss Post 18-digit barcodes, with or without dots', () => {
     expect(detectCarrier('99.34.123456.12345678')).toBe('swiss-post');
     expect(detectCarrier('993412345612345678')).toBe('swiss-post');
@@ -74,6 +79,12 @@ describe('formatTrackingNumber', () => {
 });
 
 describe('carrier metadata', () => {
+  it('links Planzer deliveries to the current tracking app', () => {
+    expect(CARRIERS.planzer.trackingUrl?.('91346097020038089282')).toBe(
+      'https://tracking.app.planzer.ch/delivery/info?deliveryNumber=91346097020038089282',
+    );
+  });
+
   it('builds encoded tracking links for every linked carrier', () => {
     const linked = Object.values(CARRIERS).filter((carrier) => carrier.trackingUrl);
     expect(linked.length).toBeGreaterThan(0);

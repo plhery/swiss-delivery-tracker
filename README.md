@@ -1,6 +1,6 @@
 # Parcel Post
 
-An iPhone-first PWA for following parcels from announcement to delivery, with
+An iPhone-first PWA for following parcels from first lookup to delivery, with
 special handling for customs, failed attempts and pickup notices.
 
 The production app uses one deliberately simple security model:

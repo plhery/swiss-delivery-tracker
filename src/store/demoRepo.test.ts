@@ -8,6 +8,7 @@ beforeEach(() => {
 
 describe('nextStage', () => {
   it('walks the happy path in order', () => {
+    expect(nextStage('pending')).toBe('registered');
     expect(nextStage('registered')).toBe('accepted');
     expect(nextStage('accepted')).toBe('in_transit');
     expect(nextStage('in_transit')).toBe('out_for_delivery');
@@ -40,7 +41,7 @@ describe('createDemoRepo', () => {
     );
   });
 
-  it('adds a parcel with a registered event and a detected carrier', async () => {
+  it('adds a parcel as pending until the carrier announces it', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({
       trackingNumber: '99.34.123456.12345678',
@@ -50,7 +51,7 @@ describe('createDemoRepo', () => {
     expect(parcel.trackingNumber).toBe('993412345612345678');
     expect(parcel.carrier).toBe('swiss-post');
     expect(parcel.events).toHaveLength(1);
-    expect(parcel.events[0].stage).toBe('registered');
+    expect(parcel.events[0].stage).toBe('pending');
 
     const listed = await repo.list();
     expect(listed.some((p) => p.id === parcel.id)).toBe(true);
@@ -89,11 +90,11 @@ describe('createDemoRepo', () => {
   it('refresh advances non-final parcels by exactly one stage', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Socks' });
-    expect(currentStage(parcel.events)).toBe('registered');
+    expect(currentStage(parcel.events)).toBe('pending');
 
     const afterOne = await repo.refresh();
     const mine = afterOne.find((p) => p.id === parcel.id)!;
-    expect(currentStage(mine.events)).toBe('accepted');
+    expect(currentStage(mine.events)).toBe('registered');
     expect(mine.events).toHaveLength(2);
   });
 

@@ -133,7 +133,11 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(infer_stage("Unrecognised", "waiting"), "waiting")
 
     def test_result_stage_maps_provider_states(self):
-        self.assertEqual(result_stage({"status": "pending"}), "registered")
+        self.assertEqual(result_stage({"status": "pending"}), "pending")
+        self.assertEqual(
+            result_stage({"status": "pending", "last_status_text": "Label created"}),
+            "registered",
+        )
         self.assertEqual(result_stage({"status": "in_transit"}), "in_transit")
         self.assertEqual(result_stage({"status": "out_for_delivery"}), "out_for_delivery")
         self.assertEqual(result_stage({"status": "delivered"}), "delivered")
@@ -198,6 +202,22 @@ class TrackingSyncTests(unittest.TestCase):
         ).sync()
         self.assertEqual(waiting.waiting, 1)
         self.assertEqual(client.updates[-1][1]["sync_status"], "waiting")
+
+        pending_client = FakeClient([self.package("pkg-pending")])
+        pending = TrackingSyncService(
+            pending_client,
+            FakeAdapter(
+                result={
+                    "status": "pending",
+                    "last_status_text": "Shipment not found yet",
+                    "events": [],
+                }
+            ),
+        ).sync()
+        self.assertEqual(pending.waiting, 1)
+        self.assertEqual(pending_client.events[0]["stage"], "pending")
+        self.assertEqual(pending_client.updates[-1][1]["current_stage"], "pending")
+        self.assertEqual(pending_client.updates[-1][1]["sync_status"], "waiting")
 
         json_client = FakeClient([self.package("pkg-json")])
         json_error = json.JSONDecodeError("bad", "<html>", 0)
