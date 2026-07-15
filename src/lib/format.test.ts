@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDateTime, relativeTime } from './format';
+import {
+  formatDate,
+  formatDateTime,
+  formatExpectedDelivery,
+  relativeTime,
+} from './format';
 
 const NOW = new Date('2026-07-01T12:00:00.000Z').getTime();
 
@@ -35,5 +40,26 @@ describe('formatDate / formatDateTime', () => {
   it('returns empty string for invalid input', () => {
     expect(formatDate('nope')).toBe('');
     expect(formatDateTime('nope')).toBe('');
+  });
+});
+
+describe('formatExpectedDelivery', () => {
+  const today = new Date(2026, 6, 15, 12).getTime();
+
+  it('uses friendly labels for today and tomorrow', () => {
+    expect(formatExpectedDelivery('2026-07-15', today)).toBe('today');
+    expect(formatExpectedDelivery('2026-07-16', today)).toBe('tomorrow');
+  });
+
+  it('formats other dates and preserves unrecognised carrier values', () => {
+    expect(formatExpectedDelivery('2026-07-20', today)).toBe('20.07.2026');
+    expect(formatExpectedDelivery('Awaiting carrier estimate', today)).toBe(
+      'Awaiting carrier estimate',
+    );
+  });
+
+  it('handles tomorrow across month boundaries', () => {
+    const endOfMonth = new Date(2026, 6, 31, 12).getTime();
+    expect(formatExpectedDelivery('2026-08-01', endOfMonth)).toBe('tomorrow');
   });
 });

@@ -479,6 +479,13 @@ button:disabled {
   font-weight: 700;
 }
 
+.parcel-card__eta {
+  margin: 8px 0 -4px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .parcel-card--skeleton {
   display: block;
   min-height: 158px;

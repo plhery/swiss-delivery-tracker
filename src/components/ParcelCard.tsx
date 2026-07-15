@@ -1,5 +1,5 @@
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
-import { relativeTime } from '../lib/format';
+import { formatExpectedDelivery, relativeTime } from '../lib/format';
 import { latestEvent, stageMeta } from '../lib/stages';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
@@ -14,13 +14,16 @@ export function ParcelCard({
   const carrier = carrierInfo(parcel.carrier);
   const last = latestEvent(parcel.events);
   const meta = last ? stageMeta(last.stage) : null;
+  const expectedDelivery = parcel.expectedDelivery
+    ? formatExpectedDelivery(parcel.expectedDelivery)
+    : null;
 
   return (
     <button
       type="button"
       className={`parcel-card parcel-card--${meta?.tone ?? 'ok'}`}
       onClick={() => onOpen(parcel)}
-      aria-label={`${parcel.label || 'Parcel'} — ${meta?.label ?? 'no updates yet'}`}
+      aria-label={`${parcel.label || 'Parcel'} — ${meta?.label ?? 'no updates yet'}${expectedDelivery ? ` — expected ${expectedDelivery}` : ''}`}
     >
       <div className="parcel-card__stamp" aria-hidden="true">
         <svg viewBox="0 0 32 32">
@@ -46,6 +49,11 @@ export function ParcelCard({
             {meta?.label ?? 'Waiting for updates'}
           </span>
         </div>
+        {expectedDelivery && (
+          <p className="parcel-card__eta">
+            Expected {expectedDelivery}
+          </p>
+        )}
         {parcel.syncStatus === 'error' && (
           <p className="parcel-card__sync-error">Sync needs attention</p>
         )}

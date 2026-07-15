@@ -1,5 +1,6 @@
 import { useRef, type PointerEvent } from 'react';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
+import { formatExpectedDelivery } from '../lib/format';
 import { latestEvent, stageMeta } from '../lib/stages';
 import { isLeftSwipe, type TouchPoint } from '../lib/swipe';
 import type { ParcelWithEvents } from '../types';
@@ -78,7 +79,9 @@ export function ParcelDetail({
           <span className="detail__barcode" aria-hidden="true" />
         </div>
         {parcel.expectedDelivery && (
-          <p className="detail__meta">Expected: {parcel.expectedDelivery}</p>
+          <p className="detail__meta">
+            Expected: {formatExpectedDelivery(parcel.expectedDelivery)}
+          </p>
         )}
         {parcel.lastSyncedAt && (
           <p className="detail__meta">

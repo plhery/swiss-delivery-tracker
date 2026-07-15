@@ -42,6 +42,34 @@ describe('App', () => {
     expect(screen.getByText('At customs')).toBeInTheDocument();
   });
 
+  it('shows a tomorrow ETA on the main parcel card', async () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const pad = (value: number) => String(value).padStart(2, '0');
+    const expectedDelivery = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+    const parcel: ParcelWithEvents = {
+      id: 'parcel-with-eta',
+      trackingNumber: '993412345612345678',
+      label: 'Tomorrow parcel',
+      carrier: 'swiss-post',
+      createdAt: new Date().toISOString(),
+      expectedDelivery,
+      syncStatus: 'ok',
+      events: [],
+    };
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([parcel]),
+      add: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([parcel]),
+    };
+
+    renderApp(repo);
+
+    expect(await screen.findByText('Expected tomorrow')).toBeInTheDocument();
+  });
+
   it('adds a parcel through the bottom sheet', async () => {
     const user = userEvent.setup();
     renderApp();
