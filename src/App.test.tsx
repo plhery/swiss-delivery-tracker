@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -138,7 +138,22 @@ describe('App', () => {
       within(detail).getByRole('link', { name: /open on swiss post/i }),
     ).toBeInTheDocument();
 
-    await user.click(within(detail).getByRole('button', { name: /back/i }));
+    fireEvent(
+      detail,
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 280,
+        clientY: 180,
+      }),
+    );
+    fireEvent(
+      detail,
+      new MouseEvent('pointerup', {
+        bubbles: true,
+        clientX: 150,
+        clientY: 190,
+      }),
+    );
     expect(
       screen.queryByRole('dialog', { name: 'Coffee beans ☕' }),
     ).not.toBeInTheDocument();

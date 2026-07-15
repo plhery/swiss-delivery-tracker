@@ -14,7 +14,10 @@ const [index, registration, worker, pushWorker, manifestText] = await Promise.al
 const asset = index.match(/\/assets\/index-[^" ]+\.js/)?.[0];
 assert.ok(asset, 'index.html must reference a hashed JavaScript bundle');
 await stat(resolve(dist, asset.slice(1)));
+const bundle = await readFile(resolve(dist, asset.slice(1)), 'utf8');
 assert.ok(worker.includes(asset.slice(1)), 'the service worker must precache the current bundle');
+assert.match(bundle, /controllerchange/, 'the app must observe service worker upgrades');
+assert.match(bundle, /location\.reload/, 'an activated upgrade must reload the open app');
 assert.match(registration, /serviceWorker\.register\(['"]\/sw\.js['"]/);
 assert.match(worker, /\.skipWaiting\(\)/, 'new workers must activate without waiting');
 assert.match(worker, /\.clientsClaim\(\)/, 'new workers must take control of open clients');

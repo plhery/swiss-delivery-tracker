@@ -31,7 +31,11 @@ code. Every device admitted by Cloudflare Access sees the same packages.
 - **Durable history** — provider events are deduplicated and carrier failures
   remain visible without deleting the parcel.
 - **Installable PWA** — standalone home-screen display, safe-area layout and an
-  automatically updating offline shell.
+  automatically updating offline shell. An open app reloads as soon as an
+  installed update takes control.
+- **Phone-native navigation** — parcel details can be dismissed with the back
+  button or a deliberate swipe to the left without interfering with vertical
+  timeline scrolling.
 - **Local demo mode** — Vite development uses local sample data unless
   `VITE_USE_API=true` is set.
 

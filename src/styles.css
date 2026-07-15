@@ -903,6 +903,7 @@ button:disabled {
   background: var(--canvas);
   box-shadow: 0 0 55px rgba(25, 25, 22, 0.18);
   animation: slide-in 180ms ease-out;
+  touch-action: pan-y;
 }
 
 @keyframes slide-in {

@@ -1,5 +1,7 @@
+import { useRef, type PointerEvent } from 'react';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { latestEvent, stageMeta } from '../lib/stages';
+import { isLeftSwipe, type TouchPoint } from '../lib/swipe';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
 import { Timeline } from './Timeline';
@@ -17,9 +19,36 @@ export function ParcelDetail({
   const last = latestEvent(parcel.events);
   const meta = last ? stageMeta(last.stage) : null;
   const trackingUrl = carrier.trackingUrl?.(parcel.trackingNumber);
+  const swipeStart = useRef<TouchPoint | null>(null);
+
+  function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (event.isPrimary === false) {
+      swipeStart.current = null;
+      return;
+    }
+    swipeStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+  }
+
+  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (start && isLeftSwipe(start, { x: event.clientX, y: event.clientY })) {
+      onBack();
+    }
+  }
 
   return (
-    <div className="detail" role="dialog" aria-label={parcel.label || 'Parcel'}>
+    <div
+      className="detail"
+      role="dialog"
+      aria-label={parcel.label || 'Parcel'}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => { swipeStart.current = null; }}
+    >
       <header className="detail__header">
         <button type="button" className="detail__back" onClick={onBack}>
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m13 4-6 6 6 6" /></svg>
