@@ -63,3 +63,7 @@ comment on table public.push_subscriptions is
   'Server-only Web Push endpoints. Endpoints and keys must never be exposed to browser database roles.';
 comment on table public.push_deliveries is
   'Per-device acknowledgements used to retry only notifications that were not delivered successfully.';
+
+-- Direct SQL deployments do not automatically refresh PostgREST's relation
+-- cache. Without this signal the API can return 404 for the new queue view.
+notify pgrst, 'reload schema';
