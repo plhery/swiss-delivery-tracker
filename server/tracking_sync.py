@@ -28,6 +28,10 @@ class CarrierAdapter(Protocol):
     def fetch(self, carrier_id: str, tracking_number: str, tracking_url: str | None) -> dict[str, Any]: ...
 
 
+class NotificationDispatcher(Protocol):
+    def dispatch(self) -> Any: ...
+
+
 class UpstreamTrackerAdapter:
     """Loads the pinned upstream tracker only in the production image."""
 
@@ -55,6 +59,9 @@ class SyncSummary:
     waiting: int = 0
     errors: int = 0
     unsupported: int = 0
+    notifications_sent: int = 0
+    notification_errors: int = 0
+    subscriptions_expired: int = 0
 
     def to_dict(self) -> dict[str, int]:
         return {
@@ -63,6 +70,9 @@ class SyncSummary:
             "waiting": self.waiting,
             "errors": self.errors,
             "unsupported": self.unsupported,
+            "notifications_sent": self.notifications_sent,
+            "notification_errors": self.notification_errors,
+            "subscriptions_expired": self.subscriptions_expired,
         }
 
 
@@ -174,10 +184,12 @@ class TrackingSyncService:
         self,
         client: SupabaseServiceClient,
         adapter: CarrierAdapter | None = None,
+        notifier: NotificationDispatcher | None = None,
         now=lambda: datetime.now(timezone.utc),
     ) -> None:
         self.client = client
         self.adapter = adapter or UpstreamTrackerAdapter()
+        self.notifier = notifier
         self.now = now
         self.lock = threading.Lock()
 
@@ -188,6 +200,14 @@ class TrackingSyncService:
                 summary.checked += 1
                 outcome = self._sync_package(package)
                 setattr(summary, outcome, getattr(summary, outcome) + 1)
+            if self.notifier:
+                try:
+                    push = self.notifier.dispatch()
+                    summary.notifications_sent = push.sent
+                    summary.notification_errors = push.failed
+                    summary.subscriptions_expired = push.expired
+                except Exception:
+                    summary.notification_errors += 1
         return summary
 
     def _sync_package(self, package: dict[str, Any]) -> str:

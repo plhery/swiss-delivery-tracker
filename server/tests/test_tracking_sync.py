@@ -233,8 +233,31 @@ class TrackingSyncTests(unittest.TestCase):
     def test_summary_serialization(self):
         self.assertEqual(
             SyncSummary(checked=2, updated=1, waiting=1, errors=0, unsupported=0).to_dict(),
-            {"checked": 2, "updated": 1, "waiting": 1, "errors": 0, "unsupported": 0},
+            {
+                "checked": 2,
+                "updated": 1,
+                "waiting": 1,
+                "errors": 0,
+                "unsupported": 0,
+                "notifications_sent": 0,
+                "notification_errors": 0,
+                "subscriptions_expired": 0,
+            },
         )
+
+    def test_notification_delivery_is_summarized_without_breaking_sync(self):
+        notifier = unittest.mock.Mock()
+        notifier.dispatch.return_value = type(
+            "Push", (), {"sent": 2, "failed": 1, "expired": 1}
+        )()
+        summary = TrackingSyncService(FakeClient([]), FakeAdapter(), notifier=notifier).sync()
+        self.assertEqual(summary.notifications_sent, 2)
+        self.assertEqual(summary.notification_errors, 1)
+        self.assertEqual(summary.subscriptions_expired, 1)
+
+        notifier.dispatch.side_effect = RuntimeError("push offline")
+        summary = TrackingSyncService(FakeClient([]), FakeAdapter(), notifier=notifier).sync()
+        self.assertEqual(summary.notification_errors, 1)
 
     def test_upstream_adapter_loads_modules_and_handles_missing_carriers(self):
         tracker = ModuleType("swiss_delivery_tracker.tracker")

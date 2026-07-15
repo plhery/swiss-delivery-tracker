@@ -9,8 +9,10 @@ RUN npm run build
 
 FROM python:3.13-slim AS runtime
 ARG TRACKER_COMMIT=62ae24f5677b3ff2d1af5d08574dc544c365a14d
+COPY requirements.txt /tmp/requirements.txt
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates curl \
+    && pip install --no-cache-dir -r /tmp/requirements.txt \
     && pip install --no-cache-dir "swiss-delivery-tracker @ git+https://github.com/blue-plhery-assistant/swiss-delivery-tracker.git@${TRACKER_COMMIT}" \
     && apt-get purge -y git \
     && apt-get autoremove -y \
@@ -23,7 +25,6 @@ RUN useradd --system --uid 10001 --create-home delivery \
 USER delivery
 ENV PORT=3000 \
     STATIC_DIR=/app/dist \
-    SYNC_INTERVAL_SECONDS=900 \
     PYTHONUNBUFFERED=1
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \

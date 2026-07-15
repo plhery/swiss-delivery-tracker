@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AddParcelSheet } from './components/AddParcelSheet';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
+import { NotificationControl } from './components/NotificationControl';
 import { isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
@@ -10,7 +11,17 @@ export default function App() {
   const { parcels, loading, refreshing, error, mode, addParcel, removeParcel, refresh } =
     useParcels();
   const [adding, setAdding] = useState(false);
-  const [openParcelId, setOpenParcelId] = useState<string | null>(null);
+  const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('parcel'),
+  );
+
+  function showParcel(packageId: string | null) {
+    const url = new URL(window.location.href);
+    if (packageId) url.searchParams.set('parcel', packageId);
+    else url.searchParams.delete('parcel');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    setOpenParcelId(packageId);
+  }
 
   const openParcel = useMemo(
     () => parcels.find((p) => p.id === openParcelId) ?? null,
@@ -34,7 +45,7 @@ export default function App() {
     const name = parcel.label || 'this parcel';
     if (!window.confirm(`Remove ${name} from your deliveries?`)) return;
     await removeParcel(parcel.id);
-    setOpenParcelId(null);
+    showParcel(null);
   }
 
   return (
@@ -51,6 +62,7 @@ export default function App() {
             </div>
           </div>
           <div className="app__header-actions">
+            {mode === 'api' && <NotificationControl />}
             <button
               type="button"
               className="icon-button"
@@ -132,7 +144,7 @@ export default function App() {
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  onOpen={(p) => setOpenParcelId(p.id)}
+                  onOpen={(p) => showParcel(p.id)}
                 />
               ))}
             </div>
@@ -153,7 +165,7 @@ export default function App() {
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  onOpen={(p) => setOpenParcelId(p.id)}
+                  onOpen={(p) => showParcel(p.id)}
                 />
               ))}
             </div>
@@ -178,7 +190,7 @@ export default function App() {
       {openParcel && (
         <ParcelDetail
           parcel={openParcel}
-          onBack={() => setOpenParcelId(null)}
+          onBack={() => showParcel(null)}
           onDelete={(p) => void handleDelete(p)}
         />
       )}

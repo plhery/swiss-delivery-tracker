@@ -6,6 +6,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -152,4 +153,74 @@ class SupabaseServiceClient:
             method="POST",
             body=events,
             prefer="resolution=ignore-duplicates,return=minimal",
+        )
+
+    def upsert_push_subscription(
+        self, endpoint: str, p256dh: str, auth: str, user_agent: str | None
+    ) -> dict[str, Any]:
+        now = datetime.now(timezone.utc).isoformat()
+        query = urllib.parse.urlencode({"on_conflict": "endpoint"})
+        rows = self._request(
+            f"/rest/v1/push_subscriptions?{query}",
+            method="POST",
+            body={
+                "endpoint": endpoint,
+                "p256dh": p256dh,
+                "auth": auth,
+                "user_agent": user_agent,
+                "subscribed_at": now,
+                "disabled_at": None,
+                "last_error": None,
+                "updated_at": now,
+            },
+            prefer="resolution=merge-duplicates,return=representation",
+        ) or []
+        if not rows:
+            raise SupabaseError("Supabase did not return the push subscription")
+        return rows[0]
+
+    def delete_push_subscription(self, endpoint: str) -> None:
+        query = urllib.parse.urlencode({"endpoint": f"eq.{endpoint}"})
+        self._request(
+            f"/rest/v1/push_subscriptions?{query}",
+            method="DELETE",
+            prefer="return=minimal",
+        )
+
+    def list_pending_push_notifications(self) -> list[dict[str, Any]]:
+        query = urllib.parse.urlencode(
+            {
+                "select": "*",
+                "order": "event_created_at.asc",
+                "limit": "1000",
+            },
+            safe="*,.",
+        )
+        return self._request(f"/rest/v1/pending_push_notifications?{query}") or []
+
+    def record_push_deliveries(self, subscription_id: str, event_ids: list[str]) -> None:
+        if not event_ids:
+            return
+        query = urllib.parse.urlencode(
+            {"on_conflict": "subscription_id,event_id"}, safe=","
+        )
+        self._request(
+            f"/rest/v1/push_deliveries?{query}",
+            method="POST",
+            body=[
+                {"subscription_id": subscription_id, "event_id": event_id}
+                for event_id in event_ids
+            ],
+            prefer="resolution=ignore-duplicates,return=minimal",
+        )
+
+    def update_push_subscription(
+        self, subscription_id: str, values: dict[str, Any]
+    ) -> None:
+        query = urllib.parse.urlencode({"id": f"eq.{subscription_id}"})
+        self._request(
+            f"/rest/v1/push_subscriptions?{query}",
+            method="PATCH",
+            body={**values, "updated_at": datetime.now(timezone.utc).isoformat()},
+            prefer="return=minimal",
         )

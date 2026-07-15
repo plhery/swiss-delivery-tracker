@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import server.app as app
@@ -40,6 +41,13 @@ class FakeService:
         self.client.list_packages.side_effect = self._list_packages
         self.client.create_package.side_effect = self._create_package
         self.client.delete_package.side_effect = self._delete_package
+        self.client.upsert_push_subscription.return_value = {
+            "id": "sub-1",
+            "endpoint": "https://push.example.test/token",
+            "p256dh": "public-key-value",
+            "auth": "auth-key-value",
+        }
+        self.notifier = None
         self.sync = Mock(side_effect=self._sync)
 
     def _maybe_raise(self):
@@ -169,6 +177,64 @@ class AppHttpTests(unittest.TestCase):
         self.assertTrue(json.loads(body)["ok"])
         app.SERVICE.client.delete_package.assert_called_once_with(PACKAGE["id"])
 
+    def test_push_configuration_subscription_and_unsubscribe(self):
+        status, _, body = self.request("GET", "/api/push/config")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"available": False, "publicKey": None})
+
+        notifier = Mock(public_key="vapid-public")
+        app.SERVICE.notifier = notifier
+        status, _, body = self.request("GET", "/api/push/config")
+        self.assertEqual(json.loads(body), {"available": True, "publicKey": "vapid-public"})
+
+        payload = {
+            "endpoint": "https://push.example.test/token",
+            "keys": {"p256dh": "public-key-value", "auth": "auth-key-value"},
+        }
+        status, _, body = self.request(
+            "POST", "/api/push/subscriptions", payload=payload, headers={"User-Agent": "iPhone"}
+        )
+        self.assertEqual(status, 201)
+        self.assertTrue(json.loads(body)["testSent"])
+        app.SERVICE.client.upsert_push_subscription.assert_called_once_with(
+            payload["endpoint"], "public-key-value", "auth-key-value", "iPhone"
+        )
+        notifier.send_test.assert_called_once()
+
+        status, _, body = self.request(
+            "DELETE", "/api/push/subscriptions", payload={"endpoint": payload["endpoint"]}
+        )
+        self.assertEqual(status, 200)
+        app.SERVICE.client.delete_push_subscription.assert_called_once_with(payload["endpoint"])
+
+    def test_push_routes_validate_credentials_and_handle_test_failure(self):
+        app.SERVICE.notifier = Mock(public_key="public")
+        invalid = [
+            {},
+            {"endpoint": "http://insecure.test", "keys": {}},
+            {"endpoint": "https://push.example.test", "keys": {"p256dh": "short", "auth": "short"}},
+        ]
+        for payload in invalid:
+            status, _, _ = self.request("POST", "/api/push/subscriptions", payload=payload)
+            self.assertEqual(status, 400)
+
+        app.SERVICE.notifier.send_test.side_effect = RuntimeError("Apple unavailable")
+        status, _, body = self.request(
+            "POST",
+            "/api/push/subscriptions",
+            payload={
+                "endpoint": "https://push.example.test/token",
+                "keys": {"p256dh": "public-key-value", "auth": "auth-key-value"},
+            },
+        )
+        self.assertEqual(status, 201)
+        self.assertFalse(json.loads(body)["testSent"])
+
+        app.SERVICE.notifier = None
+        status, _, body = self.request("POST", "/api/push/subscriptions", payload={})
+        self.assertEqual(status, 503)
+        self.assertIn("not configured", json.loads(body)["error"])
+
     def test_api_requires_configuration_and_valid_routes(self):
         app.SERVICE = None
         for method, path in (
@@ -279,7 +345,48 @@ class AppLifecycleTests(unittest.TestCase):
         ):
             self.assertIs(app.build_service(), service_class.return_value)
             client_class.assert_called_once_with("http://supabase", "service")
-            service_class.assert_called_once_with(client_class.return_value)
+            service_class.assert_called_once_with(client_class.return_value, notifier=None)
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SUPABASE_URL": "http://supabase",
+                    "SUPABASE_SERVICE_ROLE_KEY": "service",
+                    "VAPID_PUBLIC_KEY": "public",
+                    "VAPID_PRIVATE_KEY": "private",
+                    "VAPID_SUBJECT": "mailto:owner@example.test",
+                },
+                clear=True,
+            ),
+            patch("server.app.SupabaseServiceClient") as client_class,
+            patch("server.app.PushNotificationService") as push_class,
+            patch("server.app.TrackingSyncService") as service_class,
+        ):
+            app.build_service()
+            push_class.assert_called_once_with(
+                client_class.return_value,
+                "public",
+                "private",
+                "mailto:owner@example.test",
+            )
+            service_class.assert_called_once_with(
+                client_class.return_value, notifier=push_class.return_value
+            )
+
+    def test_schedule_uses_ten_minutes_by_day_and_hourly_by_night(self):
+        cases = [
+            (datetime(2026, 7, 15, 7, 4, 30, tzinfo=timezone.utc), 330),  # 09:04 Zurich
+            (datetime(2026, 7, 15, 19, 59, tzinfo=timezone.utc), 60),     # 21:59 Zurich
+            (datetime(2026, 7, 15, 20, 1, tzinfo=timezone.utc), 3540),   # 22:01 Zurich
+            (datetime(2026, 7, 15, 5, 30, tzinfo=timezone.utc), 1800),  # 07:30 Zurich
+            (datetime(2026, 1, 15, 6, 30, tzinfo=timezone.utc), 1800),  # winter boundary
+        ]
+        for now, expected in cases:
+            with self.subTest(now=now):
+                self.assertEqual(app.seconds_until_next_sync(now), expected)
+        with self.assertRaisesRegex(ValueError, "timezone"):
+            app.seconds_until_next_sync(datetime(2026, 7, 15, 9))
 
     def test_scheduler_records_success_and_top_level_failures(self):
         app.STATE.clear()

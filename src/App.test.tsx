@@ -16,6 +16,7 @@ function renderApp(repo: ParcelRepo = createDemoRepo(window.localStorage)) {
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.history.replaceState({}, '', '/');
 });
 
 describe('App', () => {
@@ -141,6 +142,32 @@ describe('App', () => {
     expect(
       screen.queryByRole('dialog', { name: 'Coffee beans ☕' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('opens notification deep links and clears the parcel query on back', async () => {
+    const parcel: ParcelWithEvents = {
+      id: 'parcel-from-push',
+      trackingNumber: '993412345612345678',
+      label: 'From notification',
+      carrier: 'swiss-post',
+      createdAt: '2026-07-15T08:00:00Z',
+      syncStatus: 'ok',
+      events: [],
+    };
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([parcel]),
+      add: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([parcel]),
+    };
+    window.history.replaceState({}, '', '/?parcel=parcel-from-push');
+    const user = userEvent.setup();
+    renderApp(repo);
+    const detail = await screen.findByRole('dialog', { name: 'From notification' });
+    expect(detail).toBeInTheDocument();
+    await user.click(within(detail).getByRole('button', { name: /back/i }));
+    expect(window.location.search).toBe('');
   });
 
   it('removes a parcel after confirmation', async () => {

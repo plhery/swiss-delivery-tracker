@@ -52,6 +52,16 @@ update public.packages
 set label = 'Updated everywhere'
 where id = '50000000-0000-0000-0000-000000000005';
 
+insert into public.push_subscriptions (
+  id, endpoint, p256dh, auth, subscribed_at
+) values (
+  '60000000-0000-0000-0000-000000000006',
+  'https://push.example.test/device-token',
+  'public-encryption-key',
+  'auth-secret',
+  '2000-01-01T00:00:00Z'
+);
+
 reset role;
 
 -- Browser Supabase roles no longer have table access; Cloudflare Access plus
@@ -71,6 +81,20 @@ begin
   begin
     insert into public.packages (tracking_number) values ('DIRECT-BROWSER-WRITE');
     raise exception 'expected direct authenticated writes to be denied';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  begin
+    perform count(*) from public.push_subscriptions;
+    raise exception 'expected direct authenticated push subscription reads to be denied';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  begin
+    perform count(*) from public.pending_push_notifications;
+    raise exception 'expected direct authenticated push queue reads to be denied';
   exception when insufficient_privilege then
     null;
   end;
@@ -124,6 +148,43 @@ begin
   end if;
 end;
 $$;
+
+-- New events are pending only until each subscribed device is acknowledged.
+set role service_role;
+
+do $$
+declare
+  pending integer;
+begin
+  select count(*) into pending
+  from public.pending_push_notifications
+  where subscription_id = '60000000-0000-0000-0000-000000000006';
+  if pending <> 1 then
+    raise exception 'expected one pending provider event, found %', pending;
+  end if;
+end;
+$$;
+
+insert into public.push_deliveries (subscription_id, event_id)
+select
+  '60000000-0000-0000-0000-000000000006',
+  id
+from public.tracking_events
+where package_id = '50000000-0000-0000-0000-000000000005'
+  and provider_event_id = 'provider:event-1';
+
+do $$
+begin
+  if exists (
+    select 1 from public.pending_push_notifications
+    where subscription_id = '60000000-0000-0000-0000-000000000006'
+  ) then
+    raise exception 'acknowledged push event remained pending';
+  end if;
+end;
+$$;
+
+reset role;
 
 -- Invalid state values are still rejected.
 do $$

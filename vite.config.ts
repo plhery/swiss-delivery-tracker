@@ -8,13 +8,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/apple-touch-icon.png'],
+      includeAssets: ['icons/apple-touch-icon.png', 'push-sw.js'],
       manifest: {
-        name: 'Swiss Delivery Tracker',
-        short_name: 'Deliveries',
+        name: 'Parcel Post',
+        short_name: 'Parcels',
         description:
           'Follow your Swiss package deliveries through every stage.',
         lang: 'en',
+        id: '/',
         start_url: '/',
         scope: '/',
         display: 'standalone',
@@ -42,6 +43,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
       },
     }),

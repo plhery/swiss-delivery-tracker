@@ -1,4 +1,4 @@
-# Swiss Delivery Tracker
+# Parcel Post
 
 An iPhone-first PWA for following parcels from announcement to delivery, with
 special handling for customs, failed attempts and pickup notices.
@@ -18,8 +18,13 @@ code. Every device admitted by Cloudflare Access sees the same packages.
 - **Shared delivery box** — packages live in Postgres and appear on every
   authorized device. Open tabs poll for changes and refresh when they become
   visible again.
-- **Server-side synchronization** — a worker checks active parcels every 15
-  minutes, and the refresh button triggers an immediate shared sync.
+- **Server-side synchronization** — a worker checks active parcels every 10
+  minutes from 08:00 through 22:00 Europe/Zurich and hourly overnight. The
+  refresh button triggers an immediate shared sync.
+- **Per-device notifications** — standards-based Web Push alerts each opted-in
+  device about newly discovered tracking events. Delivery acknowledgements are
+  stored per device, transient failures retry, and expired endpoints are
+  disabled automatically.
 - **Swiss-first carrier support** — automatic adapters for Swiss Post,
   Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS and
   PostLogistics; carrier links for DHL, UPS, FedEx and DPD.
@@ -45,6 +50,9 @@ docker build -t swiss-delivery-tracker .
 docker run --rm -p 3000:3000 \
   -e SUPABASE_URL=https://supabase.example.com \
   -e SUPABASE_SERVICE_ROLE_KEY=server-only-key \
+  -e VAPID_PUBLIC_KEY=base64url-public-key \
+  -e VAPID_PRIVATE_KEY=base64url-private-key \
+  -e VAPID_SUBJECT=https://delivery.example.com \
   swiss-delivery-tracker
 ```
 
@@ -58,10 +66,19 @@ The backend endpoints are:
 - `POST /api/packages`
 - `DELETE /api/packages/:id`
 - `POST /api/sync`
+- `GET /api/push/config`
+- `POST /api/push/subscriptions`
+- `DELETE /api/push/subscriptions`
 - `GET /health`
 
 They intentionally rely on the deployment's Cloudflare Access boundary. Do not
 expose the application origin directly to the public internet.
+
+On iPhone, install Parcel Post with Safari's **Add to Home Screen**, open the
+installed app and enable notifications from the bell. Each device opts in
+independently, while all devices continue to share the same parcel collection.
+Notification text contains the parcel label and progress but never the tracking
+number. A notification opens the matching parcel in the app.
 
 ## Carrier engine
 
@@ -120,7 +137,9 @@ scripts/      migrations, origin smoke checks and PWA validation
 ## Production operations
 
 - Deploy the Dockerfile on port `3000` with `/health` as the health check.
-- Supply only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to the server.
+- Supply `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, the VAPID key pair and a
+  valid HTTPS or `mailto:` VAPID subject to the server. VAPID keys must remain
+  stable across deployments or existing device subscriptions stop working.
 - Keep the hostname behind Cloudflare Access and require Access validation in
   the tunnel ingress rule.
 - Back up Postgres independently and verify the reverse-proxy route after every

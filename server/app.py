@@ -8,19 +8,22 @@ import os
 import re
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
+from .push import PushNotificationService
 from .supabase_client import SupabaseError, SupabaseServiceClient
 from .tracking_sync import TrackingSyncService
 
 
 DIST = Path(os.environ.get("STATIC_DIR", "/app/dist")).resolve()
 PORT = int(os.environ.get("PORT", "3000"))
-SYNC_INTERVAL = max(60, int(os.environ.get("SYNC_INTERVAL_SECONDS", "900")))
+SYNC_TIMEZONE = ZoneInfo("Europe/Zurich")
 MAX_JSON_BODY = 16_384
 VALID_CARRIERS = {
     "swiss-post", "quickpac", "planzer", "aliexpress", "sunyou", "hermes",
@@ -34,11 +37,40 @@ def build_service() -> TrackingSyncService | None:
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not all((url, service_key)):
         return None
-    return TrackingSyncService(SupabaseServiceClient(url, service_key))
+    client = SupabaseServiceClient(url, service_key)
+    public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+    private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+    notifier = None
+    if public_key and private_key:
+        notifier = PushNotificationService(
+            client,
+            public_key,
+            private_key,
+            os.environ.get("VAPID_SUBJECT", "https://delivery.plhery.com"),
+        )
+    return TrackingSyncService(client, notifier=notifier)
 
 
 SERVICE = build_service()
-STATE: dict[str, object] = {"last_scheduled_sync": None, "last_summary": None, "last_error": None}
+STATE: dict[str, object] = {
+    "last_scheduled_sync": None,
+    "next_scheduled_sync": None,
+    "last_summary": None,
+    "last_error": None,
+}
+
+
+def seconds_until_next_sync(now: datetime | None = None) -> float:
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        raise ValueError("Sync clock must include a timezone")
+    local = current.astimezone(SYNC_TIMEZONE)
+    if 8 <= local.hour < 22:
+        minutes = 10 - (local.minute % 10)
+        candidate = local.replace(second=0, microsecond=0) + timedelta(minutes=minutes)
+    else:
+        candidate = local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    return max(1.0, (candidate.astimezone(timezone.utc) - current.astimezone(timezone.utc)).total_seconds())
 
 
 def scheduler() -> None:
@@ -51,11 +83,13 @@ def scheduler() -> None:
             )
         except Exception as exc:
             STATE.update(last_scheduled_sync=time.time(), last_error=str(exc)[:500])
-        time.sleep(SYNC_INTERVAL)
+        delay = seconds_until_next_sync()
+        STATE["next_scheduled_sync"] = time.time() + delay
+        time.sleep(delay)
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "DeliveryTracker/2"
+    server_version = "DeliveryTracker/3"
 
     def _json(self, status: int, payload: object) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -87,6 +121,16 @@ class Handler(BaseHTTPRequestHandler):
             except SupabaseError as exc:
                 self._json(502, {"error": str(exc)})
             return
+        if path == "/api/push/config":
+            notifier = SERVICE.notifier if SERVICE else None
+            self._json(
+                200,
+                {
+                    "available": notifier is not None,
+                    "publicKey": notifier.public_key if notifier else None,
+                },
+            )
+            return
         self._serve_static(path)
 
     def do_HEAD(self) -> None:  # noqa: N802
@@ -107,6 +151,31 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, SERVICE.sync().to_dict())
             except Exception as exc:
                 self._json(502, {"error": str(exc)[:500]})
+            return
+
+        if path == "/api/push/subscriptions":
+            notifier = SERVICE.notifier
+            if not notifier:
+                self._json(503, {"error": "Push notifications are not configured"})
+                return
+            try:
+                endpoint, p256dh, auth = self._push_subscription(self._read_json())
+                subscription = SERVICE.client.upsert_push_subscription(
+                    endpoint,
+                    p256dh,
+                    auth,
+                    (self.headers.get("User-Agent") or "")[:300] or None,
+                )
+                test_sent = True
+                try:
+                    notifier.send_test(subscription)
+                except Exception:
+                    test_sent = False
+                self._json(HTTPStatus.CREATED, {"ok": True, "testSent": test_sent})
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except SupabaseError as exc:
+                self._json(502, {"error": str(exc)})
             return
 
         if path != "/api/packages":
@@ -144,6 +213,19 @@ class Handler(BaseHTTPRequestHandler):
         if not SERVICE:
             self._json(503, {"error": "The delivery database is not configured"})
             return
+        if path == "/api/push/subscriptions":
+            try:
+                payload = self._read_json()
+                endpoint = payload.get("endpoint")
+                if not isinstance(endpoint, str) or not self._valid_push_endpoint(endpoint):
+                    raise ValueError("Send a valid push endpoint")
+                SERVICE.client.delete_push_subscription(endpoint)
+                self._json(200, {"ok": True})
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except SupabaseError as exc:
+                self._json(502, {"error": str(exc)})
+            return
         if not path.startswith("/api/packages/"):
             self._json(404, {"error": "Not found"})
             return
@@ -170,6 +252,26 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             raise ValueError("Send a valid JSON object")
         return payload
+
+    @classmethod
+    def _push_subscription(cls, payload: dict[str, object]) -> tuple[str, str, str]:
+        endpoint = payload.get("endpoint")
+        keys = payload.get("keys")
+        if not isinstance(endpoint, str) or not cls._valid_push_endpoint(endpoint):
+            raise ValueError("Send a valid push endpoint")
+        if not isinstance(keys, dict):
+            raise ValueError("Send valid push encryption keys")
+        p256dh, auth = keys.get("p256dh"), keys.get("auth")
+        if not all(isinstance(value, str) and 8 <= len(value) <= 512 for value in (p256dh, auth)):
+            raise ValueError("Send valid push encryption keys")
+        return endpoint, p256dh, auth
+
+    @staticmethod
+    def _valid_push_endpoint(endpoint: str) -> bool:
+        if not 1 <= len(endpoint) <= 4096:
+            return False
+        parsed = urlparse(endpoint)
+        return parsed.scheme == "https" and bool(parsed.netloc) and not parsed.username
 
     def _serve_static(self, path: str, head_only: bool = False) -> None:
         relative = unquote(path).lstrip("/") or "index.html"

@@ -3,10 +3,11 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const dist = resolve(import.meta.dirname, '..', 'dist');
-const [index, registration, worker, manifestText] = await Promise.all([
+const [index, registration, worker, pushWorker, manifestText] = await Promise.all([
   readFile(resolve(dist, 'index.html'), 'utf8'),
   readFile(resolve(dist, 'registerSW.js'), 'utf8'),
   readFile(resolve(dist, 'sw.js'), 'utf8'),
+  readFile(resolve(dist, 'push-sw.js'), 'utf8'),
   readFile(resolve(dist, 'manifest.webmanifest'), 'utf8'),
 ]);
 
@@ -18,10 +19,15 @@ assert.match(registration, /serviceWorker\.register\(['"]\/sw\.js['"]/);
 assert.match(worker, /\.skipWaiting\(\)/, 'new workers must activate without waiting');
 assert.match(worker, /\.clientsClaim\(\)/, 'new workers must take control of open clients');
 assert.match(worker, /\.cleanupOutdatedCaches\(\)/, 'old precaches must be removed');
+assert.match(worker, /importScripts\(["']push-sw\.js["']\)/, 'push handler must be loaded');
+assert.match(pushWorker, /addEventListener\(['"]push['"]/, 'push events must be handled');
+assert.match(pushWorker, /showNotification\(/, 'push events must display a notification');
+assert.match(pushWorker, /addEventListener\(['"]notificationclick['"]/, 'notification clicks must be handled');
 
 const manifest = JSON.parse(manifestText);
 assert.equal(manifest.start_url, '/');
 assert.equal(manifest.scope, '/');
 assert.equal(manifest.display, 'standalone');
+assert.equal(manifest.id, '/');
 
 console.log(`PWA build contract passed for ${asset}`);

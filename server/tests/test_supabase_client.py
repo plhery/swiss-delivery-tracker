@@ -156,6 +156,44 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertEqual(call.kwargs["method"], "POST")
         self.assertEqual(call.kwargs["body"], events)
 
+    def test_push_subscription_lifecycle_uses_server_only_tables(self):
+        self.client._request = Mock(return_value=[{"id": "sub-1"}])
+        result = self.client.upsert_push_subscription(
+            "https://push.example.test/token", "p256dh-value", "auth-value", "iPhone"
+        )
+        self.assertEqual(result, {"id": "sub-1"})
+        create = self.client._request.call_args
+        self.assertIn("on_conflict=endpoint", create.args[0])
+        self.assertEqual(create.kwargs["method"], "POST")
+        self.assertEqual(create.kwargs["body"]["disabled_at"], None)
+        self.assertIn("merge-duplicates", create.kwargs["prefer"])
+
+        self.client._request = Mock()
+        self.client.delete_push_subscription("https://push.example.test/a/b")
+        delete = self.client._request.call_args
+        self.assertIn("endpoint=eq.https%3A%2F%2Fpush.example.test%2Fa%2Fb", delete.args[0])
+        self.assertEqual(delete.kwargs["method"], "DELETE")
+
+    def test_pending_push_queries_acknowledgements_and_status_updates(self):
+        self.client._request = Mock(return_value=[{"event_id": "event-1"}])
+        self.assertEqual(
+            self.client.list_pending_push_notifications(), [{"event_id": "event-1"}]
+        )
+        self.assertIn("pending_push_notifications", self.client._request.call_args.args[0])
+
+        self.client._request = Mock()
+        self.client.record_push_deliveries("sub-1", [])
+        self.client._request.assert_not_called()
+        self.client.record_push_deliveries("sub-1", ["event-1", "event-2"])
+        delivery = self.client._request.call_args
+        self.assertEqual(delivery.kwargs["method"], "POST")
+        self.assertEqual(len(delivery.kwargs["body"]), 2)
+
+        self.client.update_push_subscription("sub/1", {"last_error": None})
+        update = self.client._request.call_args
+        self.assertIn("id=eq.sub%2F1", update.args[0])
+        self.assertEqual(update.kwargs["method"], "PATCH")
+
 
 if __name__ == "__main__":
     unittest.main()
