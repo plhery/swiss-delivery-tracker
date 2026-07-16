@@ -146,13 +146,36 @@ class _DPDPageParser(HTMLParser):
 
 def _event_time(date: str, clock: str) -> str:
     value = f"{date} {clock}".strip()
-    formats = ("%d.%m.%Y %H:%M", "%d.%m.%Y") if clock else ("%d.%m.%Y",)
+    formats = (
+        ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y")
+        if clock
+        else ("%d.%m.%Y",)
+    )
     for date_format in formats:
         try:
             return datetime.strptime(value, date_format).replace(tzinfo=ZURICH).isoformat()
         except ValueError:
             continue
     return value
+
+
+def _summary_events(events: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Keep dated summary steps and make their documented order deterministic."""
+    offsets: dict[str, int] = {}
+    dated: list[dict[str, str]] = []
+    for event in events:
+        date = event.get("date", "")
+        if not date:
+            continue
+        offset = offsets.get(date, 0)
+        offsets[date] = offset + 1
+        dated.append(
+            {
+                **event,
+                "clock": f"00:{offset // 60:02d}:{offset % 60:02d}",
+            }
+        )
+    return list(reversed(dated))
 
 
 def _status(text: str, has_events: bool) -> str:
@@ -206,7 +229,7 @@ def parse_tracking_html(html: str, tracking_number: str) -> dict[str, Any]:
             "events": [],
         }
 
-    raw_events = parser.events or list(reversed(parser.summary_events))
+    raw_events = parser.events or _summary_events(parser.summary_events)
     events = [
         {
             "time": _event_time(event.get("date", ""), event.get("clock", "")),

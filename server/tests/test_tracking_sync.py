@@ -131,6 +131,8 @@ class TrackingSyncTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(infer_stage(text), expected)
         self.assertEqual(infer_stage("Unrecognised", "waiting"), "waiting")
+        self.assertEqual(infer_stage("Parcel handed to DPD"), "accepted")
+        self.assertEqual(infer_stage("At delivery centre"), "in_transit")
 
     def test_result_stage_maps_provider_states(self):
         self.assertEqual(result_stage({"status": "pending"}), "pending")

@@ -95,11 +95,32 @@ def infer_stage(text: str, fallback: str = "in_transit") -> str:
         return "customs"
     if any(word in value for word in ("failed", "unsuccessful", "missed delivery", "not delivered")):
         return "failed_attempt"
-    if any(word in value for word in ("accepted", "received at", "handed over", "posted")):
+    if any(
+        word in value
+        for word in (
+            "accepted",
+            "received at",
+            "handed over",
+            "handed to dpd",
+            "parcel handed",
+            "posted",
+        )
+    ):
         return "accepted"
     if any(word in value for word in ("announced", "registered", "label created", "information received")):
         return "registered"
-    if any(word in value for word in ("transit", "sorted", "departed", "arrived", "transport")):
+    if any(
+        word in value
+        for word in (
+            "transit",
+            "sorted",
+            "departed",
+            "arrived",
+            "transport",
+            "delivery centre",
+            "depot",
+        )
+    ):
         return "in_transit"
     return fallback
 

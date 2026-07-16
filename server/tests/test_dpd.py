@@ -142,14 +142,13 @@ class DPDParserTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "delivered")
         self.assertEqual(result["last_status_text"], "Delivered")
-        self.assertEqual(result["last_update"], "2026-07-16T00:00:00+02:00")
+        self.assertEqual(result["last_update"], "2026-07-16T00:00:02+02:00")
         self.assertEqual(
             [event["description"] for event in result["events"]],
             [
                 "Delivered",
                 "Parcel out for delivery",
                 "At delivery centre",
-                "In transit",
                 "Parcel handed to DPD",
             ],
         )
