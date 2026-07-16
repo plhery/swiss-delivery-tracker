@@ -543,6 +543,17 @@ button:disabled {
   background: var(--green);
 }
 
+.status-badge--syncing::before {
+  animation: sync-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes sync-pulse {
+  to {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
 .progress-track {
   display: flex;
   align-items: center;

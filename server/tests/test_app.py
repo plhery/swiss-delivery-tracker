@@ -50,6 +50,7 @@ class FakeService:
         }
         self.notifier = None
         self.sync = Mock(side_effect=self._sync)
+        self.sync_package = Mock(side_effect=lambda package: self._sync())
 
     def _maybe_raise(self):
         if self.error:
@@ -428,6 +429,19 @@ class AppLifecycleTests(unittest.TestCase):
                 self.assertEqual(app.seconds_until_next_sync(now), expected)
         with self.assertRaisesRegex(ValueError, "timezone"):
             app.seconds_until_next_sync(datetime(2026, 7, 15, 9))
+
+    def test_new_packages_start_syncing_in_the_background(self):
+        service = FakeService()
+        with patch("server.app.threading.Thread") as thread_class:
+            app.start_immediate_sync(service, PACKAGE)
+
+        thread_class.assert_called_once_with(
+            target=service.sync_package,
+            args=(PACKAGE,),
+            name=f"delivery-sync-{PACKAGE['id']}",
+            daemon=True,
+        )
+        thread_class.return_value.start.assert_called_once_with()
 
     def test_scheduler_records_success_and_top_level_failures(self):
         app.STATE.clear()

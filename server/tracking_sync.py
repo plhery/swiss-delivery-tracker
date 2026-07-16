@@ -234,15 +234,28 @@ class TrackingSyncService:
                 summary.checked += 1
                 outcome = self._sync_package(package)
                 setattr(summary, outcome, getattr(summary, outcome) + 1)
-            if self.notifier:
-                try:
-                    push = self.notifier.dispatch()
-                    summary.notifications_sent = push.sent
-                    summary.notification_errors = push.failed
-                    summary.subscriptions_expired = push.expired
-                except Exception:
-                    summary.notification_errors += 1
+            self._dispatch_notifications(summary)
         return summary
+
+    def sync_package(self, package: dict[str, Any]) -> SyncSummary:
+        """Sync one newly created package without waiting for the scheduler."""
+        summary = SyncSummary(checked=1)
+        with self.lock:
+            outcome = self._sync_package(package)
+            setattr(summary, outcome, getattr(summary, outcome) + 1)
+            self._dispatch_notifications(summary)
+        return summary
+
+    def _dispatch_notifications(self, summary: SyncSummary) -> None:
+        if not self.notifier:
+            return
+        try:
+            push = self.notifier.dispatch()
+            summary.notifications_sent = push.sent
+            summary.notification_errors = push.failed
+            summary.subscriptions_expired = push.expired
+        except Exception:
+            summary.notification_errors += 1
 
     def _sync_package(self, package: dict[str, Any]) -> str:
         now = self.now()

@@ -1,7 +1,8 @@
 import { useRef, type PointerEvent } from 'react';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { formatExpectedDelivery } from '../lib/format';
-import { latestEvent, stageMeta } from '../lib/stages';
+import { parcelDisplayStatus } from '../lib/parcelStatus';
+import { latestEvent } from '../lib/stages';
 import { isLeftSwipe, type TouchPoint } from '../lib/swipe';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
@@ -18,7 +19,7 @@ export function ParcelDetail({
 }) {
   const carrier = carrierInfo(parcel.carrier);
   const last = latestEvent(parcel.events);
-  const meta = last ? stageMeta(last.stage) : null;
+  const status = parcelDisplayStatus(parcel);
   const trackingUrl = parcel.trackingUrl ?? carrier.trackingUrl?.(parcel.trackingNumber);
   const swipeStart = useRef<TouchPoint | null>(null);
 
@@ -68,8 +69,8 @@ export function ParcelDetail({
         <p className="detail__eyebrow">{carrier.name}</p>
         <h1 className="detail__title">{parcel.label || 'Parcel'}</h1>
         <p className="detail__status">
-          <span className={`status-badge status-badge--${meta?.tone ?? 'ok'}`}>
-            {meta?.label ?? 'Not announced yet'}
+          <span className={`status-badge status-badge--${status.tone}${status.syncing ? ' status-badge--syncing' : ''}`}>
+            {status.label}
           </span>
         </p>
         <ProgressTrack stage={last?.stage ?? null} />
@@ -108,7 +109,7 @@ export function ParcelDetail({
           <p>Tracking history</p>
           <h2 className="detail__section-title">Journey</h2>
         </div>
-        <Timeline events={parcel.events} />
+        <Timeline events={parcel.events} syncing={status.syncing} />
       </section>
 
       <footer className="detail__footer">

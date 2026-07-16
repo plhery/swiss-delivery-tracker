@@ -73,10 +73,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload;
 }
 
-export function createApiRepo(pollIntervalMs = 30_000): ParcelRepo {
+export function createApiRepo(
+  pollIntervalMs = 30_000,
+  activePollIntervalMs = 1_000,
+): ParcelRepo {
+  let hasActiveSync = false;
+
   async function list(): Promise<ParcelWithEvents[]> {
     const payload = await request<{ packages: PackageRow[] }>('/api/packages');
-    return payload.packages.map(toParcel);
+    const parcels = payload.packages.map(toParcel);
+    hasActiveSync = parcels.some(
+      (parcel) => parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing',
+    );
+    return parcels;
   }
 
   return {
@@ -95,7 +104,9 @@ export function createApiRepo(pollIntervalMs = 30_000): ParcelRepo {
           trackingUrl: input.trackingUrl?.trim() || undefined,
         }),
       });
-      return toParcel(row);
+      const parcel = toParcel(row);
+      hasActiveSync = parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing';
+      return parcel;
     },
 
     async remove(id: string): Promise<void> {
@@ -109,12 +120,31 @@ export function createApiRepo(pollIntervalMs = 30_000): ParcelRepo {
       return list();
     },
 
-    subscribe(onChange: () => void): () => void {
+    subscribe(onChange: () => void | Promise<void>): () => void {
+      let lastPollAt = Date.now();
+      let pollInFlight = false;
+      const timerResolution = Math.min(pollIntervalMs, activePollIntervalMs);
+
+      const trigger = () => {
+        if (pollInFlight) return;
+        lastPollAt = Date.now();
+        pollInFlight = true;
+        const result = onChange();
+        if (result) {
+          void result.finally(() => {
+            pollInFlight = false;
+          });
+        } else {
+          pollInFlight = false;
+        }
+      };
       const interval = window.setInterval(() => {
-        if (document.visibilityState === 'visible') onChange();
-      }, pollIntervalMs);
+        if (document.visibilityState !== 'visible') return;
+        const desiredInterval = hasActiveSync ? activePollIntervalMs : pollIntervalMs;
+        if (Date.now() - lastPollAt >= desiredInterval) trigger();
+      }, timerResolution);
       const onVisible = () => {
-        if (document.visibilityState === 'visible') onChange();
+        if (document.visibilityState === 'visible') trigger();
       };
       document.addEventListener('visibilitychange', onVisible);
       return () => {

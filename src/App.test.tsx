@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -97,6 +97,61 @@ describe('App', () => {
     expect(
       screen.queryByRole('dialog', { name: /add a parcel/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows the first sync in progress and reflects its result without manual refresh', async () => {
+    const pendingEvent = {
+      id: 'event-pending',
+      parcelId: 'parcel-syncing',
+      stage: 'pending' as const,
+      description: 'Tracking added',
+      occurredAt: '2026-07-16T10:00:00Z',
+    };
+    let parcel: ParcelWithEvents = {
+      id: 'parcel-syncing',
+      trackingNumber: '993412345612345678',
+      label: 'Fresh parcel',
+      carrier: 'swiss-post',
+      createdAt: '2026-07-16T10:00:00Z',
+      syncStatus: 'pending',
+      events: [pendingEvent],
+    };
+    let notify: (() => void | Promise<void>) | undefined;
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn(async () => [parcel]),
+      add: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn(async () => [parcel]),
+      subscribe: (onChange) => {
+        notify = onChange;
+        return () => undefined;
+      },
+    };
+    renderApp(repo);
+
+    expect(await screen.findByText('Sync in progress')).toBeInTheDocument();
+
+    parcel = {
+      ...parcel,
+      syncStatus: 'ok',
+      events: [
+        pendingEvent,
+        {
+          id: 'event-announced',
+          parcelId: parcel.id,
+          stage: 'registered',
+          description: 'Shipment announced',
+          occurredAt: '2026-07-16T10:00:01Z',
+        },
+      ],
+    };
+    await act(async () => {
+      await notify?.();
+    });
+
+    expect(screen.getByText('Announced')).toBeInTheDocument();
+    expect(screen.queryByText('Sync in progress')).not.toBeInTheDocument();
   });
 
   it('keeps a manual carrier selection for ambiguous tracking numbers', async () => {
@@ -353,7 +408,7 @@ describe('App', () => {
 
     expect(await screen.findByText('Sync needs attention')).toBeInTheDocument();
     await user.click(
-      screen.getByRole('button', { name: /Parcel — not announced yet/i }),
+      screen.getByRole('button', { name: /Parcel — Sync failed/i }),
     );
     expect(screen.getByRole('status')).toHaveTextContent('Carrier maintenance');
     expect(

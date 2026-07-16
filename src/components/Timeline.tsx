@@ -3,13 +3,21 @@ import { sortEventsDesc, stageMeta } from '../lib/stages';
 import type { TrackingEvent } from '../types';
 
 /** The parcel's journey, newest update on top. */
-export function Timeline({ events }: { events: TrackingEvent[] }) {
+export function Timeline({
+  events,
+  syncing = false,
+}: {
+  events: TrackingEvent[];
+  syncing?: boolean;
+}) {
   const sorted = sortEventsDesc(events);
 
   if (sorted.length === 0) {
     return (
       <p className="timeline-empty">
-        The carrier hasn’t announced this shipment yet — check back soon! 🕊️
+        {syncing
+          ? 'Checking with the carrier now…'
+          : 'The carrier hasn’t announced this shipment yet — check back soon! 🕊️'}
       </p>
     );
   }
@@ -28,7 +36,11 @@ export function Timeline({ events }: { events: TrackingEvent[] }) {
               aria-hidden="true"
             />
             <div className="timeline__content">
-              <div className="timeline__stage">{meta.label}</div>
+              <div className="timeline__stage">
+                {syncing && i === 0 && event.stage === 'pending'
+                  ? 'Sync in progress'
+                  : meta.label}
+              </div>
               <div className="timeline__description">{event.description}</div>
               <div className="timeline__meta">
                 {event.location ? `${event.location} · ` : ''}

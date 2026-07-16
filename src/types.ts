@@ -77,5 +77,5 @@ export interface ParcelRepo {
   /** Re-sync tracking; in demo mode this advances the simulation. */
   refresh(): Promise<ParcelWithEvents[]>;
   /** Optional shared-data polling. Returns unsubscribe. */
-  subscribe?(onChange: () => void): () => void;
+  subscribe?(onChange: () => void | Promise<void>): () => void;
 }

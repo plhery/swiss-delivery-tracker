@@ -92,6 +92,18 @@ def scheduler() -> None:
         time.sleep(delay)
 
 
+def start_immediate_sync(
+    service: TrackingSyncService, package: dict[str, object]
+) -> None:
+    """Start the first carrier lookup without delaying the create response."""
+    threading.Thread(
+        target=service.sync_package,
+        args=(package,),
+        name=f"delivery-sync-{package['id']}",
+        daemon=True,
+    ).start()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "DeliveryTracker/3"
 
@@ -216,6 +228,7 @@ class Handler(BaseHTTPRequestHandler):
             package = SERVICE.client.create_package(
                 tracking_number, label.strip(), carrier, tracking_url
             )
+            start_immediate_sync(SERVICE, package)
             self._json(HTTPStatus.CREATED, package)
         except ValueError as exc:
             self._json(400, {"error": str(exc)})

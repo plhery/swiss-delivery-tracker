@@ -97,6 +97,20 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(final_update["current_stage"], "out_for_delivery")
         self.assertEqual(final_update["sync_status"], "ok")
 
+    def test_sync_package_checks_only_the_new_package_immediately(self):
+        package = self.package("new-package")
+        other = self.package("older-package")
+        client = FakeClient([other])
+        adapter = FakeAdapter()
+        service = TrackingSyncService(client, adapter)
+
+        summary = service.sync_package(package)
+
+        self.assertEqual(summary.checked, 1)
+        self.assertEqual(summary.updated, 1)
+        self.assertEqual(adapter.calls, [("swiss-post", package["tracking_number"], None)])
+        self.assertTrue(all(package_id == "new-package" for package_id, _ in client.updates))
+
     def test_unsupported_carrier_is_explicit(self):
         client = FakeClient(
             [

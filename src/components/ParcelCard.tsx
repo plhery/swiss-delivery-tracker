@@ -1,6 +1,7 @@
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { formatExpectedDelivery, relativeTime } from '../lib/format';
-import { latestEvent, stageMeta } from '../lib/stages';
+import { parcelDisplayStatus } from '../lib/parcelStatus';
+import { latestEvent } from '../lib/stages';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
 
@@ -13,7 +14,7 @@ export function ParcelCard({
 }) {
   const carrier = carrierInfo(parcel.carrier);
   const last = latestEvent(parcel.events);
-  const meta = last ? stageMeta(last.stage) : null;
+  const status = parcelDisplayStatus(parcel);
   const expectedDelivery = parcel.expectedDelivery
     ? formatExpectedDelivery(parcel.expectedDelivery)
     : null;
@@ -21,9 +22,9 @@ export function ParcelCard({
   return (
     <button
       type="button"
-      className={`parcel-card parcel-card--${meta?.tone ?? 'ok'}`}
+      className={`parcel-card parcel-card--${status.tone}`}
       onClick={() => onOpen(parcel)}
-      aria-label={`${parcel.label || 'Parcel'} — ${meta?.label ?? 'not announced yet'}${expectedDelivery ? ` — expected ${expectedDelivery}` : ''}`}
+      aria-label={`${parcel.label || 'Parcel'} — ${status.label}${expectedDelivery ? ` — expected ${expectedDelivery}` : ''}`}
     >
       <div className="parcel-card__stamp" aria-hidden="true">
         <svg viewBox="0 0 32 32">
@@ -44,9 +45,9 @@ export function ParcelCard({
         </span>
         <div className="parcel-card__status">
           <span
-            className={`status-badge status-badge--${meta?.tone ?? 'ok'}`}
+            className={`status-badge status-badge--${status.tone}${status.syncing ? ' status-badge--syncing' : ''}`}
           >
-            {meta?.label ?? 'Not announced yet'}
+            {status.label}
           </span>
         </div>
         {expectedDelivery && (

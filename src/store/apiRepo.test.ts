@@ -170,4 +170,43 @@ describe('createApiRepo', () => {
     vi.advanceTimersByTime(1_000);
     expect(onChange).toHaveBeenCalledTimes(2);
   });
+
+  it('polls quickly until a newly added parcel finishes its first sync', async () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const pendingRow = {
+      ...packageRow,
+      last_synced_at: null,
+      sync_status: 'pending',
+      tracking_events: [
+        {
+          ...packageRow.tracking_events[0],
+          stage: 'pending',
+          description: 'Tracking added',
+        },
+      ],
+    };
+    const waitingRow = { ...pendingRow, sync_status: 'waiting' };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response(pendingRow))
+      .mockResolvedValueOnce(response({ packages: [waitingRow] }));
+    vi.stubGlobal('fetch', fetch);
+    const repo = createApiRepo(30_000, 1_000);
+    const onChange = vi.fn(async () => {
+      await repo.list();
+    });
+    const unsubscribe = repo.subscribe?.(onChange);
+
+    await repo.add({ trackingNumber: packageRow.tracking_number, label: 'Coffee' });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(onChange).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onChange).toHaveBeenCalledOnce();
+    unsubscribe?.();
+  });
 });

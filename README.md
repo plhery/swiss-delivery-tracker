@@ -96,6 +96,11 @@ Carrier sites can temporarily return maintenance pages or change markup. Those
 failures are stored on the package and retried. A long-term Swiss Post setup
 should replace scraping with its authenticated business tracking API.
 
+Adding a parcel starts its first carrier lookup immediately in the background.
+While that lookup is active, the app shows `Sync in progress` and polls briefly
+for the result; settled parcels continue to use the normal low-frequency polling
+and scheduled carrier retries.
+
 Planzer shared shipments with numbers shaped like `999.90.########` use a
 different tracking site. The add sheet asks for the complete
 `trackandtrace.planzergroup.com/shared/sendungen/...` URL, validates that its

@@ -59,7 +59,7 @@ export function ParcelsProvider({
 
   useEffect(() => {
     void reload();
-    const unsubscribe = repo.subscribe?.(() => void reload());
+    const unsubscribe = repo.subscribe?.(reload);
     return unsubscribe;
   }, [repo, reload]);
 
