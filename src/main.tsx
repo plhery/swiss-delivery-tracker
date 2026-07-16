@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { enableAppBadgeClearing } from './lib/pushNotifications';
 import { enablePwaLiveReload } from './lib/pwaUpdates';
 import { createApiRepo } from './store/apiRepo';
 import { createDemoRepo } from './store/demoRepo';
@@ -12,6 +13,7 @@ const useDemo = import.meta.env.DEV && import.meta.env.VITE_USE_API !== 'true';
 const repo = useDemo ? createDemoRepo() : createApiRepo();
 
 enablePwaLiveReload();
+enableAppBadgeClearing();
 
 root.render(
   <StrictMode>

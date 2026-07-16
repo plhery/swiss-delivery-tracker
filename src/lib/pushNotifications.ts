@@ -6,6 +6,26 @@ export type PushState =
   | { kind: 'enabled'; publicKey: string };
 
 type PushConfig = { available: boolean; publicKey: string | null };
+type BadgeNavigator = { clearAppBadge?: () => Promise<void> };
+type VisibilityDocument = Pick<
+  Document,
+  'visibilityState' | 'addEventListener' | 'removeEventListener'
+>;
+
+/** Clear stale OS app badges on launch and whenever the PWA returns to the foreground. */
+export function enableAppBadgeClearing(
+  appNavigator: BadgeNavigator = navigator as BadgeNavigator,
+  page: VisibilityDocument = document,
+): () => void {
+  const clearWhenVisible = () => {
+    if (page.visibilityState !== 'visible') return;
+    void appNavigator.clearAppBadge?.().catch(() => undefined);
+  };
+
+  clearWhenVisible();
+  page.addEventListener('visibilitychange', clearWhenVisible);
+  return () => page.removeEventListener('visibilitychange', clearWhenVisible);
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {

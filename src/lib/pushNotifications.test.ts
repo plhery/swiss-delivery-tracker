@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   decodePublicKey,
   disablePushNotifications,
+  enableAppBadgeClearing,
   enablePushNotifications,
   inspectPushState,
 } from './pushNotifications';
@@ -54,6 +55,52 @@ describe('inspectPushState', () => {
 
     getSubscription.mockResolvedValueOnce({ endpoint: 'https://push.example/token' });
     await expect(inspectPushState()).resolves.toEqual({ kind: 'enabled', publicKey: 'AQID' });
+  });
+});
+
+describe('app badge lifecycle', () => {
+  it('clears the badge on launch and each return to the foreground', () => {
+    let visibilityState: DocumentVisibilityState = 'visible';
+    let onVisibilityChange: EventListener | undefined;
+    const page = {
+      get visibilityState() {
+        return visibilityState;
+      },
+      addEventListener: vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+        onVisibilityChange = listener as EventListener;
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as Document;
+    const clearAppBadge = vi.fn().mockResolvedValue(undefined);
+
+    const cleanupBadgeClearing = enableAppBadgeClearing({ clearAppBadge }, page);
+    expect(clearAppBadge).toHaveBeenCalledOnce();
+
+    visibilityState = 'hidden';
+    onVisibilityChange?.(new Event('visibilitychange'));
+    expect(clearAppBadge).toHaveBeenCalledOnce();
+
+    visibilityState = 'visible';
+    onVisibilityChange?.(new Event('visibilitychange'));
+    expect(clearAppBadge).toHaveBeenCalledTimes(2);
+
+    cleanupBadgeClearing();
+    expect(page.removeEventListener).toHaveBeenCalledWith(
+      'visibilitychange',
+      onVisibilityChange,
+    );
+  });
+
+  it('is inert when the Badging API is unsupported', () => {
+    const addEventListener = vi.fn();
+    const page = {
+      visibilityState: 'visible',
+      addEventListener,
+      removeEventListener: vi.fn(),
+    } as unknown as Document;
+
+    expect(() => enableAppBadgeClearing({}, page)).not.toThrow();
+    expect(addEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
   });
 });
 
