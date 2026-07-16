@@ -45,6 +45,23 @@ TRACKING_HTML = f"""
 </html>
 """
 
+SUMMARY_HTML = f"""
+<!doctype html>
+<html lang="en">
+  <body>
+    <span>{TRACKING_NUMBER}</span>
+    <span class="gray-out"><span>Delivered</span><span>16.07.2026</span></span>
+    <div class="parcelStatus">
+      <div class="row"><div class="col-xs-7"><span>Parcel handed to DPD</span></div><div class="col-xs-5"><span class="bolded inlineDate">15.07.2026</span></div></div>
+      <div class="row"><div class="col-xs-7"><span>In transit</span></div><div class="col-xs-5"><span class="bolded inlineDate"></span></div></div>
+      <div class="row"><div class="col-xs-7"><span>At delivery centre</span></div><div class="col-xs-5"><span class="bolded inlineDate">16.07.2026</span></div></div>
+      <div class="row"><div class="col-xs-7"><span>Parcel out for delivery</span></div><div class="col-xs-5"><span class="bolded inlineDate">16.07.2026</span></div></div>
+      <div class="row"><div class="col-xs-7"><span>Delivered</span></div><div class="col-xs-5"><span class="bolded inlineDate">16.07.2026</span></div></div>
+    </div>
+  </body>
+</html>
+"""
+
 
 class FakeResponse:
     def __init__(self, body: bytes, charset: str = "utf-8") -> None:
@@ -120,6 +137,23 @@ class DPDParserTests(unittest.TestCase):
             },
         )
 
+    def test_parses_public_tracking_summary_in_latest_first_order(self):
+        result = parse_tracking_html(SUMMARY_HTML, TRACKING_NUMBER)
+
+        self.assertEqual(result["status"], "delivered")
+        self.assertEqual(result["last_status_text"], "Delivered")
+        self.assertEqual(result["last_update"], "2026-07-16T00:00:00+02:00")
+        self.assertEqual(
+            [event["description"] for event in result["events"]],
+            [
+                "Delivered",
+                "Parcel out for delivery",
+                "At delivery centre",
+                "In transit",
+                "Parcel handed to DPD",
+            ],
+        )
+
     def test_rejects_challenges_and_unrelated_pages(self):
         with self.assertRaises(DPDChallengeError):
             parse_tracking_html("<title>Just a moment...</title>", TRACKING_NUMBER)
@@ -137,7 +171,8 @@ class DPDTrackerTests(unittest.TestCase):
         self.assertEqual(result["status"], "in_transit")
         self.assertEqual(result["tracking_url"], tracking_url(TRACKING_NUMBER))
         request = open_url.call_args.args[0]
-        self.assertIn(f"parcelNumber={TRACKING_NUMBER}&lang=en", request.full_url)
+        self.assertIn(f"lang=en&parcelNumber={TRACKING_NUMBER}", request.full_url)
+        self.assertIn("/my-parcels/track?", request.full_url)
 
     @patch("server.dpd.urlopen")
     def test_explains_when_a_solver_is_required(self, open_url):
@@ -169,7 +204,8 @@ class DPDTrackerTests(unittest.TestCase):
         self.assertEqual(request.full_url, "http://flaresolverr:8191/v1")
         payload = json.loads(request.data)
         self.assertEqual(payload["cmd"], "request.get")
-        self.assertIn(f"parcelNumber={TRACKING_NUMBER}&lang=en", payload["url"])
+        self.assertIn(f"lang=en&parcelNumber={TRACKING_NUMBER}", payload["url"])
+        self.assertIn("/my-parcels/track?", payload["url"])
 
     def test_validates_tracking_numbers_and_solver_urls(self):
         with self.assertRaisesRegex(ValueError, "14 digits"):

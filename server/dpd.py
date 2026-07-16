@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 
 DPD_TRACKING_BASE = "https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming"
+DPD_FETCH_BASE = "https://www.dpdgroup.com/ch/mydpd/my-parcels/track"
 DEFAULT_TIMEOUT = 90
 MAX_RESPONSE_BYTES = 10_000_000
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -27,6 +28,10 @@ class DPDChallengeError(RuntimeError):
 def tracking_url(tracking_number: str, *, language: str | None = None) -> str:
     url = f"{DPD_TRACKING_BASE}?parcelNumber={quote(tracking_number)}"
     return f"{url}&lang={quote(language)}" if language else url
+
+
+def _fetch_url(tracking_number: str) -> str:
+    return f"{DPD_FETCH_BASE}?lang=en&parcelNumber={quote(tracking_number)}"
 
 
 def _clean(value: str) -> str:
@@ -46,6 +51,9 @@ class _DPDPageParser(HTMLParser):
         self.current_event: dict[str, str] | None = None
         self.event_depth: int | None = None
         self.capture: tuple[str, int, list[str]] | None = None
+        self.summary_events: list[dict[str, str]] = []
+        self.summary_depth: int | None = None
+        self.summary_row: tuple[int, list[str]] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.depth += 1
@@ -59,6 +67,16 @@ class _DPDPageParser(HTMLParser):
         if tag == "li" and "content-item-track" in classes:
             self.current_event = {}
             self.event_depth = self.depth
+
+        if tag == "div" and "parcelStatus" in classes:
+            self.summary_depth = self.depth
+        elif (
+            tag == "div"
+            and self.summary_depth is not None
+            and self.summary_row is None
+            and "row" in classes
+        ):
+            self.summary_row = (self.depth, [])
 
         if self.current_event is not None:
             if "entry-date" in classes:
@@ -79,6 +97,8 @@ class _DPDPageParser(HTMLParser):
         if not value:
             return
         self.visible_text.append(value)
+        if self.summary_row is not None:
+            self.summary_row[1].append(value)
         if self.capture is not None:
             self.capture[2].append(value)
 
@@ -106,15 +126,33 @@ class _DPDPageParser(HTMLParser):
             self.current_event = None
             self.event_depth = None
 
+        if self.summary_row is not None and self.summary_row[0] == self.depth:
+            _, parts = self.summary_row
+            if parts:
+                date = next(
+                    (part for part in parts[1:] if re.fullmatch(r"\d{2}\.\d{2}\.\d{4}", part)),
+                    "",
+                )
+                self.summary_events.append(
+                    {"description": parts[0], "date": date, "clock": "", "location": ""}
+                )
+            self.summary_row = None
+
+        if self.summary_depth == self.depth:
+            self.summary_depth = None
+
         self.depth -= 1
 
 
 def _event_time(date: str, clock: str) -> str:
     value = f"{date} {clock}".strip()
-    try:
-        return datetime.strptime(value, "%d.%m.%Y %H:%M").replace(tzinfo=ZURICH).isoformat()
-    except ValueError:
-        return value
+    formats = ("%d.%m.%Y %H:%M", "%d.%m.%Y") if clock else ("%d.%m.%Y",)
+    for date_format in formats:
+        try:
+            return datetime.strptime(value, date_format).replace(tzinfo=ZURICH).isoformat()
+        except ValueError:
+            continue
+    return value
 
 
 def _status(text: str, has_events: bool) -> str:
@@ -168,13 +206,14 @@ def parse_tracking_html(html: str, tracking_number: str) -> dict[str, Any]:
             "events": [],
         }
 
+    raw_events = parser.events or list(reversed(parser.summary_events))
     events = [
         {
             "time": _event_time(event.get("date", ""), event.get("clock", "")),
             "location": event.get("location", ""),
             "description": event["description"],
         }
-        for event in parser.events
+        for event in raw_events
     ]
     status_text = (
         events[0]["description"]
@@ -203,7 +242,7 @@ class DPDTracker:
         if not re.fullmatch(r"\d{14}", tracking_number):
             raise ValueError("DPD tracking numbers must contain 14 digits")
 
-        url = tracking_url(tracking_number, language="en")
+        url = _fetch_url(tracking_number)
         if self.flaresolverr_url:
             html = self._flaresolverr_get(url)
         else:
