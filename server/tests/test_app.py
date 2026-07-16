@@ -24,6 +24,7 @@ PACKAGE = {
     "last_synced_at": None,
     "sync_status": "pending",
     "sync_error": None,
+    "tracking_url": None,
     "tracking_events": [],
 }
 
@@ -58,9 +59,15 @@ class FakeService:
         self._maybe_raise()
         return [PACKAGE]
 
-    def _create_package(self, tracking_number, label, carrier):
+    def _create_package(self, tracking_number, label, carrier, tracking_url=None):
         self._maybe_raise()
-        return {**PACKAGE, "tracking_number": tracking_number, "label": label, "carrier": carrier}
+        return {
+            **PACKAGE,
+            "tracking_number": tracking_number,
+            "label": label,
+            "carrier": carrier,
+            "tracking_url": tracking_url,
+        }
 
     def _delete_package(self, package_id):
         self._maybe_raise()
@@ -169,7 +176,27 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(status, 201)
         self.assertEqual(json.loads(body)["tracking_number"], "993412345612345678")
         app.SERVICE.client.create_package.assert_called_once_with(
-            "993412345612345678", "Coffee beans", "swiss-post"
+            "993412345612345678", "Coffee beans", "swiss-post", None
+        )
+
+        tracking_url = (
+            "https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119"
+            "?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH"
+        )
+        status, _, body = self.request(
+            "POST",
+            "/api/packages",
+            payload={
+                "trackingNumber": "999.90.03316119",
+                "label": "Plants",
+                "carrier": "planzer",
+                "trackingUrl": tracking_url,
+            },
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body)["tracking_url"], tracking_url)
+        app.SERVICE.client.create_package.assert_called_with(
+            "9999003316119", "Plants", "planzer", tracking_url
         )
 
         status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
@@ -260,6 +287,20 @@ class AppHttpTests(unittest.TestCase):
             ({"trackingNumber": ["bad"], "label": "", "carrier": "unknown"}, "must be text"),
             ({"trackingNumber": "1234", "label": "x" * 81, "carrier": "unknown"}, "at most 80"),
             ({"trackingNumber": "1234", "label": "", "carrier": "invented"}, "supported carrier"),
+            (
+                {"trackingNumber": "999.90.03316119", "label": "", "carrier": "planzer"},
+                "requires its complete tracking URL",
+            ),
+            (
+                {
+                    "trackingNumber": "999.90.03316119",
+                    "label": "",
+                    "carrier": "planzer",
+                    "trackingUrl": "https://example.test/shared/sendungen/999.90.03316119"
+                    "?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH",
+                },
+                "must use https://trackandtrace.planzergroup.com",
+            ),
         ]
         for payload, message in invalid_requests:
             status, _, body = self.request("POST", "/api/packages", payload=payload)

@@ -88,6 +88,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertEqual(query["archived_at"], ["is.null"])
         self.assertEqual(query["order"], ["created_at.desc"])
         self.assertIn("tracking_events", query["select"][0])
+        self.assertIn("tracking_url", query["select"][0])
 
         self.client._request.reset_mock()
         self.client.get_package("pkg-1")
@@ -111,6 +112,14 @@ class SupabaseServiceClientTests(unittest.TestCase):
                 "label": "Coffee",
                 "carrier": "swiss-post",
             },
+        )
+
+        tracking_url = "https://trackandtrace.planzergroup.com/shared/sendungen/1?accessKey=key"
+        self.client._request = Mock(side_effect=[[{"id": "pkg-2"}], [{"id": "pkg-2"}]])
+        self.client.create_package("TRACKING2", "Plants", "planzer", tracking_url)
+        self.assertEqual(
+            self.client._request.call_args_list[0].kwargs["body"]["tracking_url"],
+            tracking_url,
         )
 
         self.client._request = Mock()

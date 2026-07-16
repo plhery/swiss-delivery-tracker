@@ -1,5 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { carrierInfo, detectCarrier, SELECTABLE_CARRIERS } from '../lib/carriers';
+import {
+  carrierInfo,
+  detectCarrier,
+  isPlanzerSharedTrackingNumber,
+  SELECTABLE_CARRIERS,
+} from '../lib/carriers';
 import type { CarrierId, NewParcelInput } from '../types';
 
 export function AddParcelSheet({
@@ -11,6 +16,7 @@ export function AddParcelSheet({
 }) {
   const [label, setLabel] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [trackingUrl, setTrackingUrl] = useState('');
   const [selectedCarrier, setSelectedCarrier] = useState<CarrierId | 'auto'>('auto');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +25,8 @@ export function AddParcelSheet({
   const carrier = trackingNumber.trim()
     ? carrierInfo(selectedCarrier === 'auto' ? detectedCarrier : selectedCarrier)
     : null;
+  const needsPlanzerUrl =
+    carrier?.id === 'planzer' && isPlanzerSharedTrackingNumber(trackingNumber);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,6 +38,7 @@ export function AddParcelSheet({
         trackingNumber: trackingNumber.trim(),
         label: label.trim(),
         carrier: selectedCarrier === 'auto' ? detectedCarrier : selectedCarrier,
+        trackingUrl: needsPlanzerUrl ? trackingUrl.trim() : undefined,
       });
       onClose();
     } catch (err) {
@@ -91,6 +100,25 @@ export function AddParcelSheet({
               required
             />
           </label>
+          {needsPlanzerUrl && (
+            <label className="field">
+              <span className="field__label">Planzer tracking URL</span>
+              <input
+                className="field__input"
+                type="url"
+                value={trackingUrl}
+                placeholder="https://trackandtrace.planzergroup.com/shared/…"
+                onChange={(e) => setTrackingUrl(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                required
+              />
+              <small className="field__help">
+                Paste the complete shared link, including its accessKey.
+              </small>
+            </label>
+          )}
           <label className="field">
             <span className="field__label">Carrier</span>
             <select
@@ -131,7 +159,9 @@ export function AddParcelSheet({
             <button
               type="submit"
               className="button button--primary"
-              disabled={!trackingNumber.trim() || saving}
+              disabled={
+                !trackingNumber.trim() || (needsPlanzerUrl && !trackingUrl.trim()) || saving
+              }
             >
               {saving ? 'Adding…' : 'Add parcel'}
             </button>

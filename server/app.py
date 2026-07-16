@@ -16,6 +16,10 @@ from urllib.parse import unquote, urlparse
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from .planzer_shared import (
+    is_planzer_shared_tracking_number,
+    validate_planzer_shared_url,
+)
 from .push import PushNotificationService
 from .supabase_client import SupabaseError, SupabaseServiceClient
 from .tracking_sync import TrackingSyncService
@@ -187,8 +191,12 @@ class Handler(BaseHTTPRequestHandler):
             raw_tracking = payload.get("trackingNumber", "")
             label = payload.get("label", "")
             carrier = payload.get("carrier", "unknown")
-            if not all(isinstance(value, str) for value in (raw_tracking, label, carrier)):
-                raise ValueError("Tracking number, label and carrier must be text")
+            raw_tracking_url = payload.get("trackingUrl", "")
+            if not all(
+                isinstance(value, str)
+                for value in (raw_tracking, label, carrier, raw_tracking_url)
+            ):
+                raise ValueError("Tracking number, label, carrier and tracking URL must be text")
             tracking_number = re.sub(r"[\s.\-]", "", raw_tracking).upper()
             if not 4 <= len(tracking_number) <= 40:
                 raise ValueError("Enter a tracking number between 4 and 40 characters")
@@ -196,8 +204,17 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Parcel names can be at most 80 characters")
             if carrier not in VALID_CARRIERS:
                 raise ValueError("Choose a supported carrier")
+            tracking_url = raw_tracking_url.strip() or None
+            if carrier == "planzer" and is_planzer_shared_tracking_number(tracking_number):
+                if not tracking_url:
+                    raise ValueError(
+                        "This Planzer tracking number requires its complete tracking URL"
+                    )
+                tracking_url = validate_planzer_shared_url(tracking_url, tracking_number)
+            elif tracking_url:
+                raise ValueError("A tracking URL is only used for Planzer shared shipments")
             package = SERVICE.client.create_package(
-                tracking_number, label.strip(), carrier
+                tracking_number, label.strip(), carrier, tracking_url
             )
             self._json(HTTPStatus.CREATED, package)
         except ValueError as exc:

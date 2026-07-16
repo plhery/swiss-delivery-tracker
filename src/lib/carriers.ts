@@ -132,6 +132,11 @@ export function normalizeTrackingNumber(raw: string): string {
   return raw.toUpperCase().replace(/[\s.\-]/g, '');
 }
 
+/** Capability-link shipment numbers look like 999.90.########. */
+export function isPlanzerSharedTrackingNumber(raw: string): boolean {
+  return /^99990\d{8}$/.test(normalizeTrackingNumber(raw));
+}
+
 /**
  * Guess the carrier from the shape of a tracking number.
  * Swiss-focused: Swiss Post barcodes and UPU S10 codes ending in CH
@@ -140,6 +145,8 @@ export function normalizeTrackingNumber(raw: string): string {
 export function detectCarrier(raw: string): CarrierId {
   const n = normalizeTrackingNumber(raw);
   if (!n) return 'unknown';
+
+  if (isPlanzerSharedTrackingNumber(n)) return 'planzer';
 
   // UPS: 1Z + 16 alphanumeric characters.
   if (/^1Z[A-Z0-9]{16}$/.test(n)) return 'ups';
@@ -165,6 +172,9 @@ export function detectCarrier(raw: string): CarrierId {
 /** Swiss Post shows 18-digit barcodes as 99.34.123456.12345678. */
 export function formatTrackingNumber(raw: string): string {
   const n = normalizeTrackingNumber(raw);
+  if (isPlanzerSharedTrackingNumber(n)) {
+    return `${n.slice(0, 3)}.${n.slice(3, 5)}.${n.slice(5)}`;
+  }
   if (/^\d{18}$/.test(n)) {
     return `${n.slice(0, 2)}.${n.slice(2, 4)}.${n.slice(4, 10)}.${n.slice(10)}`;
   }

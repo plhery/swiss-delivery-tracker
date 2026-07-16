@@ -787,6 +787,12 @@ button:disabled {
   color: #969187;
 }
 
+.field__help {
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .sheet__carrier-hint,
 .sheet__error {
   margin: 0;

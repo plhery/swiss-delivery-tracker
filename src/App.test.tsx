@@ -146,6 +146,37 @@ describe('App', () => {
     });
   });
 
+  it('asks for the complete URL for a Planzer shared-link shipment', async () => {
+    const base = createDemoRepo(window.localStorage);
+    const add = vi.fn(base.add);
+    const user = userEvent.setup();
+    renderApp({ ...base, add });
+    await screen.findByText('Coffee beans ☕');
+
+    await user.click(screen.getByRole('button', { name: /add a parcel/i }));
+    const sheet = screen.getByRole('dialog', { name: /add a parcel/i });
+    await user.type(
+      within(sheet).getByLabelText(/tracking number/i),
+      '999.90.03316119',
+    );
+
+    const urlField = within(sheet).getByLabelText(/planzer tracking url/i);
+    expect(urlField).toBeRequired();
+    expect(within(sheet).getByRole('button', { name: /add parcel/i })).toBeDisabled();
+
+    const trackingUrl =
+      'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';
+    await user.type(urlField, trackingUrl);
+    await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
+
+    expect(add).toHaveBeenCalledWith({
+      trackingNumber: '999.90.03316119',
+      label: '',
+      carrier: 'planzer',
+      trackingUrl,
+    });
+  });
+
   it('keeps the add sheet open and reports repository failures', async () => {
     const base = createDemoRepo(window.localStorage);
     const user = userEvent.setup();

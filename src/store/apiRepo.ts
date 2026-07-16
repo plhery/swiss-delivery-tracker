@@ -19,6 +19,7 @@ interface PackageRow {
   last_synced_at: string | null;
   sync_status: string | null;
   sync_error: string | null;
+  tracking_url: string | null;
   tracking_events: EventRow[] | null;
 }
 
@@ -54,6 +55,7 @@ function toParcel(row: PackageRow): ParcelWithEvents {
     lastSyncedAt: row.last_synced_at ?? undefined,
     syncStatus: (row.sync_status ?? 'pending') as ParcelWithEvents['syncStatus'],
     syncError: row.sync_error ?? undefined,
+    trackingUrl: row.tracking_url ?? undefined,
     events: (row.tracking_events ?? []).map(toEvent),
   };
 }
@@ -86,7 +88,12 @@ export function createApiRepo(pollIntervalMs = 30_000): ParcelRepo {
       const carrier = input.carrier ?? detectCarrier(trackingNumber);
       const row = await request<PackageRow>('/api/packages', {
         method: 'POST',
-        body: JSON.stringify({ trackingNumber, label: input.label, carrier }),
+        body: JSON.stringify({
+          trackingNumber,
+          label: input.label,
+          carrier,
+          trackingUrl: input.trackingUrl?.trim() || undefined,
+        }),
       });
       return toParcel(row);
     },

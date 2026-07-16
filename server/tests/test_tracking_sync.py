@@ -297,13 +297,25 @@ class TrackingSyncTests(unittest.TestCase):
         ):
             dpd_tracker = unittest.mock.Mock()
             dpd_tracker.fetch.return_value = {"status": "in_transit"}
-            adapter = UpstreamTrackerAdapter(dpd_tracker=dpd_tracker)
+            planzer_shared_tracker = unittest.mock.Mock()
+            planzer_shared_tracker.fetch.return_value = {"status": "out_for_delivery"}
+            adapter = UpstreamTrackerAdapter(
+                dpd_tracker=dpd_tracker,
+                planzer_shared_tracker=planzer_shared_tracker,
+            )
         self.assertEqual(adapter.fetch("swiss-post", "123", None), {"number": "123"})
         self.assertEqual(
             adapter.fetch("dpd", "06086514587082", None),
             {"status": "in_transit"},
         )
         dpd_tracker.fetch.assert_called_once_with("06086514587082")
+        self.assertEqual(
+            adapter.fetch("planzer", "9999003316119", "https://planzer.example/shared"),
+            {"status": "out_for_delivery"},
+        )
+        planzer_shared_tracker.fetch.assert_called_once_with(
+            "9999003316119", "https://planzer.example/shared"
+        )
         with patch.dict(CARRIER_NAMES, {"dachser-test": "Dachser"}):
             self.assertEqual(
                 adapter.fetch("dachser-test", "456", "https://example.test"),

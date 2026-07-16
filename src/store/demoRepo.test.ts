@@ -79,6 +79,19 @@ describe('createDemoRepo', () => {
     expect(parcel.carrier).toBe('quickpac');
   });
 
+  it('keeps a Planzer shared tracking URL', async () => {
+    const trackingUrl =
+      'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';
+    const parcel = await createDemoRepo(window.localStorage).add({
+      trackingNumber: '999.90.03316119',
+      label: 'Plants',
+      trackingUrl,
+    });
+
+    expect(parcel.carrier).toBe('planzer');
+    expect(parcel.trackingUrl).toBe(trackingUrl);
+  });
+
   it('removes a parcel', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Bye' });

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from .dpd import DPDTracker
+from .planzer_shared import PlanzerSharedTracker
 from .supabase_client import SupabaseServiceClient
 
 
@@ -37,15 +38,22 @@ class NotificationDispatcher(Protocol):
 class UpstreamTrackerAdapter:
     """Loads the pinned upstream tracker only in the production image."""
 
-    def __init__(self, dpd_tracker: DPDTracker | None = None) -> None:
+    def __init__(
+        self,
+        dpd_tracker: DPDTracker | None = None,
+        planzer_shared_tracker: PlanzerSharedTracker | None = None,
+    ) -> None:
         from swiss_delivery_tracker.tracker import CARRIER_MODULES
 
         self.modules = CARRIER_MODULES
         self.dpd_tracker = dpd_tracker or DPDTracker()
+        self.planzer_shared_tracker = planzer_shared_tracker or PlanzerSharedTracker()
 
     def fetch(self, carrier_id: str, tracking_number: str, tracking_url: str | None) -> dict[str, Any]:
         if carrier_id == "dpd":
             return self.dpd_tracker.fetch(tracking_number)
+        if carrier_id == "planzer" and tracking_url:
+            return self.planzer_shared_tracker.fetch(tracking_number, tracking_url)
         carrier_name = CARRIER_NAMES.get(carrier_id)
         if not carrier_name:
             raise LookupError(f"Automatic tracking is not available for {carrier_id}")

@@ -19,7 +19,7 @@ export function ParcelDetail({
   const carrier = carrierInfo(parcel.carrier);
   const last = latestEvent(parcel.events);
   const meta = last ? stageMeta(last.stage) : null;
-  const trackingUrl = carrier.trackingUrl?.(parcel.trackingNumber);
+  const trackingUrl = parcel.trackingUrl ?? carrier.trackingUrl?.(parcel.trackingNumber);
   const swipeStart = useRef<TouchPoint | null>(null);
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {

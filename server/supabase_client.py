@@ -67,7 +67,7 @@ class SupabaseServiceClient:
             (
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
-                "last_status_text,last_synced_at,sync_status,sync_error,"
+                "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
                 "tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
             ("archived_at", "is.null"),
@@ -81,7 +81,7 @@ class SupabaseServiceClient:
             (
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
-                "last_status_text,last_synced_at,sync_status,sync_error,"
+                "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
                 "tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
             ("id", f"eq.{package_id}"),
@@ -92,17 +92,24 @@ class SupabaseServiceClient:
         return rows[0] if rows else None
 
     def create_package(
-        self, tracking_number: str, label: str, carrier: str
+        self,
+        tracking_number: str,
+        label: str,
+        carrier: str,
+        tracking_url: str | None = None,
     ) -> dict[str, Any]:
+        body = {
+            "user_id": None,
+            "tracking_number": tracking_number,
+            "label": label,
+            "carrier": carrier,
+        }
+        if tracking_url:
+            body["tracking_url"] = tracking_url
         rows = self._request(
             "/rest/v1/packages",
             method="POST",
-            body={
-                "user_id": None,
-                "tracking_number": tracking_number,
-                "label": label,
-                "carrier": carrier,
-            },
+            body=body,
             prefer="return=representation",
         ) or []
         if not rows:

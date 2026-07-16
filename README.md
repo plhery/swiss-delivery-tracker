@@ -96,6 +96,12 @@ Carrier sites can temporarily return maintenance pages or change markup. Those
 failures are stored on the package and retried. A long-term Swiss Post setup
 should replace scraping with its authenticated business tracking API.
 
+Planzer shared shipments with numbers shaped like `999.90.########` use a
+different tracking site. The add sheet asks for the complete
+`trackandtrace.planzergroup.com/shared/sendungen/...` URL, validates that its
+shipment number matches and stores the capability link so scheduled syncs can
+send its `accessKey`. Ordinary Planzer numbers continue to use the direct API.
+
 DPD protects its public tracking page with a Cloudflare browser challenge.
 Automatic DPD tracking therefore requires a private
 [`FlareSolverr`](https://github.com/FlareSolverr/FlareSolverr) instance and the

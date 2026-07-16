@@ -200,6 +200,7 @@ export function createDemoRepo(
         trackingNumber,
         label: input.label,
         carrier: input.carrier ?? detectCarrier(trackingNumber),
+        trackingUrl: input.trackingUrl?.trim() || undefined,
         createdAt,
         syncStatus: 'ok',
         events: [],

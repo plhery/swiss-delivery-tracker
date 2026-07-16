@@ -45,6 +45,7 @@ export interface Parcel {
   lastSyncedAt?: string;
   syncStatus: SyncStatus;
   syncError?: string;
+  trackingUrl?: string;
 }
 
 export interface TrackingEvent {
@@ -64,6 +65,7 @@ export interface NewParcelInput {
   trackingNumber: string;
   label: string;
   carrier?: CarrierId;
+  trackingUrl?: string;
 }
 
 /** Storage backends: the shared server API in production, local demo in development. */

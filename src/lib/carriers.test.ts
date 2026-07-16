@@ -5,6 +5,7 @@ import {
   carrierInfo,
   detectCarrier,
   formatTrackingNumber,
+  isPlanzerSharedTrackingNumber,
   normalizeTrackingNumber,
 } from './carriers';
 
@@ -21,6 +22,13 @@ describe('detectCarrier', () => {
   it('recognises Planzer 20-digit delivery numbers', () => {
     expect(detectCarrier('91346097020038089282')).toBe('planzer');
     expect(detectCarrier('91346 09702 00380 89282')).toBe('planzer');
+  });
+
+  it('recognises Planzer shared-link shipment numbers', () => {
+    expect(detectCarrier('999.90.03316119')).toBe('planzer');
+    expect(detectCarrier('9999003316119')).toBe('planzer');
+    expect(isPlanzerSharedTrackingNumber('999.90.03316119')).toBe(true);
+    expect(isPlanzerSharedTrackingNumber('91346097020038089282')).toBe(false);
   });
 
   it('recognises Swiss Post 18-digit barcodes, with or without dots', () => {
@@ -75,6 +83,10 @@ describe('formatTrackingNumber', () => {
   it('leaves other numbers as-is (normalised)', () => {
     expect(formatTrackingNumber('ra123456789ch')).toBe('RA123456789CH');
     expect(formatTrackingNumber('1Z999AA10123456784')).toBe('1Z999AA10123456784');
+  });
+
+  it('formats Planzer shared-link numbers with their original separators', () => {
+    expect(formatTrackingNumber('9999003316119')).toBe('999.90.03316119');
   });
 });
 

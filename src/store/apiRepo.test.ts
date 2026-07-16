@@ -12,6 +12,7 @@ const packageRow = {
   last_synced_at: '2026-07-15T01:00:00Z',
   sync_status: 'ok',
   sync_error: null,
+  tracking_url: null,
   tracking_events: [
     {
       id: 'event-1',
@@ -89,6 +90,23 @@ describe('createApiRepo', () => {
         trackingNumber: 'AMBIGUOUS123',
         label: '',
         carrier: 'planzer',
+      }),
+    }));
+
+    const trackingUrl =
+      'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';
+    await createApiRepo().add({
+      trackingNumber: '999.90.03316119',
+      label: 'Plants',
+      carrier: 'planzer',
+      trackingUrl,
+    });
+    expect(fetch).toHaveBeenLastCalledWith('/api/packages', expect.objectContaining({
+      body: JSON.stringify({
+        trackingNumber: '9999003316119',
+        label: 'Plants',
+        carrier: 'planzer',
+        trackingUrl,
       }),
     }));
   });
