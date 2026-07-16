@@ -293,8 +293,15 @@ class TrackingSyncTests(unittest.TestCase):
             sys.modules,
             {"swiss_delivery_tracker": package, "swiss_delivery_tracker.tracker": tracker},
         ):
-            adapter = UpstreamTrackerAdapter()
+            dpd_tracker = unittest.mock.Mock()
+            dpd_tracker.fetch.return_value = {"status": "in_transit"}
+            adapter = UpstreamTrackerAdapter(dpd_tracker=dpd_tracker)
         self.assertEqual(adapter.fetch("swiss-post", "123", None), {"number": "123"})
+        self.assertEqual(
+            adapter.fetch("dpd", "06086514587082", None),
+            {"status": "in_transit"},
+        )
+        dpd_tracker.fetch.assert_called_once_with("06086514587082")
         with patch.dict(CARRIER_NAMES, {"dachser-test": "Dachser"}):
             self.assertEqual(
                 adapter.fetch("dachser-test", "456", "https://example.test"),

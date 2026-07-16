@@ -102,8 +102,8 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     name: 'DPD',
     color: '#dc0032',
     trackingUrl: (n) =>
-      `https://tracking.dpd.de/status/en_CH/parcel/${encodeURIComponent(n)}`,
-    automatic: false,
+      `https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming?parcelNumber=${encodeURIComponent(n)}`,
+    automatic: true,
   },
   shipup: {
     id: 'shipup',

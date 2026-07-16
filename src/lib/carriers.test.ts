@@ -85,6 +85,13 @@ describe('carrier metadata', () => {
     );
   });
 
+  it('links DPD deliveries to myDPD Switzerland', () => {
+    expect(CARRIERS.dpd.trackingUrl?.('06086514587082')).toBe(
+      'https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming?parcelNumber=06086514587082',
+    );
+    expect(CARRIERS.dpd.automatic).toBe(true);
+  });
+
   it('builds encoded tracking links for every linked carrier', () => {
     const linked = Object.values(CARRIERS).filter((carrier) => carrier.trackingUrl);
     expect(linked.length).toBeGreaterThan(0);

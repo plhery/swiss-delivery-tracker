@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from .dpd import DPDTracker
 from .supabase_client import SupabaseServiceClient
 
 
@@ -21,6 +22,7 @@ CARRIER_NAMES = {
     "hermes": "Hermes Einrichtungs-Service",
     "spring-gds": "Spring GDS",
     "postlogistics": "PostLogistics",
+    "dpd": "DPD",
 }
 
 
@@ -35,12 +37,15 @@ class NotificationDispatcher(Protocol):
 class UpstreamTrackerAdapter:
     """Loads the pinned upstream tracker only in the production image."""
 
-    def __init__(self) -> None:
+    def __init__(self, dpd_tracker: DPDTracker | None = None) -> None:
         from swiss_delivery_tracker.tracker import CARRIER_MODULES
 
         self.modules = CARRIER_MODULES
+        self.dpd_tracker = dpd_tracker or DPDTracker()
 
     def fetch(self, carrier_id: str, tracking_number: str, tracking_url: str | None) -> dict[str, Any]:
+        if carrier_id == "dpd":
+            return self.dpd_tracker.fetch(tracking_number)
         carrier_name = CARRIER_NAMES.get(carrier_id)
         if not carrier_name:
             raise LookupError(f"Automatic tracking is not available for {carrier_id}")

@@ -27,7 +27,7 @@ code. Every device admitted by Cloudflare Access sees the same packages.
   disabled automatically.
 - **Swiss-first carrier support** — automatic adapters for Swiss Post,
   Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS and
-  PostLogistics; carrier links for DHL, UPS, FedEx and DPD.
+  PostLogistics and DPD; carrier links for DHL, UPS and FedEx.
 - **Durable history** — provider events are deduplicated and carrier failures
   remain visible without deleting the parcel.
 - **Installable PWA** — standalone home-screen display, safe-area layout and an
@@ -95,6 +95,12 @@ the reusable carrier adapters.
 Carrier sites can temporarily return maintenance pages or change markup. Those
 failures are stored on the package and retried. A long-term Swiss Post setup
 should replace scraping with its authenticated business tracking API.
+
+DPD protects its public tracking page with a Cloudflare browser challenge.
+Automatic DPD tracking therefore requires a private
+[`FlareSolverr`](https://github.com/FlareSolverr/FlareSolverr) instance and the
+runtime environment variable `FLARESOLVERR_URL`, for example
+`http://flaresolverr:8191`. The carrier link remains usable without it.
 
 ## Testing
 
