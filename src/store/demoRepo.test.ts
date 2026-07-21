@@ -79,6 +79,16 @@ describe('createDemoRepo', () => {
     expect(parcel.carrier).toBe('quickpac');
   });
 
+  it('automatically selects Quickpac for parcel numbers starting with 44', async () => {
+    const parcel = await createDemoRepo(window.localStorage).add({
+      trackingNumber: '44.00.123456.12345678',
+      label: 'Quickpac parcel',
+    });
+
+    expect(parcel.trackingNumber).toBe('440012345612345678');
+    expect(parcel.carrier).toBe('quickpac');
+  });
+
   it('keeps a Planzer shared tracking URL', async () => {
     const trackingUrl =
       'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';

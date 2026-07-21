@@ -139,8 +139,8 @@ export function isPlanzerSharedTrackingNumber(raw: string): boolean {
 
 /**
  * Guess the carrier from the shape of a tracking number.
- * Swiss-focused: Swiss Post barcodes and UPU S10 codes ending in CH
- * are recognised first, then the big international carriers.
+ * Swiss-focused: Quickpac and Swiss Post barcodes, plus UPU S10 codes
+ * ending in CH, are recognised first, then the big international carriers.
  */
 export function detectCarrier(raw: string): CarrierId {
   const n = normalizeTrackingNumber(raw);
@@ -160,7 +160,8 @@ export function detectCarrier(raw: string): CarrierId {
 
   // Numeric barcodes, longest first to avoid ambiguity.
   if (/^\d{20}$/.test(n)) return 'planzer';
-  if (/^\d{18}$/.test(n)) return 'swiss-post'; // 99.xx.xxxxxx.xxxxxxxx
+  if (/^44\d{16}$/.test(n)) return 'quickpac'; // 44.xx.xxxxxx.xxxxxxxx
+  if (/^\d{18}$/.test(n)) return 'swiss-post'; // Usually 99.xx.xxxxxx.xxxxxxxx
   if (/^\d{15}$/.test(n)) return 'fedex';
   if (/^\d{14}$/.test(n)) return 'dpd';
   if (/^\d{12}$/.test(n)) return 'fedex';
@@ -169,7 +170,7 @@ export function detectCarrier(raw: string): CarrierId {
   return 'unknown';
 }
 
-/** Swiss Post shows 18-digit barcodes as 99.34.123456.12345678. */
+/** Swiss carriers show 18-digit barcodes as 99.34.123456.12345678. */
 export function formatTrackingNumber(raw: string): string {
   const n = normalizeTrackingNumber(raw);
   if (isPlanzerSharedTrackingNumber(n)) {

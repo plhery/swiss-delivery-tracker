@@ -216,6 +216,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Parcel names can be at most 80 characters")
             if carrier not in VALID_CARRIERS:
                 raise ValueError("Choose a supported carrier")
+            # Quickpac and Swiss Post both use 18-digit Swiss-style barcodes.
+            # Correct stale clients that still classify every such code as Swiss Post.
+            if re.fullmatch(r"44\d{16}", tracking_number):
+                carrier = "quickpac"
             tracking_url = raw_tracking_url.strip() or None
             if carrier == "planzer" and is_planzer_shared_tracking_number(tracking_number):
                 if not tracking_url:

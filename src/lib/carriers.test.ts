@@ -37,6 +37,11 @@ describe('detectCarrier', () => {
     expect(detectCarrier('98.11.223344.55667788')).toBe('swiss-post');
   });
 
+  it('recognises Quickpac 18-digit barcodes starting with 44', () => {
+    expect(detectCarrier('44.00.123456.12345678')).toBe('quickpac');
+    expect(detectCarrier('440012345612345678')).toBe('quickpac');
+  });
+
   it('recognises S10 registered mail ending in CH as Swiss Post', () => {
     expect(detectCarrier('RA123456789CH')).toBe('swiss-post');
     expect(detectCarrier('ra123456789ch')).toBe('swiss-post');
@@ -74,9 +79,12 @@ describe('detectCarrier', () => {
 });
 
 describe('formatTrackingNumber', () => {
-  it('formats Swiss Post barcodes with dots', () => {
+  it('formats Swiss Post and Quickpac barcodes with dots', () => {
     expect(formatTrackingNumber('993412345612345678')).toBe(
       '99.34.123456.12345678',
+    );
+    expect(formatTrackingNumber('440012345612345678')).toBe(
+      '44.00.123456.12345678',
     );
   });
 

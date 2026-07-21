@@ -81,6 +81,18 @@ describe('createApiRepo', () => {
     });
 
     await createApiRepo().add({
+      trackingNumber: '44.00.123456.12345678',
+      label: 'Quickpac parcel',
+    });
+    expect(fetch).toHaveBeenLastCalledWith('/api/packages', expect.objectContaining({
+      body: JSON.stringify({
+        trackingNumber: '440012345612345678',
+        label: 'Quickpac parcel',
+        carrier: 'quickpac',
+      }),
+    }));
+
+    await createApiRepo().add({
       trackingNumber: 'ambiguous-123',
       label: '',
       carrier: 'planzer',

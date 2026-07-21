@@ -180,6 +180,22 @@ class AppHttpTests(unittest.TestCase):
             "993412345612345678", "Coffee beans", "swiss-post", None
         )
 
+        status, _, body = self.request(
+            "POST",
+            "/api/packages",
+            payload={
+                "trackingNumber": "44.00.123456.12345678",
+                "label": "Quickpac parcel",
+                # An older cached client may still submit this broad fallback.
+                "carrier": "swiss-post",
+            },
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body)["tracking_number"], "440012345612345678")
+        app.SERVICE.client.create_package.assert_called_with(
+            "440012345612345678", "Quickpac parcel", "quickpac", None
+        )
+
         tracking_url = (
             "https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119"
             "?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH"
