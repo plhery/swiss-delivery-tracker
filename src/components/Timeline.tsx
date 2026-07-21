@@ -1,5 +1,5 @@
 import { formatDateTime } from '../lib/format';
-import { sortEventsDesc, stageMeta } from '../lib/stages';
+import { currentEvent, sortEventsDesc, stageMeta } from '../lib/stages';
 import type { TrackingEvent } from '../types';
 
 /** The parcel's journey, newest update on top. */
@@ -11,6 +11,7 @@ export function Timeline({
   syncing?: boolean;
 }) {
   const sorted = sortEventsDesc(events);
+  const current = currentEvent(events);
 
   if (sorted.length === 0) {
     return (
@@ -24,12 +25,13 @@ export function Timeline({
 
   return (
     <ol className="timeline" aria-label="Tracking history">
-      {sorted.map((event, i) => {
+      {sorted.map((event) => {
         const meta = stageMeta(event.stage);
+        const isCurrent = event.id === current?.id;
         return (
           <li
             key={event.id}
-            className={`timeline__item${i === 0 ? ' timeline__item--latest' : ''}`}
+            className={`timeline__item${isCurrent ? ' timeline__item--latest' : ''}`}
           >
             <span
               className={`timeline__dot timeline__dot--${meta.tone}`}
@@ -37,7 +39,7 @@ export function Timeline({
             />
             <div className="timeline__content">
               <div className="timeline__stage">
-                {syncing && i === 0 && event.stage === 'pending'
+                {syncing && isCurrent && event.stage === 'pending'
                   ? 'Sync in progress'
                   : meta.label}
               </div>

@@ -20,7 +20,7 @@ export interface StageMeta {
 }
 
 export const STAGE_META: Record<Stage, StageMeta> = {
-  pending: { label: 'Not announced yet', emoji: '🔎', tone: 'ok', progress: 0 },
+  pending: { label: 'Tracked', emoji: '🔎', tone: 'ok', progress: 0 },
   registered: { label: 'Announced', emoji: '📝', tone: 'ok', progress: 1 },
   accepted: { label: 'Posted', emoji: '📮', tone: 'ok', progress: 2 },
   in_transit: { label: 'In transit', emoji: '🚚', tone: 'ok', progress: 3 },
@@ -63,8 +63,20 @@ export function latestEvent(events: TrackingEvent[]): TrackingEvent | null {
   return sortEventsDesc(events)[0] ?? null;
 }
 
+/**
+ * The event that represents the parcel's current delivery state.
+ *
+ * A pending event only records that tracking was added to this app. Carrier
+ * history can predate that action, so pending must not override a real update
+ * merely because it has a newer timestamp.
+ */
+export function currentEvent(events: TrackingEvent[]): TrackingEvent | null {
+  return latestEvent(events.filter((event) => event.stage !== 'pending'))
+    ?? latestEvent(events);
+}
+
 export function currentStage(events: TrackingEvent[]): Stage | null {
-  return latestEvent(events)?.stage ?? null;
+  return currentEvent(events)?.stage ?? null;
 }
 
 /** 0..5 position on the happy path; -1 when there are no events yet. */

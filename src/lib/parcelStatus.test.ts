@@ -30,7 +30,7 @@ describe('parcelDisplayStatus', () => {
       syncing: true,
     });
     expect(parcelDisplayStatus(parcel('syncing')).label).toBe('Sync in progress');
-    expect(parcelDisplayStatus(parcel('waiting')).label).toBe('Not announced yet');
+    expect(parcelDisplayStatus(parcel('waiting')).label).toBe('Tracked');
   });
 
   it('makes first-sync failures and unsupported carriers explicit', () => {
@@ -41,5 +41,18 @@ describe('parcelDisplayStatus', () => {
   it('keeps a real carrier stage visible during later sync attempts or errors', () => {
     expect(parcelDisplayStatus(parcel('syncing', 'in_transit')).label).toBe('In transit');
     expect(parcelDisplayStatus(parcel('error', 'in_transit')).label).toBe('In transit');
+  });
+
+  it('keeps an older carrier event visible when tracking was added later', () => {
+    const tracked = parcel('waiting');
+    tracked.events.unshift({
+      id: 'event-carrier',
+      parcelId: tracked.id,
+      stage: 'in_transit',
+      description: 'In transit',
+      occurredAt: '2026-07-15T10:00:00Z',
+    });
+
+    expect(parcelDisplayStatus(tracked).label).toBe('In transit');
   });
 });

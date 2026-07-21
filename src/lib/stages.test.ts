@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TrackingEvent } from '../types';
 import {
   CORE_STAGES,
+  currentEvent,
   currentStage,
   isDelivered,
   isFinal,
@@ -94,6 +95,24 @@ describe('currentStage / progressIndex', () => {
     expect(progressIndex(events)).toBe(4);
   });
 
+  it('does not let a newer app tracking event override a carrier status', () => {
+    const carrierUpdate = makeEvent({
+      id: 'carrier',
+      stage: 'in_transit',
+      occurredAt: '2026-06-01T08:00:00.000Z',
+    });
+    const trackingAdded = makeEvent({
+      id: 'app',
+      stage: 'pending',
+      occurredAt: '2026-06-03T08:00:00.000Z',
+    });
+
+    expect(latestEvent([carrierUpdate, trackingAdded])).toBe(trackingAdded);
+    expect(currentEvent([carrierUpdate, trackingAdded])).toBe(carrierUpdate);
+    expect(currentStage([carrierUpdate, trackingAdded])).toBe('in_transit');
+    expect(progressIndex([carrierUpdate, trackingAdded])).toBe(3);
+  });
+
   it('keeps progress at in-transit level while at customs', () => {
     const events = [
       makeEvent({ id: 'a', stage: 'customs', occurredAt: '2026-06-03T08:00:00.000Z' }),
@@ -110,6 +129,15 @@ describe('isDelivered / isFinal', () => {
     ];
     expect(isDelivered(events)).toBe(true);
     expect(isDelivered([events[1]])).toBe(false);
+  });
+
+  it('keeps a parcel delivered when tracking was added later', () => {
+    const events = [
+      makeEvent({ id: 'delivered', stage: 'delivered', occurredAt: '2026-06-01T08:00:00.000Z' }),
+      makeEvent({ id: 'app', stage: 'pending', occurredAt: '2026-06-04T08:00:00.000Z' }),
+    ];
+
+    expect(isDelivered(events)).toBe(true);
   });
 
   it('treats delivered and returned as final', () => {

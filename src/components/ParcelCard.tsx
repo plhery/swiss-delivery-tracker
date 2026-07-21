@@ -1,7 +1,7 @@
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { formatExpectedDelivery, relativeTime } from '../lib/format';
 import { parcelDisplayStatus } from '../lib/parcelStatus';
-import { latestEvent } from '../lib/stages';
+import { currentEvent } from '../lib/stages';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
 
@@ -13,7 +13,7 @@ export function ParcelCard({
   onOpen: (parcel: ParcelWithEvents) => void;
 }) {
   const carrier = carrierInfo(parcel.carrier);
-  const last = latestEvent(parcel.events);
+  const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
   const expectedDelivery = parcel.expectedDelivery
     ? formatExpectedDelivery(parcel.expectedDelivery)
@@ -36,7 +36,7 @@ export function ParcelCard({
         <div className="parcel-card__top">
           <span className="parcel-card__carrier">{carrier.name}</span>
           <span className="parcel-card__time">
-            {last ? relativeTime(last.occurredAt) : ''}
+            {current ? relativeTime(current.occurredAt) : ''}
           </span>
         </div>
         <span className="parcel-card__label">{parcel.label || 'Parcel'}</span>
@@ -58,7 +58,7 @@ export function ParcelCard({
         {parcel.syncStatus === 'error' && (
           <p className="parcel-card__sync-error">Sync needs attention</p>
         )}
-        <ProgressTrack stage={last?.stage ?? null} />
+        <ProgressTrack stage={current?.stage ?? null} />
       </div>
       <div className="parcel-card__chevron" aria-hidden="true">
         <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>

@@ -2,7 +2,7 @@ import { useRef, type PointerEvent } from 'react';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { formatExpectedDelivery } from '../lib/format';
 import { parcelDisplayStatus } from '../lib/parcelStatus';
-import { latestEvent } from '../lib/stages';
+import { currentEvent } from '../lib/stages';
 import { isLeftSwipe, type TouchPoint } from '../lib/swipe';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
@@ -18,7 +18,7 @@ export function ParcelDetail({
   onDelete: (parcel: ParcelWithEvents) => void;
 }) {
   const carrier = carrierInfo(parcel.carrier);
-  const last = latestEvent(parcel.events);
+  const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
   const trackingUrl = parcel.trackingUrl ?? carrier.trackingUrl?.(parcel.trackingNumber);
   const swipeStart = useRef<TouchPoint | null>(null);
@@ -73,7 +73,7 @@ export function ParcelDetail({
             {status.label}
           </span>
         </p>
-        <ProgressTrack stage={last?.stage ?? null} />
+        <ProgressTrack stage={current?.stage ?? null} />
         <div className="detail__tracking-ticket">
           <span className="detail__tracking-label">Tracking number</span>
           <strong>{formatTrackingNumber(parcel.trackingNumber)}</strong>

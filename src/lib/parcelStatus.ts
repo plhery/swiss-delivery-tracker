@@ -1,5 +1,5 @@
 import type { ParcelWithEvents } from '../types';
-import { latestEvent, stageMeta } from './stages';
+import { currentEvent, stageMeta } from './stages';
 
 export interface ParcelDisplayStatus {
   label: string;
@@ -9,8 +9,8 @@ export interface ParcelDisplayStatus {
 
 /** Keep the app's sync lifecycle separate from the carrier's delivery stage. */
 export function parcelDisplayStatus(parcel: ParcelWithEvents): ParcelDisplayStatus {
-  const last = latestEvent(parcel.events);
-  const hasCarrierUpdate = Boolean(last && last.stage !== 'pending');
+  const current = currentEvent(parcel.events);
+  const hasCarrierUpdate = Boolean(current && current.stage !== 'pending');
 
   if (!hasCarrierUpdate && (parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing')) {
     return { label: 'Sync in progress', tone: 'ok', syncing: true };
@@ -22,7 +22,7 @@ export function parcelDisplayStatus(parcel: ParcelWithEvents): ParcelDisplayStat
     return { label: 'Automatic sync unavailable', tone: 'warn', syncing: false };
   }
 
-  const meta = last ? stageMeta(last.stage) : null;
+  const meta = current ? stageMeta(current.stage) : null;
   return {
     label: meta?.label ?? 'Not announced yet',
     tone: meta?.tone ?? 'ok',
