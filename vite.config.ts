@@ -45,6 +45,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
+        // This route must reach Cloudflare even while the cached shell controls the PWA.
+        navigateFallbackDenylist: [/^\/reauth(?:\/|$)/],
       },
     }),
   ],

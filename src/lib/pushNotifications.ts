@@ -1,3 +1,5 @@
+import { throwIfCloudflareAccessRequiresLogin } from './cloudflareAccess';
+
 export type PushState =
   | { kind: 'unsupported' }
   | { kind: 'unavailable' }
@@ -30,8 +32,10 @@ export function enableAppBadgeClearing(
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    redirect: 'manual',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
+  throwIfCloudflareAccessRequiresLogin(response);
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok) throw new Error(body.error || 'Notification settings are unavailable');
   return body as T;

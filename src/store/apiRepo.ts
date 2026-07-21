@@ -1,4 +1,5 @@
 import { detectCarrier, normalizeTrackingNumber } from '../lib/carriers';
+import { throwIfCloudflareAccessRequiresLogin } from '../lib/cloudflareAccess';
 import type {
   CarrierId,
   NewParcelInput,
@@ -63,8 +64,10 @@ function toParcel(row: PackageRow): ParcelWithEvents {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    redirect: 'manual',
     headers: init?.body ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers,
   });
+  throwIfCloudflareAccessRequiresLogin(response);
   const payload = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!response.ok) {
     throw new Error(payload?.error ?? `Delivery service failed (${response.status})`);

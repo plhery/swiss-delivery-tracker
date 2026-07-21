@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CloudflareAccessError } from '../lib/cloudflareAccess';
 import { createApiRepo } from './apiRepo';
 
 const packageRow = {
@@ -46,7 +47,10 @@ describe('createApiRepo', () => {
 
     const parcels = await createApiRepo().list();
 
-    expect(fetch).toHaveBeenCalledWith('/api/packages', { headers: undefined });
+    expect(fetch).toHaveBeenCalledWith('/api/packages', {
+      headers: undefined,
+      redirect: 'manual',
+    });
     expect(parcels[0]).toMatchObject({
       trackingNumber: '993412345612345678',
       label: 'Coffee beans',
@@ -78,6 +82,7 @@ describe('createApiRepo', () => {
         carrier: 'swiss-post',
       }),
       headers: { 'Content-Type': 'application/json' },
+      redirect: 'manual',
     });
 
     await createApiRepo().add({
@@ -136,13 +141,14 @@ describe('createApiRepo', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       `/api/packages/${packageRow.id}`,
-      { method: 'DELETE', headers: undefined },
+      { method: 'DELETE', headers: undefined, redirect: 'manual' },
     );
 
     const parcels = await repo.refresh();
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/sync', {
       method: 'POST',
       headers: undefined,
+      redirect: 'manual',
     });
     expect(parcels).toHaveLength(1);
   });
@@ -159,6 +165,26 @@ describe('createApiRepo', () => {
     await expect(repo.list()).rejects.toThrow('Database offline');
     await expect(repo.list()).rejects.toThrow('Delivery service failed (503)');
     await expect(repo.list()).rejects.toThrow('empty response');
+  });
+
+  it('recognises Cloudflare Access redirects and authentication responses', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...response(null, false, 0),
+        type: 'opaqueredirect',
+        redirected: false,
+      })
+      .mockResolvedValueOnce({
+        ...response(null, false, 401),
+        type: 'basic',
+        redirected: false,
+      });
+    vi.stubGlobal('fetch', fetch);
+    const repo = createApiRepo();
+
+    await expect(repo.list()).rejects.toBeInstanceOf(CloudflareAccessError);
+    await expect(repo.list()).rejects.toThrow('Sign in again');
   });
 
   it('polls while visible, refreshes on visibility changes, and unsubscribes', () => {

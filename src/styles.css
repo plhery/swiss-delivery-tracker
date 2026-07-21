@@ -289,6 +289,21 @@ button:disabled {
   color: var(--ink);
 }
 
+.error-banner__action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: var(--ink);
+  color: white;
+  font-size: 12px;
+  font-weight: 780;
+  text-decoration: none;
+}
+
 .parcel-section + .parcel-section {
   margin-top: 30px;
 }

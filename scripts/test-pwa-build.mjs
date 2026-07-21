@@ -23,6 +23,7 @@ assert.match(worker, /\.skipWaiting\(\)/, 'new workers must activate without wai
 assert.match(worker, /\.clientsClaim\(\)/, 'new workers must take control of open clients');
 assert.match(worker, /\.cleanupOutdatedCaches\(\)/, 'old precaches must be removed');
 assert.match(worker, /importScripts\(["']push-sw\.js["']\)/, 'push handler must be loaded');
+assert.match(worker, /reauth/, 'reauth navigation must bypass the cached app shell');
 assert.match(pushWorker, /addEventListener\(['"]push['"]/, 'push events must be handled');
 assert.match(pushWorker, /showNotification\(/, 'push events must display a notification');
 assert.match(pushWorker, /addEventListener\(['"]notificationclick['"]/, 'notification clicks must be handled');

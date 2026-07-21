@@ -124,6 +124,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/reauth":
+            self._redirect("/")
+            return
         if path == "/health":
             healthy = SERVICE is not None
             self._json(200 if healthy else 503, {"ok": healthy, **STATE})
@@ -150,11 +153,22 @@ class Handler(BaseHTTPRequestHandler):
         self._serve_static(path)
 
     def do_HEAD(self) -> None:  # noqa: N802
-        if urlparse(self.path).path == "/health":
+        path = urlparse(self.path).path
+        if path == "/reauth":
+            self._redirect("/")
+            return
+        if path == "/health":
             self.send_response(200 if SERVICE else 503)
             self.end_headers()
             return
-        self._serve_static(urlparse(self.path).path, head_only=True)
+        self._serve_static(path, head_only=True)
+
+    def _redirect(self, location: str) -> None:
+        self.send_response(HTTPStatus.FOUND)
+        self.send_header("Location", location)
+        self.send_header("Cache-Control", "no-store")
+        self._security_headers()
+        self.end_headers()
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path

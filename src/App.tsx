@@ -3,13 +3,23 @@ import { AddParcelSheet } from './components/AddParcelSheet';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
+import { REAUTH_PATH } from './lib/cloudflareAccess';
 import { isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
 
 export default function App() {
-  const { parcels, loading, refreshing, error, mode, addParcel, removeParcel, refresh } =
-    useParcels();
+  const {
+    parcels,
+    loading,
+    refreshing,
+    error,
+    authenticationRequired,
+    mode,
+    addParcel,
+    removeParcel,
+    refresh,
+  } = useParcels();
   const [adding, setAdding] = useState(false);
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
@@ -109,8 +119,15 @@ export default function App() {
 
         {error && (
           <div className="error-banner" role="alert">
-            <strong>Tracking is taking a break.</strong>
+            <strong>
+              {authenticationRequired ? 'Sign-in needed.' : 'Tracking is taking a break.'}
+            </strong>
             <span>{error}</span>
+            {authenticationRequired && (
+              <a className="error-banner__action" href={REAUTH_PATH}>
+                Sign in again
+              </a>
+            )}
           </div>
         )}
 

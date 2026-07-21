@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { CloudflareAccessError } from '../lib/cloudflareAccess';
 import type { NewParcelInput, ParcelRepo, ParcelWithEvents } from '../types';
 
 interface ParcelsState {
@@ -15,6 +16,7 @@ interface ParcelsState {
   loading: boolean;
   refreshing: boolean;
   error: string | null;
+  authenticationRequired: boolean;
   mode: ParcelRepo['mode'];
   addParcel: (input: NewParcelInput) => Promise<ParcelWithEvents>;
   removeParcel: (id: string) => Promise<void>;
@@ -34,6 +36,7 @@ export function ParcelsProvider({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authenticationRequired, setAuthenticationRequired] = useState(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -43,19 +46,26 @@ export function ParcelsProvider({
     };
   }, []);
 
+  const rememberError = useCallback((reason: unknown) => {
+    if (!mounted.current) return;
+    setError(reason instanceof Error ? reason.message : String(reason));
+    setAuthenticationRequired(reason instanceof CloudflareAccessError);
+  }, []);
+
   const reload = useCallback(async () => {
     try {
       const list = await repo.list();
       if (mounted.current) {
         setParcels(list);
         setError(null);
+        setAuthenticationRequired(false);
       }
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : String(e));
+      rememberError(e);
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, [repo]);
+  }, [repo, rememberError]);
 
   useEffect(() => {
     void reload();
@@ -65,19 +75,29 @@ export function ParcelsProvider({
 
   const addParcel = useCallback(
     async (input: NewParcelInput) => {
-      const parcel = await repo.add(input);
-      await reload();
-      return parcel;
+      try {
+        const parcel = await repo.add(input);
+        await reload();
+        return parcel;
+      } catch (error) {
+        rememberError(error);
+        throw error;
+      }
     },
-    [repo, reload],
+    [repo, reload, rememberError],
   );
 
   const removeParcel = useCallback(
     async (id: string) => {
-      await repo.remove(id);
-      await reload();
+      try {
+        await repo.remove(id);
+        await reload();
+      } catch (error) {
+        rememberError(error);
+        throw error;
+      }
     },
-    [repo, reload],
+    [repo, reload, rememberError],
   );
 
   const refresh = useCallback(async () => {
@@ -87,13 +107,14 @@ export function ParcelsProvider({
       if (mounted.current) {
         setParcels(list);
         setError(null);
+        setAuthenticationRequired(false);
       }
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : String(e));
+      rememberError(e);
     } finally {
       if (mounted.current) setRefreshing(false);
     }
-  }, [repo]);
+  }, [repo, rememberError]);
 
   const value = useMemo(
     () => ({
@@ -101,12 +122,23 @@ export function ParcelsProvider({
       loading,
       refreshing,
       error,
+      authenticationRequired,
       mode: repo.mode,
       addParcel,
       removeParcel,
       refresh,
     }),
-    [parcels, loading, refreshing, error, repo.mode, addParcel, removeParcel, refresh],
+    [
+      parcels,
+      loading,
+      refreshing,
+      error,
+      authenticationRequired,
+      repo.mode,
+      addParcel,
+      removeParcel,
+      refresh,
+    ],
   );
 
   return <ParcelsContext.Provider value={value}>{children}</ParcelsContext.Provider>;

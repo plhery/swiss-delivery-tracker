@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { CloudflareAccessError } from './lib/cloudflareAccess';
 import { createDemoRepo } from './store/demoRepo';
 import { ParcelsProvider } from './store/ParcelsContext';
 import type { ParcelRepo, ParcelWithEvents } from './types';
@@ -93,7 +94,7 @@ describe('App', () => {
     await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
 
     expect(await screen.findByText('Fondue set 🫕')).toBeInTheDocument();
-    expect(screen.getByText('Not announced yet')).toBeInTheDocument();
+    expect(screen.getByText('Tracked')).toBeInTheDocument();
     expect(
       screen.queryByRole('dialog', { name: /add a parcel/i }),
     ).not.toBeInTheDocument();
@@ -382,6 +383,26 @@ describe('App', () => {
     await screen.findByText('Coffee beans ☕');
     await user.click(screen.getByRole('button', { name: /refresh tracking/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Sync unavailable');
+  });
+
+  it('offers an uncached sign-in route when Cloudflare Access expires', async () => {
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockRejectedValue(new CloudflareAccessError()),
+      add: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn(),
+    };
+
+    renderApp(repo);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Sign-in needed');
+    expect(alert).toHaveTextContent('Cloudflare Access session expired');
+    expect(within(alert).getByRole('link', { name: 'Sign in again' })).toHaveAttribute(
+      'href',
+      '/reauth',
+    );
   });
 
   it('shows sync diagnostics and an empty journey', async () => {
