@@ -99,6 +99,12 @@ describe('formatTrackingNumber', () => {
 });
 
 describe('carrier metadata', () => {
+  it('links Swiss Post deliveries to the Post tracking service', () => {
+    expect(CARRIERS['swiss-post'].trackingUrl?.('996013175411004730')).toBe(
+      'https://service.post.ch/ekp-web/ui/entry/search/996013175411004730',
+    );
+  });
+
   it('links Planzer deliveries to the current tracking app', () => {
     expect(CARRIERS.planzer.trackingUrl?.('91346097020038089282')).toBe(
       'https://tracking.app.planzer.ch/delivery/info?deliveryNumber=91346097020038089282',

@@ -16,7 +16,7 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     name: 'Swiss Post',
     color: '#ffcc00',
     trackingUrl: (n) =>
-      `https://www.post.ch/en/receiving-mail/track-consignments?formattedParcelCodes=${encodeURIComponent(n)}`,
+      `https://service.post.ch/ekp-web/ui/entry/search/${encodeURIComponent(n)}`,
     automatic: true,
   },
   quickpac: {
@@ -116,7 +116,7 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     name: 'International Post',
     color: '#2c6fb5',
     trackingUrl: (n) =>
-      `https://www.post.ch/en/receiving-mail/track-consignments?formattedParcelCodes=${encodeURIComponent(n)}`,
+      `https://service.post.ch/ekp-web/ui/entry/search/${encodeURIComponent(n)}`,
     automatic: false,
   },
   unknown: {
