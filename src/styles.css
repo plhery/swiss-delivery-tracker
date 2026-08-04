@@ -1019,9 +1019,74 @@ button:disabled {
 }
 
 .detail__title {
-  margin: 4px 0 10px;
+  margin: 0;
   font-size: clamp(25px, 6vw, 32px);
   letter-spacing: -0.045em;
+}
+
+.detail__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+
+.detail__title-edit {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--canvas);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.detail__title-edit svg {
+  width: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.detail__title-form {
+  margin: 7px auto 12px;
+}
+
+.detail__title-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 9px 12px;
+  border: 1px solid var(--orange);
+  border-radius: 12px;
+  background: #faf8f2;
+  font-size: 18px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.detail__title-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.detail__title-actions .button {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.detail__title-error {
+  margin: 8px 0 0;
+  color: #8a481f;
+  font-size: 12px;
 }
 
 .detail__status {

@@ -41,6 +41,8 @@ class FakeService:
         self.client = Mock()
         self.client.list_packages.side_effect = self._list_packages
         self.client.create_package.side_effect = self._create_package
+        self.client.get_package.return_value = PACKAGE
+        self.client.update_package.side_effect = self._update_package
         self.client.delete_package.side_effect = self._delete_package
         self.client.upsert_push_subscription.return_value = {
             "id": "sub-1",
@@ -71,6 +73,9 @@ class FakeService:
         }
 
     def _delete_package(self, package_id):
+        self._maybe_raise()
+
+    def _update_package(self, package_id, values):
         self._maybe_raise()
 
     def _sync(self):
@@ -172,7 +177,7 @@ class AppHttpTests(unittest.TestCase):
                 body, b"<html>current shell</html>" if method == "GET" else b""
             )
 
-    def test_shared_package_list_create_and_delete(self):
+    def test_shared_package_list_create_rename_and_delete(self):
         status, _, body = self.request("GET", "/api/packages")
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["packages"][0]["id"], PACKAGE["id"])
@@ -226,6 +231,19 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(json.loads(body)["tracking_url"], tracking_url)
         app.SERVICE.client.create_package.assert_called_with(
             "9999003316119", "Plants", "planzer", tracking_url
+        )
+
+        renamed = {**PACKAGE, "label": "Espresso beans"}
+        app.SERVICE.client.get_package.return_value = renamed
+        status, _, body = self.request(
+            "PATCH",
+            f"/api/packages/{PACKAGE['id']}",
+            payload={"label": " Espresso beans "},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["label"], "Espresso beans")
+        app.SERVICE.client.update_package.assert_called_once_with(
+            PACKAGE["id"], {"label": "Espresso beans"}
         )
 
         status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
@@ -296,6 +314,7 @@ class AppHttpTests(unittest.TestCase):
         for method, path in (
             ("GET", "/api/packages"),
             ("POST", "/api/sync"),
+            ("PATCH", f"/api/packages/{PACKAGE['id']}"),
             ("DELETE", f"/api/packages/{PACKAGE['id']}"),
         ):
             status, _, body = self.request(method, path)
@@ -309,6 +328,26 @@ class AppHttpTests(unittest.TestCase):
         status, _, body = self.request("DELETE", "/not-an-api")
         self.assertEqual(status, 404)
         self.assertEqual(json.loads(body), {"error": "Not found"})
+        status, _, body = self.request("PATCH", "/not-an-api", payload={"label": "New"})
+        self.assertEqual(status, 404)
+        self.assertEqual(json.loads(body), {"error": "Not found"})
+
+    def test_rename_validates_the_package_id_and_title(self):
+        for path, payload, message in (
+            ("/api/packages/not-a-uuid", {"label": "New"}, "Invalid package id"),
+            (f"/api/packages/{PACKAGE['id']}", {}, "must be text"),
+            (f"/api/packages/{PACKAGE['id']}", {"label": "x" * 81}, "at most 80"),
+        ):
+            status, _, body = self.request("PATCH", path, payload=payload)
+            self.assertEqual(status, 400)
+            self.assertIn(message, json.loads(body)["error"])
+
+        app.SERVICE.client.get_package.return_value = None
+        status, _, body = self.request(
+            "PATCH", f"/api/packages/{PACKAGE['id']}", payload={"label": "Missing"}
+        )
+        self.assertEqual(status, 404)
+        self.assertIn("not found", json.loads(body)["error"].lower())
 
     def test_create_validates_json_fields_and_duplicate_tracking(self):
         invalid_requests = [
@@ -385,6 +424,13 @@ class AppHttpTests(unittest.TestCase):
         status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
         self.assertEqual(status, 502)
         self.assertIn("delete failed", json.loads(body)["error"])
+
+        app.SERVICE = FakeService(error=SupabaseError("rename failed"))
+        status, _, body = self.request(
+            "PATCH", f"/api/packages/{PACKAGE['id']}", payload={"label": "New title"}
+        )
+        self.assertEqual(status, 502)
+        self.assertIn("rename failed", json.loads(body)["error"])
 
 
 class AppLifecycleTests(unittest.TestCase):

@@ -210,6 +210,22 @@ export function createDemoRepo(
       return parcel;
     },
 
+    async rename(id: string, nextLabel: string) {
+      const label = nextLabel.trim();
+      if (label.length > 80) {
+        throw new Error('Parcel names can be at most 80 characters');
+      }
+      const parcels = getAll();
+      const parcel = parcels.find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Parcel not found');
+      const renamed = { ...parcel, label };
+      save(
+        storage,
+        parcels.map((candidate) => candidate.id === id ? renamed : candidate),
+      );
+      return renamed;
+    },
+
     async remove(id: string) {
       save(
         storage,

@@ -19,6 +19,7 @@ interface ParcelsState {
   authenticationRequired: boolean;
   mode: ParcelRepo['mode'];
   addParcel: (input: NewParcelInput) => Promise<ParcelWithEvents>;
+  renameParcel: (id: string, label: string) => Promise<ParcelWithEvents>;
   removeParcel: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -100,6 +101,26 @@ export function ParcelsProvider({
     [repo, reload, rememberError],
   );
 
+  const renameParcel = useCallback(
+    async (id: string, label: string) => {
+      try {
+        const renamed = await repo.rename(id, label);
+        if (mounted.current) {
+          setParcels((current) =>
+            current.map((parcel) => parcel.id === renamed.id ? renamed : parcel),
+          );
+          setError(null);
+          setAuthenticationRequired(false);
+        }
+        return renamed;
+      } catch (error) {
+        rememberError(error);
+        throw error;
+      }
+    },
+    [repo, rememberError],
+  );
+
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -125,6 +146,7 @@ export function ParcelsProvider({
       authenticationRequired,
       mode: repo.mode,
       addParcel,
+      renameParcel,
       removeParcel,
       refresh,
     }),
@@ -136,6 +158,7 @@ export function ParcelsProvider({
       authenticationRequired,
       repo.mode,
       addParcel,
+      renameParcel,
       removeParcel,
       refresh,
     ],

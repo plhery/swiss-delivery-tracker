@@ -159,6 +159,25 @@ describe('createApiRepo', () => {
     expect(parcels).toHaveLength(1);
   });
 
+  it('renames a parcel through the same-origin API', async () => {
+    const renamedRow = { ...packageRow, label: 'Espresso beans' };
+    const fetch = vi.fn().mockResolvedValue(response(renamedRow));
+    vi.stubGlobal('fetch', fetch);
+
+    const parcel = await createApiRepo().rename(packageRow.id, ' Espresso beans ');
+
+    expect(parcel.label).toBe('Espresso beans');
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/packages/${packageRow.id}`,
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ label: 'Espresso beans' }),
+        cache: 'no-store',
+        redirect: 'manual',
+      }),
+    );
+  });
+
   it('surfaces API errors and malformed success responses', async () => {
     const fetch = vi
       .fn()

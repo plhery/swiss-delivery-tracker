@@ -113,6 +113,17 @@ export function createApiRepo(
       return parcel;
     },
 
+    async rename(id: string, label: string): Promise<ParcelWithEvents> {
+      const row = await request<PackageRow>(
+        `/api/packages/${encodeURIComponent(id)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ label: label.trim() }),
+        },
+      );
+      return toParcel(row);
+    },
+
     async remove(id: string): Promise<void> {
       await request<{ ok: boolean }>(`/api/packages/${encodeURIComponent(id)}`, {
         method: 'DELETE',

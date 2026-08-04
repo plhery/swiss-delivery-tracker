@@ -282,6 +282,37 @@ class Handler(BaseHTTPRequestHandler):
         except SupabaseError as exc:
             self._json(502, {"error": str(exc)})
 
+    def do_PATCH(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path
+        if not SERVICE:
+            self._json(503, {"error": "The delivery database is not configured"})
+            return
+        if not path.startswith("/api/packages/"):
+            self._json(404, {"error": "Not found"})
+            return
+        try:
+            package_id = str(UUID(path.removeprefix("/api/packages/")))
+        except ValueError:
+            self._json(400, {"error": "Invalid package id"})
+            return
+        try:
+            payload = self._read_json()
+            label = payload.get("label")
+            if not isinstance(label, str):
+                raise ValueError("Parcel name must be text")
+            if len(label) > 80:
+                raise ValueError("Parcel names can be at most 80 characters")
+            SERVICE.client.update_package(package_id, {"label": label.strip()})
+            package = SERVICE.client.get_package(package_id)
+            if not package:
+                self._json(404, {"error": "Package not found"})
+                return
+            self._json(200, package)
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+        except SupabaseError as exc:
+            self._json(502, {"error": str(exc)})
+
     def _read_json(self) -> dict[str, object]:
         try:
             length = int(self.headers.get("Content-Length", "0"))

@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent } from 'react';
+import { useState, useRef, type FormEvent, type PointerEvent } from 'react';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { formatExpectedDelivery } from '../lib/format';
 import { parcelDisplayStatus } from '../lib/parcelStatus';
@@ -11,10 +11,12 @@ import { Timeline } from './Timeline';
 export function ParcelDetail({
   parcel,
   onBack,
+  onRename,
   onDelete,
 }: {
   parcel: ParcelWithEvents;
   onBack: () => void;
+  onRename: (parcel: ParcelWithEvents, label: string) => Promise<unknown>;
   onDelete: (parcel: ParcelWithEvents) => void;
 }) {
   const carrier = carrierInfo(parcel.carrier);
@@ -22,6 +24,41 @@ export function ParcelDetail({
   const status = parcelDisplayStatus(parcel);
   const trackingUrl = parcel.trackingUrl ?? carrier.trackingUrl?.(parcel.trackingNumber);
   const swipeStart = useRef<TouchPoint | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [title, setTitle] = useState(parcel.label);
+  const [savingTitle, setSavingTitle] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
+
+  function beginTitleEdit() {
+    setTitle(parcel.label);
+    setTitleError(null);
+    setEditingTitle(true);
+  }
+
+  function cancelTitleEdit() {
+    setEditingTitle(false);
+    setTitleError(null);
+  }
+
+  async function handleTitleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (savingTitle) return;
+    const nextTitle = title.trim();
+    if (nextTitle === parcel.label) {
+      cancelTitleEdit();
+      return;
+    }
+    setSavingTitle(true);
+    setTitleError(null);
+    try {
+      await onRename(parcel, nextTitle);
+      setEditingTitle(false);
+    } catch (error) {
+      setTitleError(error instanceof Error ? error.message : 'Could not rename the parcel');
+    } finally {
+      setSavingTitle(false);
+    }
+  }
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.isPrimary === false) {
@@ -67,7 +104,54 @@ export function ParcelDetail({
           </svg>
         </div>
         <p className="detail__eyebrow">{carrier.name}</p>
-        <h1 className="detail__title">{parcel.label || 'Parcel'}</h1>
+        {editingTitle ? (
+          <form className="detail__title-form" onSubmit={handleTitleSubmit}>
+            <input
+              className="detail__title-input"
+              type="text"
+              aria-label="Parcel title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Parcel"
+              maxLength={80}
+              autoFocus
+            />
+            {titleError && (
+              <p className="detail__title-error" role="alert">{titleError}</p>
+            )}
+            <div className="detail__title-actions">
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={cancelTitleEdit}
+                disabled={savingTitle}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="button button--primary"
+                disabled={savingTitle}
+              >
+                {savingTitle ? 'Saving…' : 'Save title'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="detail__title-row">
+            <h1 className="detail__title">{parcel.label || 'Parcel'}</h1>
+            <button
+              type="button"
+              className="detail__title-edit"
+              aria-label="Edit parcel title"
+              onClick={beginTitleEdit}
+            >
+              <svg aria-hidden="true" viewBox="0 0 20 20">
+                <path d="m13.8 3.2 3 3L7.2 15.8 3 17l1.2-4.2 9.6-9.6Z" />
+              </svg>
+            </button>
+          </div>
+        )}
         <p className="detail__status">
           <span className={`status-badge status-badge--${status.tone}${status.syncing ? ' status-badge--syncing' : ''}`}>
             {status.label}

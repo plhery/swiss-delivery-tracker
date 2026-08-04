@@ -73,6 +73,7 @@ export interface ParcelRepo {
   readonly mode: 'api' | 'demo';
   list(): Promise<ParcelWithEvents[]>;
   add(input: NewParcelInput): Promise<ParcelWithEvents>;
+  rename(id: string, label: string): Promise<ParcelWithEvents>;
   remove(id: string): Promise<void>;
   /** Re-sync tracking; in demo mode this advances the simulation. */
   refresh(): Promise<ParcelWithEvents[]>;

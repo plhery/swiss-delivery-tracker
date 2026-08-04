@@ -17,6 +17,7 @@ export default function App() {
     authenticationRequired,
     mode,
     addParcel,
+    renameParcel,
     removeParcel,
     refresh,
   } = useParcels();
@@ -217,6 +218,7 @@ export default function App() {
         <ParcelDetail
           parcel={openParcel}
           onBack={() => showParcel(null)}
+          onRename={(p, label) => renameParcel(p.id, label)}
           onDelete={(p) => void handleDelete(p)}
         />
       )}

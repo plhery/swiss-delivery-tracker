@@ -62,6 +62,7 @@ describe('App', () => {
       mode: 'api',
       list: vi.fn().mockResolvedValue([parcel]),
       add: vi.fn(),
+      rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn().mockResolvedValue([parcel]),
     };
@@ -122,6 +123,7 @@ describe('App', () => {
       mode: 'api',
       list: vi.fn(async () => [parcel]),
       add: vi.fn(),
+      rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn(async () => [parcel]),
       subscribe: (onChange) => {
@@ -301,6 +303,27 @@ describe('App', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('edits a parcel title from the detail view', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText('Coffee beans ☕'));
+    const detail = screen.getByRole('dialog', { name: 'Coffee beans ☕' });
+    await user.click(within(detail).getByRole('button', { name: /edit parcel title/i }));
+
+    const title = within(detail).getByRole('textbox', { name: /parcel title/i });
+    expect(title).toHaveValue('Coffee beans ☕');
+    expect(title).toHaveAttribute('maxlength', '80');
+    await user.clear(title);
+    await user.type(title, 'Espresso beans');
+    await user.click(within(detail).getByRole('button', { name: /save title/i }));
+
+    const renamedDetail = await screen.findByRole('dialog', { name: 'Espresso beans' });
+    await user.click(within(renamedDetail).getByRole('button', { name: /back/i }));
+    expect(await screen.findByText('Espresso beans')).toBeInTheDocument();
+    expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
+  });
+
   it('opens notification deep links and clears the parcel query on back', async () => {
     const parcel: ParcelWithEvents = {
       id: 'parcel-from-push',
@@ -315,6 +338,7 @@ describe('App', () => {
       mode: 'api',
       list: vi.fn().mockResolvedValue([parcel]),
       add: vi.fn(),
+      rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn().mockResolvedValue([parcel]),
     };
@@ -370,6 +394,7 @@ describe('App', () => {
       mode: 'api',
       list: vi.fn().mockRejectedValue(new Error('Could not load deliveries')),
       add: vi.fn(),
+      rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn(),
     };
@@ -390,6 +415,7 @@ describe('App', () => {
       mode: 'api',
       list: vi.fn().mockRejectedValue(new CloudflareAccessError()),
       add: vi.fn(),
+      rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn(),
     };
@@ -432,6 +458,7 @@ describe('App', () => {
       mode: 'api',
       list: vi.fn().mockResolvedValue([parcel]),
       add: vi.fn(),
+      rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn().mockResolvedValue([parcel]),
     };

@@ -110,6 +110,24 @@ describe('createDemoRepo', () => {
     expect(listed.some((p) => p.id === parcel.id)).toBe(false);
   });
 
+  it('renames and persists a parcel', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Old title' });
+
+    const renamed = await repo.rename(parcel.id, ' New title ');
+
+    expect(renamed.label).toBe('New title');
+    const reloaded = await createDemoRepo(window.localStorage).list();
+    expect(reloaded.find((candidate) => candidate.id === parcel.id)?.label).toBe('New title');
+  });
+
+  it('applies the title length limit when renaming', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Old title' });
+
+    await expect(repo.rename(parcel.id, 'x'.repeat(81))).rejects.toThrow('at most 80');
+  });
+
   it('refresh advances non-final parcels by exactly one stage', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Socks' });
