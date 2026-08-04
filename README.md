@@ -27,7 +27,7 @@ code. Every device admitted by Cloudflare Access sees the same packages.
   disabled automatically.
 - **Swiss-first carrier support** — automatic adapters for Swiss Post,
   Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS and
-  PostLogistics and DPD; carrier links for DHL, UPS and FedEx.
+  PostLogistics, DPD and UPS; carrier links for DHL and FedEx.
 - **Durable history** — provider events are deduplicated and carrier failures
   remain visible without deleting the parcel.
 - **Installable PWA** — standalone home-screen display, safe-area layout and an
@@ -112,6 +112,14 @@ Automatic DPD tracking therefore requires a private
 [`TRAWL`](https://github.com/germondai/trawl) instance and the runtime
 environment variable `FLARESOLVERR_URL`, retained for compatibility, for example
 `http://flaresolverr:8191`. The carrier link remains usable without it.
+
+UPS uses the same private TRAWL browser to load its public tracking application,
+then reads the application's structured status response so the complete scan
+history is retained. Configure `TRAWL_REDIS_URL` in the application with the same
+private Redis URL used by TRAWL's `REDIS_URL`. This bridges UPS's `.ups.com`
+browser session between its page and API hostnames while preserving the cache
+TTL. If Redis or the structured response is temporarily unavailable, tracking
+falls back to the rendered UPS summary page.
 
 ## Testing
 

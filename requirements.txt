@@ -1,1 +1,2 @@
 pywebpush==2.3.0
+redis==8.1.0

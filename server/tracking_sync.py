@@ -12,6 +12,7 @@ from typing import Any, Protocol
 from .dpd import DPDTracker
 from .planzer_shared import PlanzerSharedTracker
 from .supabase_client import SupabaseServiceClient
+from .ups import UPSTracker
 
 
 CARRIER_NAMES = {
@@ -24,6 +25,7 @@ CARRIER_NAMES = {
     "spring-gds": "Spring GDS",
     "postlogistics": "PostLogistics",
     "dpd": "DPD",
+    "ups": "UPS",
 }
 
 
@@ -42,16 +44,20 @@ class UpstreamTrackerAdapter:
         self,
         dpd_tracker: DPDTracker | None = None,
         planzer_shared_tracker: PlanzerSharedTracker | None = None,
+        ups_tracker: UPSTracker | None = None,
     ) -> None:
         from swiss_delivery_tracker.tracker import CARRIER_MODULES
 
         self.modules = CARRIER_MODULES
         self.dpd_tracker = dpd_tracker or DPDTracker()
         self.planzer_shared_tracker = planzer_shared_tracker or PlanzerSharedTracker()
+        self.ups_tracker = ups_tracker or UPSTracker()
 
     def fetch(self, carrier_id: str, tracking_number: str, tracking_url: str | None) -> dict[str, Any]:
         if carrier_id == "dpd":
             return self.dpd_tracker.fetch(tracking_number)
+        if carrier_id == "ups":
+            return self.ups_tracker.fetch(tracking_number)
         if carrier_id == "planzer" and tracking_url:
             return self.planzer_shared_tracker.fetch(tracking_number, tracking_url)
         carrier_name = CARRIER_NAMES.get(carrier_id)

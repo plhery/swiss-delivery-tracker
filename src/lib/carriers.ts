@@ -87,7 +87,7 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
     color: '#351c15',
     trackingUrl: (n) =>
       `https://www.ups.com/track?tracknum=${encodeURIComponent(n)}`,
-    automatic: false,
+    automatic: true,
   },
   fedex: {
     id: 'fedex',

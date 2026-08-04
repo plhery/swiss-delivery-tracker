@@ -118,6 +118,13 @@ describe('carrier metadata', () => {
     expect(CARRIERS.dpd.automatic).toBe(true);
   });
 
+  it('tracks UPS deliveries automatically through the private browser', () => {
+    expect(CARRIERS.ups.automatic).toBe(true);
+    expect(CARRIERS.ups.trackingUrl?.('1Z999AA10123456784')).toBe(
+      'https://www.ups.com/track?tracknum=1Z999AA10123456784',
+    );
+  });
+
   it('builds encoded tracking links for every linked carrier', () => {
     const linked = Object.values(CARRIERS).filter((carrier) => carrier.trackingUrl);
     expect(linked.length).toBeGreaterThan(0);
