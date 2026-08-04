@@ -109,8 +109,8 @@ send its `accessKey`. Ordinary Planzer numbers continue to use the direct API.
 
 DPD protects its public tracking page with a Cloudflare browser challenge.
 Automatic DPD tracking therefore requires a private
-[`FlareSolverr`](https://github.com/FlareSolverr/FlareSolverr) instance and the
-runtime environment variable `FLARESOLVERR_URL`, for example
+[`TRAWL`](https://github.com/germondai/trawl) instance and the runtime
+environment variable `FLARESOLVERR_URL`, retained for compatibility, for example
 `http://flaresolverr:8191`. The carrier link remains usable without it.
 
 ## Testing

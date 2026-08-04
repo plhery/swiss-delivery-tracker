@@ -187,11 +187,11 @@ class DPDTrackerTests(unittest.TestCase):
             DPDTracker(timeout=5).fetch(TRACKING_NUMBER)
 
     @patch("server.dpd.urlopen")
-    def test_fetches_html_through_flaresolverr(self, open_url):
+    def test_fetches_html_through_trawl(self, open_url):
         solver_body = json.dumps(
             {
                 "status": "ok",
-                "solution": {"status": 200, "response": TRACKING_HTML},
+                "solution": {"status": 302, "response": TRACKING_HTML},
             }
         ).encode()
         open_url.return_value = FakeResponse(solver_body)

@@ -329,9 +329,9 @@ class DPDTracker:
             with urlopen(request, timeout=self.timeout + 10) as response:
                 body = response.read(MAX_RESPONSE_BYTES + 1)
         except (HTTPError, URLError) as exc:
-            raise RuntimeError("FlareSolverr could not fetch DPD") from exc
+            raise RuntimeError("The browser challenge solver could not fetch DPD") from exc
         if len(body) > MAX_RESPONSE_BYTES:
-            raise RuntimeError("FlareSolverr response was unexpectedly large")
+            raise RuntimeError("The browser challenge solver response was unexpectedly large")
 
         try:
             result = json.loads(body)
@@ -339,7 +339,11 @@ class DPDTracker:
             html = solution["response"]
             status = int(solution["status"])
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            raise RuntimeError("FlareSolverr returned an invalid response") from exc
-        if result.get("status") != "ok" or status != 200 or not isinstance(html, str):
-            raise RuntimeError("FlareSolverr did not solve the DPD page")
+            raise RuntimeError("The browser challenge solver returned an invalid response") from exc
+        if (
+            result.get("status") != "ok"
+            or status not in {200, 302}
+            or not isinstance(html, str)
+        ):
+            raise RuntimeError("The browser challenge solver did not solve the DPD page")
         return html
