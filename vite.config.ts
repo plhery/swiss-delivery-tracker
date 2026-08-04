@@ -45,8 +45,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
-        // This route must reach Cloudflare even while the cached shell controls the PWA.
-        navigateFallbackDenylist: [/^\/reauth(?:\/|$)/],
+        // These routes must reach Cloudflare even while the cached shell controls the PWA.
+        // In particular, Access completes login on /cdn-cgi/access/authorized.
+        navigateFallbackDenylist: [/^\/reauth(?:\/|$)/, /^\/cdn-cgi(?:\/|$)/],
       },
     }),
   ],
