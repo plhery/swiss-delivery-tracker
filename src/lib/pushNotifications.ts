@@ -1,4 +1,7 @@
-import { throwIfCloudflareAccessRequiresLogin } from './cloudflareAccess';
+import {
+  cloudflareAccessRequest,
+  throwIfCloudflareAccessRequiresLogin,
+} from './cloudflareAccess';
 
 export type PushState =
   | { kind: 'unsupported' }
@@ -30,11 +33,9 @@ export function enableAppBadgeClearing(
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    redirect: 'manual',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-  });
+  const headers = new Headers(init?.headers);
+  headers.set('Content-Type', 'application/json');
+  const response = await fetch(path, cloudflareAccessRequest({ ...init, headers }));
   throwIfCloudflareAccessRequiresLogin(response);
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok) throw new Error(body.error || 'Notification settings are unavailable');

@@ -405,6 +405,17 @@ describe('App', () => {
     );
   });
 
+  it('normalises the fresh post-authentication shell back to the app URL', async () => {
+    window.history.replaceState({}, '', '/reauth?parcel=parcel-1#events');
+
+    renderApp();
+
+    await screen.findByText('Coffee beans ☕');
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('?parcel=parcel-1');
+    expect(window.location.hash).toBe('#events');
+  });
+
   it('shows sync diagnostics and an empty journey', async () => {
     const parcel: ParcelWithEvents = {
       id: 'pkg-error',

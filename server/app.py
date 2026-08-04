@@ -125,7 +125,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path == "/reauth":
-            self._redirect("/")
+            # Cloudflare returns here after login. Serving a fresh document at
+            # this distinct URL prevents Safari from restoring the page whose
+            # React state still says that authentication is required.
+            self._serve_static("/")
             return
         if path == "/health":
             healthy = SERVICE is not None
@@ -155,20 +158,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path == "/reauth":
-            self._redirect("/")
+            self._serve_static("/", head_only=True)
             return
         if path == "/health":
             self.send_response(200 if SERVICE else 503)
             self.end_headers()
             return
         self._serve_static(path, head_only=True)
-
-    def _redirect(self, location: str) -> None:
-        self.send_response(HTTPStatus.FOUND)
-        self.send_header("Location", location)
-        self.send_header("Cache-Control", "no-store")
-        self._security_headers()
-        self.end_headers()
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path

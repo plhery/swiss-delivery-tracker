@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AddParcelSheet } from './components/AddParcelSheet';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
@@ -24,6 +24,15 @@ export default function App() {
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
   );
+
+  useEffect(() => {
+    if (window.location.pathname !== REAUTH_PATH) return;
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `/${window.location.search}${window.location.hash}`,
+    );
+  }, []);
 
   function showParcel(packageId: string | null) {
     const url = new URL(window.location.href);

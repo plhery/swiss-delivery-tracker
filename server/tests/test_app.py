@@ -163,11 +163,14 @@ class AppHttpTests(unittest.TestCase):
     def test_reauthentication_route_bypasses_the_cached_shell(self):
         for method in ("GET", "HEAD"):
             status, headers, body = self.request(method, "/reauth")
-            self.assertEqual(status, 302)
-            self.assertEqual(headers["Location"], "/")
-            self.assertEqual(headers["Cache-Control"], "no-store")
+            self.assertEqual(status, 200)
+            self.assertEqual(
+                headers["Cache-Control"], "no-store, max-age=0, must-revalidate"
+            )
             self.assertEqual(headers["X-Frame-Options"], "DENY")
-            self.assertEqual(body, b"")
+            self.assertEqual(
+                body, b"<html>current shell</html>" if method == "GET" else b""
+            )
 
     def test_shared_package_list_create_and_delete(self):
         status, _, body = self.request("GET", "/api/packages")

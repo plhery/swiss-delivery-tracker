@@ -47,10 +47,12 @@ describe('createApiRepo', () => {
 
     const parcels = await createApiRepo().list();
 
-    expect(fetch).toHaveBeenCalledWith('/api/packages', {
-      headers: undefined,
+    expect(fetch).toHaveBeenCalledWith('/api/packages', expect.objectContaining({
+      cache: 'no-store',
       redirect: 'manual',
-    });
+    }));
+    const requestHeaders = new Headers(fetch.mock.calls[0][1]?.headers);
+    expect(requestHeaders.get('X-Requested-With')).toBe('XMLHttpRequest');
     expect(parcels[0]).toMatchObject({
       trackingNumber: '993412345612345678',
       label: 'Coffee beans',
@@ -74,16 +76,19 @@ describe('createApiRepo', () => {
       trackingNumber: '99.34.123456.12345678',
       label: 'Coffee beans',
     });
-    expect(fetch).toHaveBeenCalledWith('/api/packages', {
+    expect(fetch).toHaveBeenCalledWith('/api/packages', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({
         trackingNumber: '993412345612345678',
         label: 'Coffee beans',
         carrier: 'swiss-post',
       }),
-      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       redirect: 'manual',
-    });
+    }));
+    const requestHeaders = new Headers(fetch.mock.calls[0][1]?.headers);
+    expect(requestHeaders.get('Content-Type')).toBe('application/json');
+    expect(requestHeaders.get('X-Requested-With')).toBe('XMLHttpRequest');
 
     await createApiRepo().add({
       trackingNumber: '44.00.123456.12345678',
@@ -141,13 +146,14 @@ describe('createApiRepo', () => {
     expect(fetch).toHaveBeenNthCalledWith(
       1,
       `/api/packages/${packageRow.id}`,
-      { method: 'DELETE', headers: undefined, redirect: 'manual' },
+      expect.objectContaining({ method: 'DELETE', cache: 'no-store', redirect: 'manual' }),
     );
 
     const parcels = await repo.refresh();
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/sync', {
       method: 'POST',
-      headers: undefined,
+      cache: 'no-store',
+      headers: expect.any(Headers),
       redirect: 'manual',
     });
     expect(parcels).toHaveLength(1);
