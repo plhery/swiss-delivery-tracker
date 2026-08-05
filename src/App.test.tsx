@@ -48,6 +48,9 @@ describe('App', () => {
     expect(screen.getByText('New sneakers 👟')).toBeInTheDocument();
     expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
     expect(screen.getByText(/demo mode/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText('Every shipment, from first lookup to arrival.'),
+    ).not.toBeInTheDocument();
 
     const active = screen.getByRole('region', { name: 'On the way' });
     expect(within(active).getByText('New sneakers 👟')).toBeInTheDocument();

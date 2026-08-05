@@ -237,6 +237,14 @@ export default function App({
     }
   }
 
+  const summaryMessage = loading
+    ? t('app.opening')
+    : error && parcels.length === 0
+      ? t('app.loadFailed')
+      : activeCount === 0
+        ? t('app.noneOnWay')
+        : null;
+
   return (
     <div className="app">
       <header className="app__header">
@@ -288,15 +296,7 @@ export default function App({
               {t('app.onTheWay')}
             </span>
           </div>
-          <p className="app__subtitle">
-            {loading
-              ? t('app.opening')
-              : error && parcels.length === 0
-                ? t('app.loadFailed')
-              : activeCount === 0
-                ? t('app.noneOnWay')
-                : t('app.subtitle')}
-          </p>
+          {summaryMessage && <p className="app__subtitle">{summaryMessage}</p>}
         </div>
       </header>
 
