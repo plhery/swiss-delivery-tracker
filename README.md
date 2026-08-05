@@ -25,9 +25,10 @@ code. Every device admitted by Cloudflare Access sees the same packages.
   device about newly discovered tracking events. Delivery acknowledgements are
   stored per device, transient failures retry, and expired endpoints are
   disabled automatically.
-- **Swiss-first carrier support** — automatic adapters for Swiss Post,
-  Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS and
-  PostLogistics, DPD and UPS; carrier links for DHL and FedEx.
+- **Swiss-first carrier support** — automatic tracking for Swiss Post,
+  Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS,
+  PostLogistics, DPD and UPS, with carrier-link or manual fallbacks for the
+  remaining choices.
 - **Durable history** — provider events are deduplicated and carrier failures
   remain visible without deleting the parcel.
 - **Installable PWA** — standalone home-screen display, safe-area layout and an
@@ -64,6 +65,25 @@ Apply every file in `supabase/migrations/` in filename order before running the
 container. `SUPABASE_SERVICE_ROLE_KEY` must remain server-only; there are no
 `VITE_SUPABASE_*` build variables.
 
+### Environment variables
+
+Copy `.env.example` as a reference. Production secrets belong in the deployment
+environment, never in a `VITE_` variable.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SUPABASE_URL` | Production | Supabase project URL used only by the Python service. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Production | Server-only database key. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | For push | Stable Web Push key pair. |
+| `VAPID_SUBJECT` | For push | HTTPS URL or `mailto:` contact; defaults to the production Parcel Post URL. |
+| `DPD_POSTCODE` | Optional | Four-digit delivery postcode. It unlocks DPD's verified scan history and delivery window when available. |
+| `FLARESOLVERR_URL` | UPS; DPD fallback | Private TRAWL `/v1` endpoint. The legacy variable name is retained for compatibility. |
+| `TRAWL_REDIS_URL` | Recommended for UPS | Same private Redis used by TRAWL, allowing the UPS browser session to be reused for its structured status call. |
+| `DPD_FIREBASE_API_KEY` | Advanced override | Overrides the public, app-restricted myDPD client identifier pinned in the adapter; normally leave unset. |
+| `PORT` | No | HTTP port, default `3000`. |
+| `STATIC_DIR` | No | Built frontend directory, default `/app/dist`. |
+| `VITE_USE_API` | Local development only | Set to `true` before a Vite build to use the real same-origin API instead of demo data. |
+
 The backend endpoints are:
 
 - `GET /api/packages`
@@ -96,10 +116,34 @@ Carrier sites can temporarily return maintenance pages or change markup. Those
 failures are stored on the package and retried. A long-term Swiss Post setup
 should replace scraping with its authenticated business tracking API.
 
+### Support matrix
+
+“Automatic” means the scheduled Python worker can refresh the parcel. It does
+not mean the carrier exposes a supported public API; several adapters use
+undocumented endpoints or page parsing and may need maintenance when a carrier
+changes its site.
+
+| Carrier | Mode | Requirements and caveats |
+| --- | --- | --- |
+| Swiss Post | Automatic | Pinned upstream adapter; a contracted business API is preferable for long-term production use. |
+| Quickpac | Automatic | Pinned upstream adapter. |
+| Planzer | Automatic | Ordinary numbers use the direct adapter. Shared `999.90.########` shipments require the complete capability URL. |
+| AliExpress / Cainiao | Automatic | Pinned upstream adapter. |
+| SunYou | Automatic | Pinned upstream adapter. |
+| Hermes Einrichtungs-Service | Automatic | Pinned upstream adapter. |
+| Spring GDS | Automatic | Pinned upstream adapter. |
+| PostLogistics | Automatic | Pinned upstream adapter. |
+| DPD Switzerland | Automatic | Uses the myDPD guest-client flow. `DPD_POSTCODE` enables verified details; TRAWL is only the web fallback. |
+| UPS | Automatic | Requires private TRAWL. Shared Redis is recommended for full structured scan history. |
+| DHL, FedEx, International Post | Carrier link | Stored and opened in the carrier site; no scheduled adapter. |
+| Dachser, ShipUp | Manual record | Selectable for organization, but no scheduled adapter or generated carrier link. |
+
 Adding a parcel starts its first carrier lookup immediately in the background.
 While that lookup is active, the app shows `Sync in progress` and polls briefly
 for the result; settled parcels continue to use the normal low-frequency polling
 and scheduled carrier retries.
+
+### Planzer shared links
 
 Planzer shared shipments with numbers shaped like `999.90.########` use a
 different tracking site. The add sheet asks for the complete
@@ -107,11 +151,52 @@ different tracking site. The add sheet asks for the complete
 shipment number matches and stores the capability link so scheduled syncs can
 send its `accessKey`. Ordinary Planzer numbers continue to use the direct API.
 
-DPD protects its public tracking page with a Cloudflare browser challenge.
-Automatic DPD tracking therefore requires a private
-[`TRAWL`](https://github.com/germondai/trawl) instance and the runtime
-environment variable `FLARESOLVERR_URL`, retained for compatibility, for example
-`http://flaresolverr:8191`. The carrier link remains usable without it.
+### DPD postcode and delivery windows
+
+DPD's unverified response contains only a summary. Set the four-digit delivery
+postcode to request the verified response:
+
+```dotenv
+DPD_POSTCODE=8000 # replace with the recipient's delivery postcode
+```
+
+The verified response adds the complete scan list plus `deliveryDate`,
+`deliveryTimeFrom` and `deliveryTimeTo`. Parcel Post displays those as, for
+example, `today, 13:30–14:30`. DPD does not calculate a window at every stage,
+so a newly handed-over parcel can still have no ETA. If the configured postcode
+does not match a parcel, the adapter retries without verification and keeps the
+basic status working.
+
+`DPD_POSTCODE` is read only by the Python service and sent only to DPD. Parcel
+Post does not send it to the browser, copy it into Supabase/carrier data, or log
+it. It is nevertheless recipient verification data, so keep it in the private
+deployment environment rather than committing a real value.
+
+The primary DPD path reproduces the anonymous guest flow used by the current
+myDPD client, including its rotating credential, and therefore does not need a
+Cloudflare solver. It is an undocumented interface and can change. The public
+tracking page remains the fallback and is protected by Cloudflare; that fallback
+needs TRAWL. DPD's supported commercial
+[Shipment API](https://label-print-docs.dpd.ch/fr/shipment-api/tracking) is the
+durable alternative for installations with a DPD contract; DPD describes the
+customer-facing delivery window in
+[myDPD/Predict](https://www.dpd.com/ch/en/mydpd/).
+
+### Cloudflare solver and UPS
+
+Run [`TRAWL`](https://github.com/germondai/trawl) on a private network and set,
+for example:
+
+```dotenv
+FLARESOLVERR_URL=http://flaresolverr:8191
+TRAWL_REDIS_URL=redis://trawl-redis:6379/0
+```
+
+The application appends `/v1` when needed and accepts either a final `200` or
+the `302` response used by DPD. Do not expose TRAWL publicly: it controls a real
+browser and retains browser sessions. Cloudflare and Turnstile are adaptive, so
+TRAWL remains best effort; a challenge that demands interactive proof can still
+fail, and a residential proxy may be necessary for a datacenter-hosted browser.
 
 UPS uses the same private TRAWL browser to load its public tracking application,
 then reads the application's structured status response so the complete scan

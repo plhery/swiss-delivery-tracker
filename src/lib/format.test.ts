@@ -58,6 +58,18 @@ describe('formatExpectedDelivery', () => {
     );
   });
 
+  it('preserves DPD delivery windows while formatting their day', () => {
+    expect(formatExpectedDelivery('2026-07-15 13:30–14:30', today)).toBe(
+      'today, 13:30–14:30',
+    );
+    expect(formatExpectedDelivery('2026-07-16 09:00', today)).toBe(
+      'tomorrow, 09:00',
+    );
+    expect(formatExpectedDelivery('2026-07-20 08:00-10:00', today)).toBe(
+      '20.07.2026, 08:00–10:00',
+    );
+  });
+
   it('handles tomorrow across month boundaries', () => {
     const endOfMonth = new Date(2026, 6, 31, 12).getTime();
     expect(formatExpectedDelivery('2026-08-01', endOfMonth)).toBe('tomorrow');

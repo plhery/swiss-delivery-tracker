@@ -61,6 +61,17 @@ export function formatExpectedDelivery(
   value: string,
   now: number = Date.now(),
 ): string {
+  const deliveryWindow = /^(\d{4}-\d{2}-\d{2})[ T]+(\d{2}:\d{2})(?:[–-](\d{2}:\d{2}))?$/.exec(
+    value.trim(),
+  );
+  if (deliveryWindow) {
+    const day = formatExpectedDelivery(deliveryWindow[1], now);
+    const window = deliveryWindow[3]
+      ? `${deliveryWindow[2]}–${deliveryWindow[3]}`
+      : deliveryWindow[2];
+    return `${day}, ${window}`;
+  }
+
   const expected = parseDeliveryDate(value);
   if (!expected) return value;
 
