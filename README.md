@@ -47,9 +47,13 @@ code. Every device admitted by Cloudflare Access sees the same packages.
 ## Development
 
 ```bash
+nvm use
 npm install
 npm run dev
 ```
+
+Node 24 is the pinned local toolchain. npm rejects unsupported Node versions so
+local builds match the versions exercised in CI.
 
 Run `npm run lint:frontend`, `npm run test:coverage` and `npm run build` before
 shipping frontend changes.
