@@ -31,7 +31,7 @@
           Parcel labels, tracking numbers, carriers, status, tracking history,
           and a delivery postcode supplied for a DPD parcel.
         </li>
-        <li>An optional Planzer shared tracking link.</li>
+        <li>Optional Planzer shared and Dachser Customer Iberia capability links.</li>
         <li>
           Push endpoints, encryption keys, browser user agent, and delivery
           acknowledgements when you enable notifications.
@@ -50,8 +50,10 @@
         metadata. The selected carrier receives its tracking number so Swiss
         Delivery Tracker can retrieve updates. DPD may also receive the
         parcel's supplied delivery postcode for recipient verification, and
-        Planzer receives a shared-link capability when you provide one. Web Push
-        endpoints receive encrypted notifications you requested.
+        Planzer receives a shared-link capability when you provide one. Dachser
+        receives its supplied capability link; sender, recipient, address,
+        contact, and document fields in Dachser's response are discarded. Web
+        Push endpoints receive encrypted notifications you requested.
       </p>
 
       <h2>Retention and your controls</h2>
@@ -79,8 +81,8 @@
         Report a privacy or security concern through GitHub's
         <a href="https://github.com/plhery/swiss-delivery-tracker/security/advisories/new"
           >private vulnerability reporting</a
-        >. Never put a real tracking number, sign-in code, token, or shared
-        tracking link in a public issue.
+        >. Never put a real tracking number, sign-in code, token, Planzer shared
+        link, or Dachser detail link in a public issue.
       </p>
 
       <p class="forks">

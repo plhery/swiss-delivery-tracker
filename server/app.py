@@ -22,10 +22,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from .api_contract import CARRIER_IDS
-from .planzer_shared import (
-    is_planzer_shared_tracking_number,
-    validate_planzer_shared_url,
-)
+from .carriers import normalize_carrier_inputs
 from .push import PushNotificationService
 from .rate_limit import RateLimiter
 from .supabase_auth import SupabaseAuthenticator, SupabaseAuthError, SupabaseUser
@@ -221,7 +218,9 @@ def seconds_until_next_sync(now: datetime | None = None) -> float:
         candidate = local.replace(second=0, microsecond=0) + timedelta(minutes=minutes)
     else:
         candidate = local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    return max(1.0, (candidate.astimezone(timezone.utc) - current.astimezone(timezone.utc)).total_seconds())
+    return max(
+        1.0, (candidate.astimezone(timezone.utc) - current.astimezone(timezone.utc)).total_seconds()
+    )
 
 
 def scheduler() -> None:
@@ -245,9 +244,7 @@ def scheduler() -> None:
         time.sleep(delay)
 
 
-def start_immediate_sync(
-    service: TrackingSyncService, package: dict[str, object]
-) -> None:
+def start_immediate_sync(service: TrackingSyncService, package: dict[str, object]) -> None:
     """Queue the first carrier lookup without delaying the create response."""
     sync_jobs(service).enqueue_package(package)
 
@@ -437,9 +434,7 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "exportedAt": datetime.now(timezone.utc).isoformat(),
                         "account": {"id": user.id, "email": user.email},
-                        "packages": self._user_database().list_packages(
-                            include_archived=True
-                        ),
+                        "packages": self._user_database().list_packages(include_archived=True),
                     },
                     headers={
                         "Content-Disposition": 'attachment; filename="swiss-delivery-tracker-export.json"'
@@ -612,7 +607,9 @@ class Handler(BaseHTTPRequestHandler):
             if not re.fullmatch(r"[A-Z0-9]+", tracking_number) or not re.search(
                 r"\d", tracking_number
             ):
-                raise ValueError("Tracking numbers must use letters and numbers and include a digit")
+                raise ValueError(
+                    "Tracking numbers must use letters and numbers and include a digit"
+                )
             if len(label) > 80:
                 raise ValueError("Parcel names can be at most 80 characters")
             if carrier not in VALID_CARRIERS:
@@ -623,21 +620,12 @@ class Handler(BaseHTTPRequestHandler):
                 carrier = "quickpac"
             tracking_url = raw_tracking_url.strip() or None
             dpd_postcode = raw_dpd_postcode.strip() or None
-            if carrier == "planzer" and is_planzer_shared_tracking_number(tracking_number):
-                if not tracking_url:
-                    raise ValueError(
-                        "This Planzer tracking number requires its complete tracking URL"
-                    )
-                tracking_url = validate_planzer_shared_url(tracking_url, tracking_number)
-            elif tracking_url:
-                raise ValueError("A tracking URL is only used for Planzer shared shipments")
-            if carrier == "dpd":
-                if not dpd_postcode or not re.fullmatch(r"\d{4}", dpd_postcode):
-                    raise ValueError(
-                        "Enter the four-digit delivery postcode for this DPD parcel"
-                    )
-            elif dpd_postcode:
-                raise ValueError("A delivery postcode is only used for DPD parcels")
+            tracking_url, dpd_postcode = normalize_carrier_inputs(
+                carrier,
+                tracking_number,
+                tracking_url or "",
+                dpd_postcode or "",
+            )
             client = self._user_database()
             created_package = client.create_package(
                 tracking_number,
@@ -710,9 +698,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 last_sign_in = fresh_user.authenticated_at
                 age = (
-                    datetime.now(timezone.utc) - last_sign_in
-                    if last_sign_in is not None
-                    else None
+                    datetime.now(timezone.utc) - last_sign_in if last_sign_in is not None else None
                 )
                 if age is None or age < -timedelta(minutes=1) or age > RECENT_AUTH_MAX_AGE:
                     self._json(
@@ -893,7 +879,10 @@ def main() -> None:
     if SERVICE:
         threading.Thread(target=scheduler, name="delivery-sync", daemon=True).start()
     server = BoundedThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Delivery Tracker listening on :{PORT}; sync={'enabled' if SERVICE else 'disabled'}", flush=True)
+    print(
+        f"Delivery Tracker listening on :{PORT}; sync={'enabled' if SERVICE else 'disabled'}",
+        flush=True,
+    )
     server.serve_forever()
 
 

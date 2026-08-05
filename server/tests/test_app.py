@@ -128,8 +128,8 @@ class AppHttpTests(unittest.TestCase):
             datetime.now(timezone.utc),
             "30000000-0000-0000-0000-000000000003",
         )
-        app.AUTHENTICATOR.user_client.side_effect = (
-            lambda _token: app.SERVICE.client if app.SERVICE else Mock()
+        app.AUTHENTICATOR.user_client.side_effect = lambda _token: (
+            app.SERVICE.client if app.SERVICE else Mock()
         )
         app.RATE_LIMITER = RateLimiter()
         app.SYNC_JOBS.enqueue_all.return_value = True
@@ -375,6 +375,27 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(json.loads(body)["tracking_url"], tracking_url)
         app.SERVICE.client.create_package.assert_called_with(
             "9999003316119", "Plants", "planzer", tracking_url, None
+        )
+
+        dachser_url = (
+            "https://customeriberia.dachser.com/customerarea/utilidades/"
+            "seguimiento-publico/detalle?cliente=generico"
+            "&numeroUnico=9010000001234&fecha=20260513&clave=TESTKEY9"
+        )
+        status, _, body = self.request(
+            "POST",
+            "/api/packages",
+            payload={
+                "trackingNumber": "9010000001234",
+                "label": "Furniture",
+                "carrier": "dachser",
+                "trackingUrl": dachser_url,
+            },
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body)["tracking_url"], dachser_url)
+        app.SERVICE.client.create_package.assert_called_with(
+            "9010000001234", "Furniture", "dachser", dachser_url, None
         )
 
         status, _, body = self.request(
@@ -666,7 +687,10 @@ class AppHttpTests(unittest.TestCase):
         invalid_requests = [
             ({}, "between 4 and 40"),
             ({"trackingNumber": ["bad"], "label": "", "carrier": "unknown"}, "must be text"),
-            ({"trackingNumber": "hello there", "label": "", "carrier": "unknown"}, "include a digit"),
+            (
+                {"trackingNumber": "hello there", "label": "", "carrier": "unknown"},
+                "include a digit",
+            ),
             ({"trackingNumber": "12??", "label": "", "carrier": "unknown"}, "letters and numbers"),
             ({"trackingNumber": "1234", "label": "x" * 81, "carrier": "unknown"}, "at most 80"),
             ({"trackingNumber": "1234", "label": "", "carrier": "invented"}, "supported carrier"),
@@ -706,6 +730,22 @@ class AppHttpTests(unittest.TestCase):
                 },
                 "must use https://trackandtrace.planzergroup.com",
             ),
+            (
+                {"trackingNumber": "9010000001234", "label": "", "carrier": "dachser"},
+                "requires its complete tracking URL",
+            ),
+            (
+                {
+                    "trackingNumber": "9010000001234",
+                    "label": "",
+                    "carrier": "dachser",
+                    "trackingUrl": (
+                        "https://example.test/customerarea/utilidades/seguimiento-publico/"
+                        "detalle?numeroUnico=9010000001234&fecha=20260513&clave=TESTKEY9"
+                    ),
+                },
+                "must use https://customeriberia.dachser.com",
+            ),
         ]
         for payload, message in invalid_requests:
             status, _, body = self.request("POST", "/api/packages", payload=payload)
@@ -715,7 +755,9 @@ class AppHttpTests(unittest.TestCase):
         for raw_body in (b"not-json", b"[]", b""):
             status, _, body = self.request("POST", "/api/packages", raw_body=raw_body)
             self.assertEqual(status, 400)
-            self.assertIn("valid JSON object" if raw_body else "request size", json.loads(body)["error"])
+            self.assertIn(
+                "valid JSON object" if raw_body else "request size", json.loads(body)["error"]
+            )
 
         app.SERVICE = FakeService(error=SupabaseError("duplicate", status=409))
         status, _, body = self.request(
@@ -884,9 +926,7 @@ class AppLifecycleTests(unittest.TestCase):
             patch("server.app.SupabaseAuthenticator") as authenticator_class,
         ):
             self.assertIs(app.build_authenticator(), authenticator_class.return_value)
-            authenticator_class.assert_called_once_with(
-                "http://supabase", "legacy-anon-key"
-            )
+            authenticator_class.assert_called_once_with("http://supabase", "legacy-anon-key")
 
     def test_public_supabase_origin_rejects_unsafe_configuration(self):
         cases = {
@@ -907,8 +947,8 @@ class AppLifecycleTests(unittest.TestCase):
     def test_schedule_uses_ten_minutes_by_day_and_hourly_by_night(self):
         cases = [
             (datetime(2026, 7, 15, 7, 4, 30, tzinfo=timezone.utc), 330),  # 09:04 Zurich
-            (datetime(2026, 7, 15, 19, 59, tzinfo=timezone.utc), 60),     # 21:59 Zurich
-            (datetime(2026, 7, 15, 20, 1, tzinfo=timezone.utc), 3540),   # 22:01 Zurich
+            (datetime(2026, 7, 15, 19, 59, tzinfo=timezone.utc), 60),  # 21:59 Zurich
+            (datetime(2026, 7, 15, 20, 1, tzinfo=timezone.utc), 3540),  # 22:01 Zurich
             (datetime(2026, 7, 15, 5, 30, tzinfo=timezone.utc), 1800),  # 07:30 Zurich
             (datetime(2026, 1, 15, 6, 30, tzinfo=timezone.utc), 1800),  # winter boundary
         ]

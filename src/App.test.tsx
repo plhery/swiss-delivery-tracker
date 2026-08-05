@@ -155,6 +155,7 @@ describe('App', () => {
       within(sheet).getByLabelText(/tracking number/i),
       '06086514587082',
     );
+    await user.selectOptions(within(sheet).getByLabelText(/carrier/i), 'dpd');
 
     const postcode = within(sheet).getByLabelText(/delivery postcode/i);
     expect(postcode).toBeRequired();
@@ -191,6 +192,7 @@ describe('App', () => {
       within(sheet).getByLabelText(/tracking number/i),
       '06086514587083',
     );
+    await user.selectOptions(within(sheet).getByLabelText(/carrier/i), 'dpd');
 
     expect(within(sheet).getByLabelText(/delivery postcode/i)).toHaveValue('8004');
   });
@@ -349,6 +351,32 @@ describe('App', () => {
       trackingNumber: '999.90.03316119',
       label: '',
       carrier: 'planzer',
+      trackingUrl,
+    });
+  });
+
+  it('captures a complete Dachser capability link from the primary paste field', async () => {
+    const base = createDemoRepo(window.localStorage);
+    const add = vi.fn(base.add);
+    const user = userEvent.setup();
+    renderApp({ ...base, add });
+    await screen.findByText('Coffee beans ☕');
+
+    await user.click(screen.getByRole('button', { name: /add a parcel/i }));
+    const sheet = screen.getByRole('dialog', { name: /add a parcel/i });
+    const trackingUrl =
+      'https://customeriberia.dachser.com/customerarea/utilidades/seguimiento-publico/detalle?cliente=generico&numeroUnico=9010000001234&fecha=20260513&clave=TESTKEY9';
+    await user.type(within(sheet).getByLabelText(/tracking number or link/i), trackingUrl);
+
+    expect(within(sheet).queryByLabelText(/dachser tracking url/i)).not.toBeInTheDocument();
+    expect(within(sheet).getByText(/Dachser will sync automatically/i)).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: /add parcel/i })).toBeEnabled();
+    await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
+
+    expect(add).toHaveBeenCalledWith({
+      trackingNumber: '9010000001234',
+      label: '',
+      carrier: 'dachser',
       trackingUrl,
     });
   });

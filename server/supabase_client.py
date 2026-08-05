@@ -9,6 +9,8 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
+from .carriers import AUTOMATIC_CARRIER_IDS
+
 
 class SupabaseError(RuntimeError):
     def __init__(
@@ -185,7 +187,7 @@ class SupabaseClient:
             ),
             ("archived_at", "is.null"),
             ("current_stage", "not.in.(delivered,returned)"),
-            ("sync_status", "neq.unsupported"),
+            ("carrier", f"in.({','.join(sorted(AUTOMATIC_CARRIER_IDS))})"),
             ("order", "last_synced_at.asc.nullsfirst,created_at.asc"),
         ]
         query = urllib.parse.urlencode(params, safe="().,*")

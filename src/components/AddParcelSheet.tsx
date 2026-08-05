@@ -1,11 +1,13 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  type CarrierInputField,
   carrierInfo,
+  carrierRequirements,
   formatTrackingNumber,
-  isPlanzerSharedTrackingNumber,
   parseTrackingInput,
   SELECTABLE_CARRIERS,
+  tracksAutomatically,
 } from '../lib/carriers';
 import type { CarrierId, NewParcelInput } from '../types';
 import { useModalDialog } from '../lib/modal';
@@ -21,8 +23,10 @@ export function AddParcelSheet({
 }) {
   const [label, setLabel] = useState('');
   const [trackingInputValue, setTrackingInputValue] = useState('');
-  const [trackingUrl, setTrackingUrl] = useState('');
-  const [dpdPostcode, setDpdPostcode] = useState(lastDpdPostcode ?? '');
+  const [carrierInputs, setCarrierInputs] = useState<Record<CarrierInputField, string>>({
+    trackingUrl: '',
+    dpdPostcode: lastDpdPostcode ?? '',
+  });
   const [selectedCarrier, setSelectedCarrier] = useState<CarrierId | 'auto'>('auto');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +35,21 @@ export function AddParcelSheet({
 
   const parsedTracking = parseTrackingInput(trackingInputValue);
   const trackingNumber = parsedTracking.trackingNumber;
-  const carrier = trackingNumber
-    ? carrierInfo(selectedCarrier === 'auto' ? parsedTracking.carrier : selectedCarrier)
-    : null;
-  const needsPlanzerUrl =
-    carrier?.id === 'planzer' && isPlanzerSharedTrackingNumber(trackingNumber);
-  const needsDpdPostcode = carrier?.id === 'dpd';
-  const resolvedTrackingUrl = parsedTracking.trackingUrl ?? trackingUrl.trim();
+  const resolvedCarrier = selectedCarrier === 'auto' ? parsedTracking.carrier : selectedCarrier;
+  const carrier = trackingNumber ? carrierInfo(resolvedCarrier) : null;
+  const requirements = carrier ? carrierRequirements(carrier.id, trackingNumber) : [];
+  const requiresCarrierConfirmation =
+    selectedCarrier === 'auto' && parsedTracking.confidence === 'low';
+  const parsedCarrierTrackingUrl =
+    parsedTracking.carrier === resolvedCarrier ? parsedTracking.trackingUrl : undefined;
+  const carrierInputValue = (field: CarrierInputField) =>
+    field === 'trackingUrl' && parsedCarrierTrackingUrl
+      ? parsedCarrierTrackingUrl
+      : carrierInputs[field];
+  const requirementsSatisfied = requirements.every((requirement) => {
+    const value = carrierInputValue(requirement.field).trim();
+    return value && (!requirement.pattern || new RegExp(requirement.pattern).test(value));
+  });
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,9 +60,13 @@ export function AddParcelSheet({
       await onAdd({
         trackingNumber: trackingNumber.trim(),
         label: label.trim(),
-        carrier: selectedCarrier === 'auto' ? parsedTracking.carrier : selectedCarrier,
-        trackingUrl: needsPlanzerUrl ? resolvedTrackingUrl : undefined,
-        dpdPostcode: needsDpdPostcode ? dpdPostcode : undefined,
+        carrier: resolvedCarrier,
+        trackingUrl: requirements.some(({ field }) => field === 'trackingUrl')
+          ? carrierInputValue('trackingUrl').trim()
+          : undefined,
+        dpdPostcode: requirements.some(({ field }) => field === 'dpdPostcode')
+          ? carrierInputValue('dpdPostcode').trim()
+          : undefined,
       });
       onClose();
     } catch (err) {
@@ -125,25 +141,6 @@ export function AddParcelSheet({
               {parsedTracking.source === 'link' ? 'link' : 'text'}.
             </p>
           )}
-          {needsPlanzerUrl && !parsedTracking.trackingUrl && (
-            <label className="field">
-              <span className="field__label">Planzer tracking URL</span>
-              <input
-                className="field__input"
-                type="url"
-                value={trackingUrl}
-                placeholder="https://trackandtrace.planzergroup.com/shared/…"
-                onChange={(e) => setTrackingUrl(e.target.value)}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                required
-              />
-              <small className="field__help">
-                Paste the complete shared link, including its accessKey.
-              </small>
-            </label>
-          )}
           <label className="field">
             <span className="field__label">Carrier</span>
             <select
@@ -154,38 +151,53 @@ export function AddParcelSheet({
               <option value="auto">Detect automatically</option>
               {SELECTABLE_CARRIERS.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {option.name}{option.automatic ? '' : ' (link only)'}
+                  {option.name}{tracksAutomatically(option.id) ? '' : ' (link only)'}
                 </option>
               ))}
             </select>
           </label>
-          {needsDpdPostcode && (
-            <label className="field">
-              <span className="field__label">Delivery postcode</span>
-              <input
-                className="field__input"
-                type="text"
-                inputMode="numeric"
-                autoComplete="postal-code"
-                value={dpdPostcode}
-                placeholder="8004"
-                pattern="[0-9]{4}"
-                maxLength={4}
-                onChange={(event) => {
-                  setDpdPostcode(event.target.value.replace(/\D/g, '').slice(0, 4));
-                }}
-                required
-              />
-              <small className="field__help">
-                DPD uses this to unlock verified scans and delivery windows.
-              </small>
-            </label>
-          )}
+          {requirements
+            .filter(({ field }) => field !== 'trackingUrl' || !parsedCarrierTrackingUrl)
+            .map((requirement) => (
+              <label className="field" key={requirement.field}>
+                <span className="field__label">{requirement.label}</span>
+                <input
+                  className="field__input"
+                  type={requirement.type}
+                  inputMode={requirement.inputMode}
+                  autoComplete={requirement.autoComplete}
+                  value={carrierInputValue(requirement.field)}
+                  placeholder={requirement.placeholder}
+                  pattern={requirement.pattern}
+                  maxLength={requirement.maxLength}
+                  onChange={(event) => {
+                    const value = requirement.inputMode === 'numeric'
+                      ? event.target.value.replace(/\D/g, '').slice(0, requirement.maxLength)
+                      : event.target.value;
+                    setCarrierInputs((current) => ({
+                      ...current,
+                      [requirement.field]: value,
+                    }));
+                  }}
+                  autoCapitalize={requirement.type === 'url' ? 'none' : undefined}
+                  autoCorrect="off"
+                  spellCheck={false}
+                  required
+                />
+                {requirement.help && (
+                  <small className="field__help">{requirement.help}</small>
+                )}
+              </label>
+            ))}
           {carrier && (
             <p className="sheet__carrier-hint">
-              {carrier.id === 'unknown'
-                ? "We couldn't recognise this format. Choose the carrier to enable syncing."
-                : carrier.automatic
+              {requiresCarrierConfirmation
+                ? `This number format could belong to ${parsedTracking.candidates
+                  .map((candidate) => carrierInfo(candidate).name)
+                  .join(' or ')}. Choose the carrier to confirm.`
+                : carrier.id === 'unknown'
+                  ? "We couldn't recognise this format. Choose the carrier to enable syncing."
+                  : tracksAutomatically(carrier.id)
                   ? `${carrier.name} will sync automatically.`
                   : `${carrier.name} is saved with a link; automatic syncing needs a supported adapter.`}
             </p>
@@ -208,8 +220,8 @@ export function AddParcelSheet({
               className="button button--primary"
               disabled={
                 !trackingNumber
-                || (needsPlanzerUrl && !resolvedTrackingUrl)
-                || (needsDpdPostcode && !/^\d{4}$/.test(dpdPostcode))
+                || requiresCarrierConfirmation
+                || !requirementsSatisfied
                 || saving
               }
             >

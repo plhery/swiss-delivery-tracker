@@ -3,11 +3,15 @@ import {
   CARRIERS,
   SELECTABLE_CARRIERS,
   carrierInfo,
+  carrierRequirements,
   detectCarrier,
+  detectCarrierMatch,
   formatTrackingNumber,
   isPlanzerSharedTrackingNumber,
+  isValidS10TrackingNumber,
   normalizeTrackingNumber,
   parseTrackingInput,
+  tracksAutomatically,
 } from './carriers';
 
 describe('normalizeTrackingNumber', () => {
@@ -44,13 +48,19 @@ describe('detectCarrier', () => {
   });
 
   it('recognises S10 registered mail ending in CH as Swiss Post', () => {
-    expect(detectCarrier('RA123456789CH')).toBe('swiss-post');
-    expect(detectCarrier('ra123456789ch')).toBe('swiss-post');
+    expect(detectCarrier('RA123456785CH')).toBe('swiss-post');
+    expect(detectCarrier('ra123456785ch')).toBe('swiss-post');
   });
 
   it('routes other S10 codes to international post', () => {
-    expect(detectCarrier('LX123456789DE')).toBe('intl-post');
-    expect(detectCarrier('CN987654321US')).toBe('intl-post');
+    expect(detectCarrier('LX123456785DE')).toBe('intl-post');
+    expect(detectCarrier('CN987654326US')).toBe('intl-post');
+  });
+
+  it('rejects S10-shaped values with an invalid check digit', () => {
+    expect(isValidS10TrackingNumber('RA123456785CH')).toBe(true);
+    expect(isValidS10TrackingNumber('RA123456789CH')).toBe(false);
+    expect(detectCarrier('RA123456789CH')).toBe('unknown');
   });
 
   it('recognises UPS 1Z numbers', () => {
@@ -58,18 +68,34 @@ describe('detectCarrier', () => {
   });
 
   it('recognises DHL waybills and parcel codes', () => {
-    expect(detectCarrier('1234567890')).toBe('dhl');
+    expect(detectCarrierMatch('1234567890')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['dhl'],
+    });
     expect(detectCarrier('JJD0099999999')).toBe('dhl');
     expect(detectCarrier('JVGL0099999999')).toBe('dhl');
   });
 
-  it('recognises FedEx 12- and 15-digit numbers', () => {
-    expect(detectCarrier('123456789012')).toBe('fedex');
-    expect(detectCarrier('123456789012345')).toBe('fedex');
+  it('keeps broad FedEx number lengths ambiguous', () => {
+    expect(detectCarrierMatch('123456789012')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['fedex'],
+    });
+    expect(detectCarrierMatch('123456789012345')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['fedex'],
+    });
   });
 
-  it('recognises DPD 14-digit numbers', () => {
-    expect(detectCarrier('01234567890123')).toBe('dpd');
+  it('keeps bare 14-digit numbers ambiguous', () => {
+    expect(detectCarrierMatch('01234567890123')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['dpd'],
+    });
   });
 
   it('falls back to unknown', () => {
@@ -125,9 +151,22 @@ describe('parseTrackingInput', () => {
     const link =
       'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';
 
-    expect(parseTrackingInput(`Your delivery: ${link}.`)).toEqual({
+    expect(parseTrackingInput(`Your delivery: ${link}.`)).toMatchObject({
       trackingNumber: '999.90.03316119',
       carrier: 'planzer',
+      trackingUrl: link,
+      source: 'link',
+    });
+  });
+
+  it('captures a complete Dachser capability link', () => {
+    const link =
+      'https://customeriberia.dachser.com/customerarea/utilidades/seguimiento-publico/detalle?cliente=generico&numeroUnico=9010000001234&fecha=20260513&clave=TESTKEY9';
+
+    expect(parseTrackingInput(`Your delivery: ${link}.`)).toMatchObject({
+      trackingNumber: '9010000001234',
+      carrier: 'dachser',
+      confidence: 'high',
       trackingUrl: link,
       source: 'link',
     });
@@ -146,7 +185,7 @@ describe('parseTrackingInput', () => {
   it('finds recognised numbers in pasted shipping text', () => {
     expect(
       parseTrackingInput('Your order is on its way. UPS tracking number: 1Z999AA10123456784.'),
-    ).toEqual({
+    ).toMatchObject({
       trackingNumber: '1Z999AA10123456784',
       carrier: 'ups',
       source: 'text',
@@ -154,7 +193,7 @@ describe('parseTrackingInput', () => {
   });
 
   it('extracts an unknown-format number following a tracking label', () => {
-    expect(parseTrackingInput('Shipment tracking: ABC123XYZ')).toEqual({
+    expect(parseTrackingInput('Shipment tracking: ABC123XYZ')).toMatchObject({
       trackingNumber: 'ABC123XYZ',
       carrier: 'unknown',
       source: 'text',
@@ -162,17 +201,17 @@ describe('parseTrackingInput', () => {
   });
 
   it('keeps plain manual numbers and rejects prose without a number', () => {
-    expect(parseTrackingInput('ambiguous-123')).toEqual({
+    expect(parseTrackingInput('ambiguous-123')).toMatchObject({
       trackingNumber: 'ambiguous-123',
       carrier: 'unknown',
       source: 'number',
     });
-    expect(parseTrackingInput('Where is my parcel?')).toEqual({
+    expect(parseTrackingInput('Where is my parcel?')).toMatchObject({
       trackingNumber: '',
       carrier: 'unknown',
       source: 'none',
     });
-    expect(parseTrackingInput('hello there')).toEqual({
+    expect(parseTrackingInput('hello there')).toMatchObject({
       trackingNumber: '',
       carrier: 'unknown',
       source: 'none',
@@ -197,14 +236,25 @@ describe('carrier metadata', () => {
     expect(CARRIERS.dpd.trackingUrl?.('06086514587082')).toBe(
       'https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming?parcelNumber=06086514587082',
     );
-    expect(CARRIERS.dpd.automatic).toBe(true);
+    expect(tracksAutomatically('dpd')).toBe(true);
   });
 
   it('tracks UPS deliveries automatically with browser fallback', () => {
-    expect(CARRIERS.ups.automatic).toBe(true);
+    expect(tracksAutomatically('ups')).toBe(true);
     expect(CARRIERS.ups.trackingUrl?.('1Z999AA10123456784')).toBe(
       'https://www.ups.com/track?tracknum=1Z999AA10123456784',
     );
+  });
+
+  it('tracks Dachser capability links automatically', () => {
+    expect(tracksAutomatically('dachser')).toBe(true);
+    expect(carrierRequirements('dachser', '9010000001234')).toMatchObject([
+      {
+        field: 'trackingUrl',
+        label: 'Dachser tracking URL',
+        type: 'url',
+      },
+    ]);
   });
 
   it('builds encoded tracking links for every linked carrier', () => {

@@ -12,34 +12,21 @@ from datetime import datetime, timezone, tzinfo
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .api_contract import STAGES
 from .bounded_http import install_bounded_http
+from .carriers import (
+    AUTOMATIC_CARRIER_IDS,
+    CARRIER_NAMES,
+    carrier_adapter,
+    carrier_timezone,
+)
+from .dachser import DachserTracker
 from .dpd import DPDTracker
+from .hermes import HermesTracker
 from .planzer_shared import PlanzerSharedTracker
 from .supabase_client import SupabaseServiceClient
 from .ups import UPSTracker
 
-CARRIER_NAMES = {
-    "swiss-post": "Swiss Post",
-    "quickpac": "Quickpac",
-    "planzer": "Planzer",
-    "aliexpress": "AliExpress",
-    "sunyou": "SunYou",
-    "hermes": "Hermes Einrichtungs-Service",
-    "spring-gds": "Spring GDS",
-    "postlogistics": "PostLogistics",
-    "dpd": "DPD",
-    "ups": "UPS",
-}
-
-ZURICH = ZoneInfo("Europe/Zurich")
-CARRIER_TIMEZONES: dict[str, tzinfo] = {
-    "swiss-post": ZURICH,
-    "quickpac": ZURICH,
-    "planzer": ZURICH,
-    "hermes": ZURICH,
-    "postlogistics": ZURICH,
-    "dpd": ZURICH,
-}
 MAX_PACKAGES_PER_OWNER_PER_SYNC = 5
 
 
@@ -63,6 +50,8 @@ class UpstreamTrackerAdapter:
     def __init__(
         self,
         dpd_tracker: DPDTracker | None = None,
+        dachser_tracker: DachserTracker | None = None,
+        hermes_tracker: HermesTracker | None = None,
         planzer_shared_tracker: PlanzerSharedTracker | None = None,
         ups_tracker: UPSTracker | None = None,
     ) -> None:
@@ -74,6 +63,8 @@ class UpstreamTrackerAdapter:
         for module in self.modules.values():
             install_bounded_http(module)
         self.dpd_tracker = dpd_tracker or DPDTracker()
+        self.dachser_tracker = dachser_tracker or DachserTracker()
+        self.hermes_tracker = hermes_tracker or HermesTracker()
         self.planzer_shared_tracker = planzer_shared_tracker or PlanzerSharedTracker()
         self.ups_tracker = ups_tracker or UPSTracker()
 
@@ -84,11 +75,18 @@ class UpstreamTrackerAdapter:
         tracking_url: str | None,
         dpd_postcode: str | None = None,
     ) -> dict[str, Any]:
-        if carrier_id == "dpd":
+        adapter = carrier_adapter(carrier_id)
+        if adapter == "dpd":
             return self.dpd_tracker.fetch(tracking_number, dpd_postcode)
-        if carrier_id == "ups":
+        if adapter == "dachser":
+            if not tracking_url:
+                raise ValueError("Dachser tracking requires its complete tracking URL")
+            return self.dachser_tracker.fetch(tracking_number, tracking_url)
+        if adapter == "hermes":
+            return self.hermes_tracker.fetch(tracking_number)
+        if adapter == "ups":
             return self.ups_tracker.fetch(tracking_number)
-        if carrier_id == "planzer" and tracking_url:
+        if adapter == "planzer" and tracking_url:
             return self.planzer_shared_tracker.fetch(tracking_number, tracking_url)
         carrier_name = CARRIER_NAMES.get(carrier_id)
         if not carrier_name:
@@ -96,11 +94,7 @@ class UpstreamTrackerAdapter:
         module = self.modules.get(carrier_name)
         if not module:
             raise LookupError(f"The upstream tracker has no {carrier_name} adapter")
-        result = (
-            module.fetch(tracking_number, tracking_url)
-            if carrier_name == "Dachser"
-            else module.fetch(tracking_number)
-        )
+        result = module.fetch(tracking_number)
         if not isinstance(result, dict):
             raise ValueError(f"The {carrier_name} adapter returned an invalid response")
         return result
@@ -134,6 +128,25 @@ def infer_stage(text: str, fallback: str = "in_transit") -> str:
     value = text.casefold()
     if any(word in value for word in ("return to sender", "returned", "retour")):
         return "returned"
+    if any(
+        word in value
+        for word in (
+            "not delivered",
+            "could not be delivered",
+            "unable to deliver",
+            "delivery attempt",
+            "failed",
+            "unsuccessful",
+            "missed delivery",
+            "nicht zugestellt",
+            "zustellung nicht möglich",
+            "non livré",
+            "livraison impossible",
+            "échec de livraison",
+            "mancata consegna",
+        )
+    ):
+        return "failed_attempt"
     if any(word in value for word in ("delivered", "deposited", "zugestellt")):
         return "delivered"
     if any(word in value for word in ("ready for pickup", "ready for collection", "abholbereit")):
@@ -142,8 +155,6 @@ def infer_stage(text: str, fallback: str = "in_transit") -> str:
         return "out_for_delivery"
     if any(word in value for word in ("customs", "custom clearance", "zoll")):
         return "customs"
-    if any(word in value for word in ("failed", "unsuccessful", "missed delivery", "not delivered")):
-        return "failed_attempt"
     if any(
         word in value
         for word in (
@@ -156,7 +167,10 @@ def infer_stage(text: str, fallback: str = "in_transit") -> str:
         )
     ):
         return "accepted"
-    if any(word in value for word in ("announced", "registered", "label created", "information received")):
+    if any(
+        word in value
+        for word in ("announced", "registered", "label created", "information received")
+    ):
         return "registered"
     if any(
         word in value
@@ -179,9 +193,9 @@ def result_stage(result: dict[str, Any]) -> str | None:
     text = str(result.get("last_status_text") or "")
     mapping = {
         "pending": infer_stage(text, "pending"),
-        "in_transit": "in_transit",
-        "out_for_delivery": "out_for_delivery",
-        "delivered": "delivered",
+        "in_transit": infer_stage(text, "in_transit"),
+        "out_for_delivery": infer_stage(text, "out_for_delivery"),
+        "delivered": infer_stage(text, "delivered"),
         "exception": infer_stage(text, "failed_attempt"),
     }
     return mapping.get(status)
@@ -194,14 +208,17 @@ def result_timezone(carrier_id: str, result: dict[str, Any]) -> tzinfo:
             return ZoneInfo(declared)
         except (ValueError, ZoneInfoNotFoundError):
             pass
-    return CARRIER_TIMEZONES.get(carrier_id, timezone.utc)
+    try:
+        configured_timezone = carrier_timezone(carrier_id)
+        return timezone.utc if configured_timezone == "UTC" else ZoneInfo(configured_timezone)
+    except (LookupError, ValueError, ZoneInfoNotFoundError):
+        return timezone.utc
 
 
 def event_timestamp(
     raw: Any,
-    fallback: datetime,
     assumed_timezone: tzinfo = timezone.utc,
-) -> str:
+) -> str | None:
     if isinstance(raw, str) and raw.strip():
         value = raw.strip()
         try:
@@ -210,13 +227,23 @@ def event_timestamp(
                 parsed = parsed.replace(tzinfo=assumed_timezone)
             return parsed.astimezone(timezone.utc).isoformat()
         except ValueError:
-            for fmt in ("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%Y-%m-%d"):
+            for fmt in (
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+                "%d.%m.%Y %H:%M:%S",
+                "%d.%m.%Y %H:%M",
+                "%d/%m/%Y %H:%M:%S",
+                "%d/%m/%Y %H:%M",
+                "%Y-%m-%d",
+                "%d.%m.%Y",
+                "%d/%m/%Y",
+            ):
                 try:
                     parsed = datetime.strptime(value, fmt).replace(tzinfo=assumed_timezone)
                     return parsed.astimezone(timezone.utc).isoformat()
                 except ValueError:
                     continue
-    return fallback.isoformat()
+    return None
 
 
 def provider_event_id(carrier_id: str, raw_time: Any, location: str, description: str) -> str:
@@ -228,21 +255,33 @@ def provider_event_id(carrier_id: str, raw_time: Any, location: str, description
     return f"{carrier_id}:{hashlib.sha256(material.encode()).hexdigest()}"
 
 
-def build_events(package: dict[str, Any], result: dict[str, Any], now: datetime) -> list[dict[str, Any]]:
+def build_events(
+    package: dict[str, Any], result: dict[str, Any], _now: datetime
+) -> list[dict[str, Any]]:
     current = result_stage(result) or "in_transit"
     assumed_timezone = result_timezone(str(package.get("carrier") or ""), result)
     rows: list[dict[str, Any]] = []
     for raw in result.get("events") or []:
+        if not isinstance(raw, dict):
+            continue
         description = str(raw.get("description") or "Tracking update").strip()
         location = str(raw.get("location") or "").strip()
         raw_time = raw.get("time")
+        occurred_at = event_timestamp(raw_time, assumed_timezone)
+        if occurred_at is None:
+            continue
+        declared_stage = str(raw.get("stage") or "")
         rows.append(
             {
                 "package_id": package["id"],
-                "stage": infer_stage(description, current),
+                "stage": (
+                    declared_stage
+                    if declared_stage in STAGES
+                    else infer_stage(description, current)
+                ),
                 "description": description,
                 "location": location or None,
-                "occurred_at": event_timestamp(raw_time, now, assumed_timezone),
+                "occurred_at": occurred_at,
                 "provider_event_id": provider_event_id(
                     package["carrier"], raw_time, location, description
                 ),
@@ -253,13 +292,16 @@ def build_events(package: dict[str, Any], result: dict[str, Any], now: datetime)
     if not rows and current and result.get("last_status_text"):
         description = str(result["last_status_text"])
         raw_time = result.get("last_update")
+        occurred_at = event_timestamp(raw_time, assumed_timezone)
+        if occurred_at is None:
+            return rows
         rows.append(
             {
                 "package_id": package["id"],
                 "stage": current,
                 "description": description,
                 "location": None,
-                "occurred_at": event_timestamp(raw_time, now, assumed_timezone),
+                "occurred_at": occurred_at,
                 "provider_event_id": provider_event_id(
                     package["carrier"], raw_time, "", description
                 ),
@@ -315,7 +357,7 @@ class TrackingSyncService:
 
     def _sync_package(self, package: dict[str, Any]) -> str:
         now = self.now()
-        if package.get("carrier") not in CARRIER_NAMES:
+        if package.get("carrier") not in AUTOMATIC_CARRIER_IDS:
             self.client.update_package(
                 package["id"],
                 {
@@ -330,23 +372,18 @@ class TrackingSyncService:
 
         self.client.update_package(package["id"], {"sync_status": "syncing", "sync_error": None})
         try:
-            if package["carrier"] == "dpd":
-                result = self.adapter.fetch(
-                    package["carrier"],
-                    package["tracking_number"],
-                    package.get("tracking_url"),
-                    package.get("dpd_postcode"),
-                )
-            else:
-                result = self.adapter.fetch(
-                    package["carrier"],
-                    package["tracking_number"],
-                    package.get("tracking_url"),
-                )
+            result = self.adapter.fetch(
+                package["carrier"],
+                package["tracking_number"],
+                package.get("tracking_url"),
+                package.get("dpd_postcode"),
+            )
             events = build_events(package, result, now)
             self.client.insert_events(events)
             reported_stage = result_stage(result)
-            latest_event = max(events, key=lambda event: str(event["occurred_at"])) if events else None
+            latest_event = (
+                max(events, key=lambda event: str(event["occurred_at"])) if events else None
+            )
             # Carrier summaries are occasionally missing or lag behind their event
             # history. Keep the denormalized package stage aligned with the newest
             # event because scheduling and automatic archiving rely on this column.

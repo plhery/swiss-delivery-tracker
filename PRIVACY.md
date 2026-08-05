@@ -11,8 +11,8 @@ notice.
 - Your email address, Supabase user ID, session metadata, authentication
   security events, and basic Google profile data when you choose Google sign-in.
 - Parcel labels, tracking numbers, carrier selection, tracking history, status,
-  timestamps, optional Planzer shared tracking URL, and the delivery postcode
-  supplied for a DPD parcel.
+  timestamps, optional Planzer shared and Dachser Customer Iberia capability
+  URLs, and the delivery postcode supplied for a DPD parcel.
 - Web Push subscription endpoints, encryption keys, browser user agent, delivery
   acknowledgements, and notification errors when you enable notifications.
 - Technical request data processed by the hosting, reverse-proxy, Auth, and mail
@@ -31,8 +31,9 @@ sign-in, and the configured SMTP provider delivers sign-in codes when email OTP
 is enabled. Cloudflare and the container host may process network metadata. A
 selected carrier necessarily receives its tracking number; DPD may also receive
 the parcel's supplied postcode for recipient verification, and Planzer receives
-the supplied shared-link capability. Web Push endpoints receive encrypted
-notifications.
+the supplied shared-link capability. Dachser receives its supplied capability
+URL; the application discards sender, recipient, address, contact and document
+fields from Dachser's response. Web Push endpoints receive encrypted notifications.
 
 Swiss Delivery Tracker does not sell personal data, serve advertising, or
 include third-party behavioral analytics.
@@ -53,9 +54,9 @@ retain for security or legal obligations.
 
 The browser stores the Supabase session, application preferences, an offline
 application shell, and an account-scoped offline parcel snapshot that can include
-tracking history and a DPD postcode. Signing out clears account-scoped local
-state. Browser or operating-system controls can clear site data and notification
-permissions.
+tracking history, a carrier capability URL and a DPD postcode. Signing out clears
+account-scoped local state. Browser or operating-system controls can clear site
+data and notification permissions.
 
 ## Security and contact
 
@@ -65,5 +66,5 @@ keys. No internet service can promise absolute security.
 
 For a privacy or security concern, use GitHub's
 [private vulnerability report](https://github.com/plhery/swiss-delivery-tracker/security/advisories/new).
-Do not include a real tracking number, sign-in code, access token, or Planzer
-shared link in a public issue.
+Do not include a real tracking number, sign-in code, access token, Planzer
+shared link, or Dachser detail link in a public issue.

@@ -1,4 +1,34 @@
-import type { CarrierId } from '../types';
+import {
+  CARRIER_CAPABILITIES,
+  type ApiCarrierId as CarrierId,
+} from '../generated/apiContract';
+
+export type CarrierTrackingMode = 'automatic' | 'link-only';
+export type CarrierInputField = 'trackingUrl' | 'dpdPostcode';
+export type DetectionConfidence = 'high' | 'low' | 'none';
+
+export interface CarrierInputRequirement {
+  field: CarrierInputField;
+  whenTrackingNumber?: string;
+  label: string;
+  type: 'text' | 'url';
+  placeholder?: string;
+  help?: string;
+  pattern?: string;
+  maxLength?: number;
+  inputMode?: 'numeric' | 'text' | 'url';
+  autoComplete?: string;
+}
+
+export interface CarrierCapabilities {
+  tracking: {
+    mode: CarrierTrackingMode;
+    adapter: string | null;
+    requirements: CarrierInputRequirement[];
+  };
+  selectable: boolean;
+  timezone: string;
+}
 
 export interface CarrierInfo {
   id: CarrierId;
@@ -6,133 +36,95 @@ export interface CarrierInfo {
   /** Accent used for the carrier chip in the UI. */
   color: string;
   trackingUrl?: (trackingNumber: string) => string;
-  /** Whether the deployed worker can fetch this carrier without private credentials. */
-  automatic: boolean;
+  capabilities: CarrierCapabilities;
 }
 
-export interface TrackingInputMatch {
-  trackingNumber: string;
+export interface CarrierDetection {
   carrier: CarrierId;
+  confidence: DetectionConfidence;
+  candidates: CarrierId[];
+}
+
+export interface TrackingInputMatch extends CarrierDetection {
+  trackingNumber: string;
   trackingUrl?: string;
   source: 'number' | 'link' | 'text' | 'none';
 }
 
-export const CARRIERS: Record<CarrierId, CarrierInfo> = {
-  'swiss-post': {
-    id: 'swiss-post',
-    name: 'Swiss Post',
-    color: '#ffcc00',
-    trackingUrl: (n) =>
-      `https://service.post.ch/ekp-web/ui/entry/search/${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  quickpac: {
-    id: 'quickpac',
-    name: 'Quickpac',
-    color: '#ed1c24',
-    trackingUrl: (n) => `https://quickpac.ch/en/tracking?parcel=${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  planzer: {
-    id: 'planzer',
-    name: 'Planzer',
-    color: '#e30613',
-    trackingUrl: (n) =>
-      `https://tracking.app.planzer.ch/delivery/info?deliveryNumber=${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  aliexpress: {
-    id: 'aliexpress',
-    name: 'AliExpress / Cainiao',
-    color: '#ff4747',
-    trackingUrl: (n) => `https://global.cainiao.com/detail.htm?mailNoList=${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  sunyou: {
-    id: 'sunyou',
-    name: 'SunYou',
-    color: '#f39800',
-    trackingUrl: (n) => `https://sypost.net/search?trackNumber=${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  hermes: {
-    id: 'hermes',
-    name: 'Hermes',
-    color: '#0091cd',
-    automatic: true,
-  },
-  'spring-gds': {
-    id: 'spring-gds',
-    name: 'Spring GDS',
-    color: '#ef7d00',
-    trackingUrl: (n) => `https://postnl.post/details/${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  postlogistics: {
-    id: 'postlogistics',
-    name: 'PostLogistics',
-    color: '#ffcc00',
-    automatic: true,
-  },
-  dachser: {
-    id: 'dachser',
-    name: 'Dachser',
-    color: '#005ca9',
-    automatic: false,
-  },
-  dhl: {
-    id: 'dhl',
-    name: 'DHL',
-    color: '#ffcc00',
-    trackingUrl: (n) =>
-      `https://www.dhl.com/ch-en/home/tracking.html?tracking-id=${encodeURIComponent(n)}`,
-    automatic: false,
-  },
-  ups: {
-    id: 'ups',
-    name: 'UPS',
-    color: '#351c15',
-    trackingUrl: (n) =>
-      `https://www.ups.com/track?tracknum=${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  fedex: {
-    id: 'fedex',
-    name: 'FedEx',
-    color: '#4d148c',
-    trackingUrl: (n) =>
-      `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(n)}`,
-    automatic: false,
-  },
-  dpd: {
-    id: 'dpd',
-    name: 'DPD',
-    color: '#dc0032',
-    trackingUrl: (n) =>
-      `https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming?parcelNumber=${encodeURIComponent(n)}`,
-    automatic: true,
-  },
-  shipup: {
-    id: 'shipup',
-    name: 'ShipUp',
-    color: '#5c4ee5',
-    automatic: false,
-  },
-  'intl-post': {
-    id: 'intl-post',
-    name: 'International Post',
-    color: '#2c6fb5',
-    trackingUrl: (n) =>
-      `https://service.post.ch/ekp-web/ui/entry/search/${encodeURIComponent(n)}`,
-    automatic: false,
-  },
-  unknown: {
-    id: 'unknown',
-    name: 'Carrier',
-    color: '#8e8e93',
-    automatic: false,
-  },
-};
+interface DetectionRule {
+  pattern: string;
+  confidence: Exclude<DetectionConfidence, 'none'>;
+  checksum?: 's10';
+}
+
+interface TrackingLinkRule {
+  carrier: CarrierId;
+  domains: string[];
+  params?: string[];
+  path?: RegExp;
+  keepsCapabilityUrl?: boolean;
+}
+
+interface RawCarrierCapability {
+  displayName: string;
+  color: string;
+  selectable: boolean;
+  timezone: string;
+  tracking: {
+    mode: CarrierTrackingMode;
+    adapter: string | null;
+    requirements?: readonly CarrierInputRequirement[];
+  };
+  trackingUrlTemplate?: string;
+  linkRules: readonly {
+    domains: readonly string[];
+    params?: readonly string[];
+    path?: string;
+    keepsCapabilityUrl?: boolean;
+  }[];
+  detectionRules: readonly DetectionRule[];
+}
+
+const RAW_CARRIERS = CARRIER_CAPABILITIES as unknown as Record<
+  CarrierId,
+  RawCarrierCapability
+>;
+
+function trackingLink(template: string | undefined) {
+  if (!template) return undefined;
+  return (trackingNumber: string) =>
+    template.replace('{trackingNumber}', encodeURIComponent(trackingNumber));
+}
+
+export const CARRIERS = Object.fromEntries(
+  Object.entries(RAW_CARRIERS).map(([id, carrier]) => [
+    id,
+    {
+      id: id as CarrierId,
+      name: carrier.displayName,
+      color: carrier.color,
+      trackingUrl: trackingLink(carrier.trackingUrlTemplate),
+      capabilities: {
+        tracking: {
+          mode: carrier.tracking.mode,
+          adapter: carrier.tracking.adapter,
+          requirements: [...(carrier.tracking.requirements ?? [])],
+        },
+        selectable: carrier.selectable,
+        timezone: carrier.timezone,
+      },
+    },
+  ]),
+) as Record<CarrierId, CarrierInfo>;
+
+const TRACKING_LINK_RULES: TrackingLinkRule[] = Object.entries(RAW_CARRIERS)
+  .flatMap(([carrier, definition]) => definition.linkRules.map((rule) => ({
+    carrier: carrier as CarrierId,
+    domains: [...rule.domains],
+    params: rule.params ? [...rule.params] : undefined,
+    path: rule.path ? new RegExp(rule.path, 'i') : undefined,
+    keepsCapabilityUrl: rule.keepsCapabilityUrl,
+  })));
 
 /** Uppercase and strip spaces, dots and dashes (Swiss Post prints 99.34.…). */
 export function normalizeTrackingNumber(raw: string): string {
@@ -144,105 +136,70 @@ export function isPlanzerSharedTrackingNumber(raw: string): boolean {
   return /^99990\d{8}$/.test(normalizeTrackingNumber(raw));
 }
 
-/**
- * Guess the carrier from the shape of a tracking number.
- * Swiss-focused: Quickpac and Swiss Post barcodes, plus UPU S10 codes
- * ending in CH, are recognised first, then the big international carriers.
- */
+/** Validate the UPU S10 check digit, not only its broad A2-N9-A2 shape. */
+export function isValidS10TrackingNumber(raw: string): boolean {
+  const value = normalizeTrackingNumber(raw);
+  if (!/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(value)) return false;
+  const weights = [8, 6, 4, 2, 3, 5, 9, 7];
+  const sum = weights.reduce(
+    (total, weight, index) => total + Number(value[index + 2]) * weight,
+    0,
+  );
+  const rawCheckDigit = 11 - (sum % 11);
+  const expected = rawCheckDigit === 10 ? 0 : rawCheckDigit === 11 ? 5 : rawCheckDigit;
+  return Number(value[10]) === expected;
+}
+
+export function carrierRequirements(
+  carrierId: CarrierId,
+  trackingNumber: string,
+): CarrierInputRequirement[] {
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  return CARRIERS[carrierId].capabilities.tracking.requirements.filter(
+    (requirement) =>
+      !requirement.whenTrackingNumber
+      || new RegExp(requirement.whenTrackingNumber).test(normalized),
+  );
+}
+
+export function tracksAutomatically(carrierId: CarrierId): boolean {
+  return CARRIERS[carrierId].capabilities.tracking.mode === 'automatic';
+}
+
+/** Return only a high-confidence carrier; preserve ambiguous candidates for the UI. */
+export function detectCarrierMatch(raw: string): CarrierDetection {
+  const trackingNumber = normalizeTrackingNumber(raw);
+  if (!trackingNumber) {
+    return { carrier: 'unknown', confidence: 'none', candidates: [] };
+  }
+
+  const matches: { carrier: CarrierId; confidence: 'high' | 'low' }[] = [];
+  for (const [carrier, definition] of Object.entries(RAW_CARRIERS)) {
+    for (const rule of definition.detectionRules) {
+      if (!new RegExp(rule.pattern).test(trackingNumber)) continue;
+      if (rule.checksum === 's10' && !isValidS10TrackingNumber(trackingNumber)) continue;
+      matches.push({ carrier: carrier as CarrierId, confidence: rule.confidence });
+      break;
+    }
+  }
+
+  const highConfidence = matches.filter((match) => match.confidence === 'high');
+  const ranked = highConfidence.length > 0 ? highConfidence : matches;
+  const candidates = ranked.map((match) => match.carrier);
+  if (highConfidence.length === 1) {
+    return { carrier: highConfidence[0].carrier, confidence: 'high', candidates };
+  }
+  return {
+    carrier: 'unknown',
+    confidence: matches.length > 0 ? 'low' : 'none',
+    candidates,
+  };
+}
+
+/** Guess only when the tracking-number shape identifies one carrier confidently. */
 export function detectCarrier(raw: string): CarrierId {
-  const n = normalizeTrackingNumber(raw);
-  if (!n) return 'unknown';
-
-  if (isPlanzerSharedTrackingNumber(n)) return 'planzer';
-
-  // UPS: 1Z + 16 alphanumeric characters.
-  if (/^1Z[A-Z0-9]{16}$/.test(n)) return 'ups';
-
-  // UPU S10 (registered mail): two letters + 9 digits + ISO country.
-  if (/^[A-Z]{2}\d{9}CH$/.test(n)) return 'swiss-post';
-  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(n)) return 'intl-post';
-
-  // DHL parcel codes.
-  if (/^(JJD|JVGL)[A-Z0-9]{8,}$/.test(n)) return 'dhl';
-
-  // Numeric barcodes, longest first to avoid ambiguity.
-  if (/^\d{20}$/.test(n)) return 'planzer';
-  if (/^44\d{16}$/.test(n)) return 'quickpac'; // 44.xx.xxxxxx.xxxxxxxx
-  if (/^\d{18}$/.test(n)) return 'swiss-post'; // Usually 99.xx.xxxxxx.xxxxxxxx
-  if (/^\d{15}$/.test(n)) return 'fedex';
-  if (/^\d{14}$/.test(n)) return 'dpd';
-  if (/^\d{12}$/.test(n)) return 'fedex';
-  if (/^\d{10}$/.test(n)) return 'dhl'; // DHL Express waybill
-
-  return 'unknown';
+  return detectCarrierMatch(raw).carrier;
 }
-
-interface TrackingLinkRule {
-  carrier: CarrierId;
-  domains: string[];
-  params?: string[];
-  path?: RegExp;
-  keepsCapabilityUrl?: boolean;
-}
-
-const TRACKING_LINK_RULES: TrackingLinkRule[] = [
-  {
-    carrier: 'swiss-post',
-    domains: ['service.post.ch'],
-    path: /\/entry\/search\/([^/?#]+)/i,
-  },
-  {
-    carrier: 'quickpac',
-    domains: ['quickpac.ch'],
-    params: ['parcel'],
-  },
-  {
-    carrier: 'planzer',
-    domains: ['trackandtrace.planzergroup.com'],
-    path: /\/shared\/sendungen\/([^/?#]+)/i,
-    keepsCapabilityUrl: true,
-  },
-  {
-    carrier: 'planzer',
-    domains: ['tracking.app.planzer.ch'],
-    params: ['deliveryNumber'],
-  },
-  {
-    carrier: 'aliexpress',
-    domains: ['global.cainiao.com'],
-    params: ['mailNoList'],
-  },
-  {
-    carrier: 'sunyou',
-    domains: ['sypost.net'],
-    params: ['trackNumber'],
-  },
-  {
-    carrier: 'spring-gds',
-    domains: ['postnl.post'],
-    path: /\/details\/([^/?#]+)/i,
-  },
-  {
-    carrier: 'dhl',
-    domains: ['dhl.com'],
-    params: ['tracking-id', 'trackingId', 'piececode'],
-  },
-  {
-    carrier: 'ups',
-    domains: ['ups.com'],
-    params: ['tracknum', 'trackNums'],
-  },
-  {
-    carrier: 'fedex',
-    domains: ['fedex.com'],
-    params: ['trknbr', 'tracknumbers'],
-  },
-  {
-    carrier: 'dpd',
-    domains: ['dpdgroup.com', 'dpd.com'],
-    params: ['parcelNumber', 'parcelnumber'],
-  },
-];
 
 const TRACKING_CANDIDATE_PATTERNS = [
   /\b1Z[A-Z0-9]{16}\b/gi,
@@ -291,7 +248,7 @@ function recognizedNumberInText(raw: string): string | undefined {
     pattern.lastIndex = 0;
     for (const match of raw.matchAll(pattern)) {
       const candidate = match[0].trim();
-      if (detectCarrier(candidate) !== 'unknown') return candidate;
+      if (detectCarrierMatch(candidate).confidence === 'high') return candidate;
     }
   }
   return undefined;
@@ -305,13 +262,28 @@ function keywordNumberInText(raw: string): string | undefined {
   return candidate && validTrackingNumber(candidate) ? candidate : undefined;
 }
 
+function trackingMatch(
+  trackingNumber: string,
+  source: TrackingInputMatch['source'],
+): TrackingInputMatch {
+  return { trackingNumber, source, ...detectCarrierMatch(trackingNumber) };
+}
+
 /**
  * Pull a tracking number and carrier out of a number, carrier URL, or pasted
  * shipping message. Known carrier links win over number-shape heuristics.
  */
 export function parseTrackingInput(raw: string): TrackingInputMatch {
   const input = raw.trim();
-  if (!input) return { trackingNumber: '', carrier: 'unknown', source: 'none' };
+  if (!input) {
+    return {
+      trackingNumber: '',
+      carrier: 'unknown',
+      confidence: 'none',
+      candidates: [],
+      source: 'none',
+    };
+  }
 
   const pastedUrls = input.match(/https?:\/\/[^\s<>"']+/gi) ?? [];
   for (const pastedUrl of pastedUrls) {
@@ -327,6 +299,8 @@ export function parseTrackingInput(raw: string): TrackingInputMatch {
           return {
             trackingNumber,
             carrier: rule.carrier,
+            confidence: 'high',
+            candidates: [rule.carrier],
             trackingUrl: rule.keepsCapabilityUrl ? trackingUrl : undefined,
             source: 'link',
           };
@@ -334,13 +308,7 @@ export function parseTrackingInput(raw: string): TrackingInputMatch {
       }
 
       const trackingNumber = recognizedNumberInText(decodeURIComponent(url.href));
-      if (trackingNumber) {
-        return {
-          trackingNumber,
-          carrier: detectCarrier(trackingNumber),
-          source: 'link',
-        };
-      }
+      if (trackingNumber) return trackingMatch(trackingNumber, 'link');
     } catch {
       // Keep looking: pasted prose can contain a truncated or malformed URL.
     }
@@ -348,43 +316,35 @@ export function parseTrackingInput(raw: string): TrackingInputMatch {
 
   const recognized = recognizedNumberInText(input);
   if (recognized) {
-    return {
-      trackingNumber: recognized,
-      carrier: detectCarrier(recognized),
-      source: input === recognized ? 'number' : 'text',
-    };
+    return trackingMatch(recognized, input === recognized ? 'number' : 'text');
   }
 
   const keywordNumber = keywordNumberInText(input);
-  if (keywordNumber) {
-    return {
-      trackingNumber: keywordNumber,
-      carrier: detectCarrier(keywordNumber),
-      source: 'text',
-    };
-  }
+  if (keywordNumber) return trackingMatch(keywordNumber, 'text');
 
   if (!input.includes('://') && validTrackingNumber(input)) {
-    return {
-      trackingNumber: input,
-      carrier: detectCarrier(input),
-      source: 'number',
-    };
+    return trackingMatch(input, 'number');
   }
 
-  return { trackingNumber: '', carrier: 'unknown', source: 'none' };
+  return {
+    trackingNumber: '',
+    carrier: 'unknown',
+    confidence: 'none',
+    candidates: [],
+    source: 'none',
+  };
 }
 
 /** Swiss carriers show 18-digit barcodes as 99.34.123456.12345678. */
 export function formatTrackingNumber(raw: string): string {
-  const n = normalizeTrackingNumber(raw);
-  if (isPlanzerSharedTrackingNumber(n)) {
-    return `${n.slice(0, 3)}.${n.slice(3, 5)}.${n.slice(5)}`;
+  const value = normalizeTrackingNumber(raw);
+  if (isPlanzerSharedTrackingNumber(value)) {
+    return `${value.slice(0, 3)}.${value.slice(3, 5)}.${value.slice(5)}`;
   }
-  if (/^\d{18}$/.test(n)) {
-    return `${n.slice(0, 2)}.${n.slice(2, 4)}.${n.slice(4, 10)}.${n.slice(10)}`;
+  if (/^\d{18}$/.test(value)) {
+    return `${value.slice(0, 2)}.${value.slice(2, 4)}.${value.slice(4, 10)}.${value.slice(10)}`;
   }
-  return n;
+  return value;
 }
 
 export function carrierInfo(id: CarrierId): CarrierInfo {
@@ -392,5 +352,5 @@ export function carrierInfo(id: CarrierId): CarrierInfo {
 }
 
 export const SELECTABLE_CARRIERS = Object.values(CARRIERS).filter(
-  (carrier) => carrier.id !== 'unknown' && carrier.id !== 'intl-post',
+  (carrier) => carrier.capabilities.selectable,
 );

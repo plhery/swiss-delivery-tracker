@@ -12,11 +12,18 @@ Swiss Delivery Tracker can refresh these carriers automatically:
 | Hermes Einrichtungs-Service | Automatic. |
 | Spring GDS | Automatic. |
 | PostLogistics | Automatic. |
+| Dachser | Automatic for Customer Iberia shipments when the complete public detail URL is supplied. |
 | DPD Switzerland | Automatic through the myDPD guest flow. The parcel's delivery postcode unlocks verified scans and delivery windows. |
 | UPS | Automatic. Direct HTTP is tried first; a private TRAWL instance can handle browser challenges. |
 
 DHL, FedEx and International Post parcels are saved with a direct carrier link.
-Dachser and ShipUp can be kept as manual records.
+ShipUp can be kept as a manual record.
+
+Carrier names, adapter modes, tracking links, required inputs, timezones and
+detection rules are defined once in `contracts/openapi.json` under
+`x-carriers`, then generated for both the browser and Python service. Broad
+numeric formats are treated as suggestions and require manual confirmation;
+UPU S10 identifiers must pass their check digit before automatic detection.
 
 ## A note about carrier integrations
 
@@ -32,6 +39,15 @@ package.
 Shared Planzer shipments use a capability URL containing an `accessKey`. Paste
 the complete `trackandtrace.planzergroup.com/shared/sendungen/...` URL. Treat it
 like a tracking secret: keep it out of logs, screenshots and public issues.
+
+## Dachser Customer Iberia links
+
+Dachser shipments require the complete
+`customeriberia.dachser.com/customerarea/.../detalle?...` URL. Its query
+parameters grant access to the shipment, so treat the URL like a password. The
+adapter checks the exact Dachser host, path, shipment number and access fields,
+then retains only normalized shipment status and event data. Sender, recipient,
+address, contact and proof-of-delivery fields from Dachser are discarded.
 
 ## DPD postcode
 

@@ -175,6 +175,14 @@ select public.create_owned_package(
   '06086514587082', 'Verified DPD parcel', 'dpd', null, '8004'
 );
 
+select public.create_owned_package(
+  '9010000001234',
+  'Dachser parcel',
+  'dachser',
+  'https://customeriberia.dachser.com/customerarea/utilidades/seguimiento-publico/detalle?cliente=generico&numeroUnico=9010000001234&fecha=20260513&clave=TESTKEY9',
+  null
+);
+
 do $$
 begin
   if not exists (
@@ -202,6 +210,38 @@ begin
   ) then
     raise exception 'DPD postcode was not stored for its owner';
   end if;
+
+  if not exists (
+    select 1 from public.packages
+    where tracking_number = '9010000001234'
+      and carrier = 'dachser'
+      and tracking_url like 'https://customeriberia.dachser.com/%'
+      and user_id = '10000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'Dachser capability URL was not stored for its owner';
+  end if;
+
+  begin
+    perform public.create_owned_package(
+      '9010000001235', '', 'dachser', null, null
+    );
+    raise exception 'Dachser package without a capability URL was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  begin
+    perform public.create_owned_package(
+      '9010000001235',
+      '',
+      'dachser',
+      'https://customeriberia.dachser.com/customerarea/utilidades/seguimiento-publico/detalle?numeroUnico=9010000009999&fecha=20260513&clave=TESTKEY9',
+      null
+    );
+    raise exception 'Dachser URL for a different shipment was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
 
   begin
     perform public.create_owned_package(

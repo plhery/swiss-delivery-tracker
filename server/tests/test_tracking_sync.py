@@ -7,7 +7,6 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from server.tracking_sync import (
-    CARRIER_NAMES,
     SyncSummary,
     TrackingSyncService,
     UpstreamTrackerAdapter,
@@ -43,8 +42,8 @@ class FakeAdapter:
         self.error = error
         self.calls = []
 
-    def fetch(self, carrier_id, tracking_number, tracking_url):
-        self.calls.append((carrier_id, tracking_number, tracking_url))
+    def fetch(self, carrier_id, tracking_number, tracking_url, dpd_postcode=None):
+        self.calls.append((carrier_id, tracking_number, tracking_url, dpd_postcode))
         if self.error:
             raise self.error
         return self.result or {
@@ -82,9 +81,7 @@ class TrackingSyncTests(unittest.TestCase):
 
         TrackingSyncService(FakeClient([package]), adapter).sync()
 
-        adapter.fetch.assert_called_once_with(
-            "dpd", "06086514587082", None, "8004"
-        )
+        adapter.fetch.assert_called_once_with("dpd", "06086514587082", None, "8004")
 
     def test_sync_writes_deduplicated_events_and_package_state(self):
         client = FakeClient(
@@ -125,7 +122,10 @@ class TrackingSyncTests(unittest.TestCase):
 
         self.assertEqual(summary.checked, 1)
         self.assertEqual(summary.updated, 1)
-        self.assertEqual(adapter.calls, [("swiss-post", package["tracking_number"], None)])
+        self.assertEqual(
+            adapter.calls,
+            [("swiss-post", package["tracking_number"], None, None)],
+        )
         self.assertTrue(all(package_id == "new-package" for package_id, _ in client.updates))
 
     def test_unsupported_carrier_is_explicit(self):
@@ -148,6 +148,9 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(infer_stage("Held at customs"), "customs")
         self.assertEqual(infer_stage("Ready for pickup"), "ready_for_pickup")
         self.assertEqual(infer_stage("Returned to sender"), "returned")
+        self.assertEqual(infer_stage("Parcel not delivered"), "failed_attempt")
+        self.assertEqual(infer_stage("Shipment could not be delivered"), "failed_attempt")
+        self.assertEqual(infer_stage("Sendung nicht zugestellt"), "failed_attempt")
 
     def test_stage_inference_covers_happy_path_and_fallbacks(self):
         cases = {
@@ -175,45 +178,56 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(result_stage({"status": "out_for_delivery"}), "out_for_delivery")
         self.assertEqual(result_stage({"status": "delivered"}), "delivered")
         self.assertEqual(
+            result_stage({"status": "delivered", "last_status_text": "Not delivered"}),
+            "failed_attempt",
+        )
+        self.assertEqual(
             result_stage({"status": "exception", "last_status_text": "Held at customs"}),
             "customs",
         )
         self.assertIsNone(result_stage({"status": "unknown"}))
 
-    def test_event_timestamps_accept_common_formats_and_fallback(self):
-        fallback = datetime(2026, 7, 14, 9, tzinfo=timezone.utc)
+    def test_event_timestamps_accept_common_formats_without_inventing_a_time(self):
         self.assertEqual(
-            event_timestamp("2026-07-14T10:00:00+02:00", fallback),
+            event_timestamp("2026-07-14T10:00:00+02:00"),
             "2026-07-14T08:00:00+00:00",
         )
         self.assertEqual(
-            event_timestamp("2026-07-14 10:00", fallback),
+            event_timestamp("2026-07-14 10:00"),
             "2026-07-14T10:00:00+00:00",
         )
         self.assertEqual(
-            event_timestamp("14.07.2026 10:00", fallback),
+            event_timestamp("14.07.2026 10:00"),
             "2026-07-14T10:00:00+00:00",
         )
         self.assertEqual(
-            event_timestamp("2026-07-14", fallback),
+            event_timestamp("2026-07-14"),
             "2026-07-14T00:00:00+00:00",
         )
         zurich = ZoneInfo("Europe/Zurich")
         self.assertEqual(
-            event_timestamp("2026-07-14 10:00", fallback, zurich),
+            event_timestamp("2026-07-14 10:00", zurich),
             "2026-07-14T08:00:00+00:00",
         )
         self.assertEqual(
-            event_timestamp("14.07.2026 10:00", fallback, zurich),
+            event_timestamp("14.07.2026 10:00", zurich),
             "2026-07-14T08:00:00+00:00",
         )
-        self.assertEqual(event_timestamp("not-a-date", fallback), fallback.isoformat())
-        self.assertEqual(event_timestamp(None, fallback), fallback.isoformat())
+        self.assertEqual(
+            event_timestamp("14/07/2026 10:00", zurich),
+            "2026-07-14T08:00:00+00:00",
+        )
+        self.assertIsNone(event_timestamp("not-a-date"))
+        self.assertIsNone(event_timestamp(None))
 
     def test_carrier_or_declared_timezone_is_used_for_naive_events(self):
         zurich = ZoneInfo("Europe/Zurich")
         self.assertEqual(result_timezone("swiss-post", {}), zurich)
         self.assertEqual(result_timezone("aliexpress", {}), timezone.utc)
+        self.assertEqual(
+            result_timezone("dachser", {}),
+            ZoneInfo("Europe/Madrid"),
+        )
         self.assertEqual(
             result_timezone("aliexpress", {"timezone": "Asia/Shanghai"}),
             ZoneInfo("Asia/Shanghai"),
@@ -227,11 +241,13 @@ class TrackingSyncTests(unittest.TestCase):
             self.package(),
             {
                 "status": "in_transit",
-                "events": [{
-                    "time": "2026-07-14 10:00",
-                    "location": "Zürich",
-                    "description": "Sorted",
-                }],
+                "events": [
+                    {
+                        "time": "2026-07-14 10:00",
+                        "location": "Zürich",
+                        "description": "Sorted",
+                    }
+                ],
             },
             datetime(2026, 7, 14, 9, tzinfo=timezone.utc),
         )
@@ -263,6 +279,41 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(rows[0]["raw_data"], {})
         self.assertEqual(build_events(self.package(), {"status": "unknown"}, now), [])
 
+    def test_build_events_drops_rows_without_a_real_provider_timestamp(self):
+        now = datetime(2026, 7, 14, 9, tzinfo=timezone.utc)
+        rows = build_events(
+            self.package(),
+            {
+                "status": "delivered",
+                "last_status_text": "Delivered",
+                "events": [
+                    {"time": "not-a-date", "description": "Delivered"},
+                    {"description": "Out for delivery"},
+                ],
+            },
+            now,
+        )
+        self.assertEqual(rows, [])
+
+    def test_build_events_honors_a_valid_adapter_stage(self):
+        rows = build_events(
+            self.package(carrier="dachser"),
+            {
+                "status": "delivered",
+                "events": [
+                    {
+                        "time": "2026-07-14T08:00:00+02:00",
+                        "location": "",
+                        "stage": "in_transit",
+                        "description": "Dachser tracking update",
+                    }
+                ],
+            },
+            datetime(2026, 7, 14, 9, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(rows[0]["stage"], "in_transit")
+
     def test_waiting_and_carrier_errors_are_persisted(self):
         client = FakeClient([self.package()])
         waiting = TrackingSyncService(
@@ -284,7 +335,7 @@ class TrackingSyncTests(unittest.TestCase):
             ),
         ).sync()
         self.assertEqual(pending.waiting, 1)
-        self.assertEqual(pending_client.events[0]["stage"], "pending")
+        self.assertEqual(pending_client.events, [])
         self.assertEqual(pending_client.updates[-1][1]["current_stage"], "pending")
         self.assertEqual(pending_client.updates[-1][1]["sync_status"], "waiting")
 
@@ -322,7 +373,7 @@ class TrackingSyncTests(unittest.TestCase):
 
     def test_one_carrier_failure_does_not_stop_other_packages(self):
         class MixedAdapter:
-            def fetch(self, carrier_id, tracking_number, tracking_url):
+            def fetch(self, carrier_id, tracking_number, tracking_url, dpd_postcode=None):
                 if tracking_number == "bad":
                     raise RuntimeError()
                 return {"status": "delivered", "last_status_text": "Delivered"}
@@ -355,9 +406,7 @@ class TrackingSyncTests(unittest.TestCase):
 
     def test_notification_delivery_is_summarized_without_breaking_sync(self):
         notifier = unittest.mock.Mock()
-        notifier.dispatch.return_value = type(
-            "Push", (), {"sent": 2, "failed": 1, "expired": 1}
-        )()
+        notifier.dispatch.return_value = type("Push", (), {"sent": 2, "failed": 1, "expired": 1})()
         summary = TrackingSyncService(FakeClient([]), FakeAdapter(), notifier=notifier).sync()
         self.assertEqual(summary.notifications_sent, 2)
         self.assertEqual(summary.notification_errors, 1)
@@ -368,14 +417,8 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(summary.notification_errors, 1)
 
     def test_scheduled_sync_round_robins_accounts_and_caps_each_owner(self):
-        packages = [
-            {"id": f"first-{number}", "user_id": "first"}
-            for number in range(1, 8)
-        ]
-        packages.extend(
-            {"id": f"second-{number}", "user_id": "second"}
-            for number in range(1, 4)
-        )
+        packages = [{"id": f"first-{number}", "user_id": "first"} for number in range(1, 8)]
+        packages.extend({"id": f"second-{number}", "user_id": "second"} for number in range(1, 4))
 
         ordered = fair_sync_packages(packages, per_owner_limit=5)
 
@@ -388,13 +431,10 @@ class TrackingSyncTests(unittest.TestCase):
 
     def test_upstream_adapter_loads_modules_and_handles_missing_carriers(self):
         tracker = ModuleType("swiss_delivery_tracker.tracker")
-        swiss_module = type("SwissModule", (), {"fetch": staticmethod(lambda number: {"number": number})})
-        dachser_module = type(
-            "DachserModule",
-            (),
-            {"fetch": staticmethod(lambda number, url: {"number": number, "url": url})},
+        swiss_module = type(
+            "SwissModule", (), {"fetch": staticmethod(lambda number: {"number": number})}
         )
-        tracker.CARRIER_MODULES = {"Swiss Post": swiss_module, "Dachser": dachser_module}
+        tracker.CARRIER_MODULES = {"Swiss Post": swiss_module}
         package = ModuleType("swiss_delivery_tracker")
         carriers = ModuleType("swiss_delivery_tracker.carriers")
         package.carriers = carriers
@@ -408,12 +448,18 @@ class TrackingSyncTests(unittest.TestCase):
         ):
             dpd_tracker = unittest.mock.Mock()
             dpd_tracker.fetch.return_value = {"status": "in_transit"}
+            dachser_tracker = unittest.mock.Mock()
+            dachser_tracker.fetch.return_value = {"status": "delivered"}
             planzer_shared_tracker = unittest.mock.Mock()
             planzer_shared_tracker.fetch.return_value = {"status": "out_for_delivery"}
+            hermes_tracker = unittest.mock.Mock()
+            hermes_tracker.fetch.return_value = {"status": "exception"}
             ups_tracker = unittest.mock.Mock()
             ups_tracker.fetch.return_value = {"status": "delivered"}
             adapter = UpstreamTrackerAdapter(
                 dpd_tracker=dpd_tracker,
+                dachser_tracker=dachser_tracker,
+                hermes_tracker=hermes_tracker,
                 planzer_shared_tracker=planzer_shared_tracker,
                 ups_tracker=ups_tracker,
             )
@@ -435,16 +481,20 @@ class TrackingSyncTests(unittest.TestCase):
         planzer_shared_tracker.fetch.assert_called_once_with(
             "9999003316119", "https://planzer.example/shared"
         )
-        with patch.dict(CARRIER_NAMES, {"dachser-test": "Dachser"}):
-            self.assertEqual(
-                adapter.fetch("dachser-test", "456", "https://example.test"),
-                {"number": "456", "url": "https://example.test"},
-            )
+        self.assertEqual(
+            adapter.fetch("dachser", "456", "https://dachser.example/shared"),
+            {"status": "delivered"},
+        )
+        dachser_tracker.fetch.assert_called_once_with("456", "https://dachser.example/shared")
+        with self.assertRaisesRegex(ValueError, "complete tracking URL"):
+            adapter.fetch("dachser", "456", None)
         with self.assertRaisesRegex(LookupError, "not available"):
             adapter.fetch("unknown", "123", None)
-        with patch.dict(CARRIER_NAMES, {"missing-test": "Missing"}):
-            with self.assertRaisesRegex(LookupError, "no Missing adapter"):
-                adapter.fetch("missing-test", "123", None)
+        self.assertEqual(
+            adapter.fetch("hermes", "HES123", None),
+            {"status": "exception"},
+        )
+        hermes_tracker.fetch.assert_called_once_with("HES123")
 
 
 if __name__ == "__main__":

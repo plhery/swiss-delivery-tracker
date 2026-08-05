@@ -43,12 +43,14 @@ Python API -------- user token -----------> PostgREST + Postgres RLS
   account quotas, and cannot target another account.
 - The service role bypasses RLS and is restricted to scheduled carrier work,
   push delivery, and account deletion. It never reaches the browser bundle.
-- Tracking numbers, labels, carrier history, push endpoints, and Planzer
-  capability URLs are private user data and must not appear in application logs
-  or analytics.
+- Tracking numbers, labels, carrier history, push endpoints, and Planzer or
+  Dachser capability URLs are private user data and must not appear in
+  application logs or analytics.
 - Carrier responses are untrusted, size-bounded input. The adapters imported
   from the pinned tracker dependency receive a private bounded HTTP wrapper.
   Tracking integrations are best effort and cannot establish user identity.
+- The Dachser adapter allowlists normalized shipment state and never stores the
+  sender, recipient, address, contact, document URLs, or raw carrier response.
 - Browser push endpoints are accepted only for known browser push-service hosts,
   and push delivery never follows redirects.
 - Cloudflare may provide TLS, proxying, and abuse protection, but Cloudflare

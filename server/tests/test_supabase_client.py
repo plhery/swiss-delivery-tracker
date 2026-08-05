@@ -190,7 +190,9 @@ class SupabaseServiceClientTests(unittest.TestCase):
         parsed = urllib.parse.urlsplit(path)
         query = urllib.parse.parse_qs(parsed.query)
         self.assertEqual(query["current_stage"], ["not.in.(delivered,returned)"])
-        self.assertEqual(query["sync_status"], ["neq.unsupported"])
+        self.assertNotIn("sync_status", query)
+        self.assertIn("swiss-post", query["carrier"][0])
+        self.assertIn("dachser", query["carrier"][0])
         self.assertEqual(
             query["order"], ["last_synced_at.asc.nullsfirst,created_at.asc"]
         )
