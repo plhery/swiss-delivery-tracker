@@ -4,6 +4,7 @@ import { AccountMenu } from './components/AccountMenu';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
+import { ParcelViewControls } from './components/ParcelViewControls';
 import { LanguageControl, type MessageKey, useI18n } from './i18n';
 import type { ApiAuth } from './lib/apiClient';
 import {
@@ -11,10 +12,16 @@ import {
   prioritizeActiveParcels,
   type ParcelAttention,
 } from './lib/parcelPriority';
+import {
+  parcelComparator,
+  viewParcels,
+  type ParcelSort,
+  type ParcelStatusFilter,
+} from './lib/parcelView';
 import { clearSharedParcelInput, readSharedParcelInput } from './lib/shareTarget';
 import { currentStage, isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
-import type { ParcelWithEvents } from './types';
+import type { CarrierId, ParcelWithEvents } from './types';
 
 const DETAIL_HISTORY_KEY = 'parcelPostDetail';
 
@@ -64,6 +71,11 @@ export default function App({
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
   const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ParcelStatusFilter>('all');
+  const [carrierFilter, setCarrierFilter] = useState<CarrierId | ''>('');
+  const [sort, setSort] = useState<ParcelSort>('priority');
+  const [viewNow, setViewNow] = useState(() => Date.now());
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
   );
@@ -83,6 +95,11 @@ export default function App({
     const timeout = window.setTimeout(() => setRefreshNotice(null), 4_000);
     return () => window.clearTimeout(timeout);
   }, [refreshNotice]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setViewNow(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const onPopState = () => {
@@ -127,28 +144,47 @@ export default function App({
     [parcels, openParcelId],
   );
 
-  const activeParcels = useMemo(
-    () => parcels.filter(isActiveParcel),
+  const visibleParcels = useMemo(
+    () => viewParcels(parcels, {
+      query,
+      status: statusFilter,
+      carrier: carrierFilter || undefined,
+      sort,
+      now: viewNow,
+    }),
+    [parcels, query, statusFilter, carrierFilter, sort, viewNow],
+  );
+  const availableCarriers = useMemo(
+    () => [...new Set(parcels.map((parcel) => parcel.carrier))]
+      .sort((first, second) => first.localeCompare(second)),
     [parcels],
+  );
+
+  const activeParcels = useMemo(
+    () => visibleParcels.filter(isActiveParcel),
+    [visibleParcels],
   );
   const prioritized = useMemo(
-    () => prioritizeActiveParcels(activeParcels),
-    [activeParcels],
+    () => prioritizeActiveParcels(activeParcels, viewNow, parcelComparator(sort)),
+    [activeParcels, sort, viewNow],
   );
-  const activeCount = activeParcels.length;
-  const deliveredParcels = useMemo(
-    () => parcels.filter((p) => !p.archivedAt && isDelivered(p.events)),
+  const activeCount = useMemo(
+    () => parcels.filter(isActiveParcel).length,
     [parcels],
+  );
+  const deliveredParcels = useMemo(
+    () => visibleParcels.filter((p) => !p.archivedAt && isDelivered(p.events)),
+    [visibleParcels],
   );
   const returnedParcels = useMemo(
-    () => parcels.filter(
+    () => visibleParcels.filter(
       (parcel) => !parcel.archivedAt && currentStage(parcel.events) === 'returned',
     ),
-    [parcels],
+    [visibleParcels],
   );
   const archivedParcels = useMemo(
-    () => parcels.filter((parcel) => Boolean(parcel.archivedAt)),
-    [parcels],
+    () => visibleParcels.filter((parcel) => Boolean(parcel.archivedAt)),
+    [visibleParcels],
   );
   const lastDpdPostcode = useMemo(
     () => [...parcels]
@@ -290,6 +326,21 @@ export default function App({
           </div>
         )}
 
+        {!loading && parcels.length > 0 && (
+          <ParcelViewControls
+            query={query}
+            status={statusFilter}
+            carrier={carrierFilter}
+            sort={sort}
+            carriers={availableCarriers}
+            count={visibleParcels.length}
+            onQueryChange={setQuery}
+            onStatusChange={setStatusFilter}
+            onCarrierChange={setCarrierFilter}
+            onSortChange={setSort}
+          />
+        )}
+
         {loading && (
           <div className="parcel-grid" aria-label={t('app.loadingParcels')}>
             <div className="parcel-card parcel-card--skeleton" />
@@ -303,6 +354,25 @@ export default function App({
             <p className="empty-state__eyebrow">{t('app.emptyEyebrow')}</p>
             <h2>{t('app.emptyTitle')}</h2>
             <p>{t('app.emptyDescription')}</p>
+          </div>
+        )}
+
+        {!loading && parcels.length > 0 && visibleParcels.length === 0 && (
+          <div className="empty-state empty-state--filtered">
+            <p className="empty-state__eyebrow">{t('view.search')}</p>
+            <h2>{t('view.noResultsTitle')}</h2>
+            <p>{t('view.noResultsDescription')}</p>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => {
+                setQuery('');
+                setStatusFilter('all');
+                setCarrierFilter('');
+              }}
+            >
+              {t('view.clear')}
+            </button>
           </div>
         )}
 

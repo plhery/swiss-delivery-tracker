@@ -59,7 +59,10 @@ export function parcelAttention(
   return null;
 }
 
-function comparePriority(first: ParcelWithEvents, second: ParcelWithEvents): number {
+export function compareParcelPriority(
+  first: ParcelWithEvents,
+  second: ParcelWithEvents,
+): number {
   const firstDay = expectedDeliveryDay(first.expectedDelivery) ?? '9999-99-99';
   const secondDay = expectedDeliveryDay(second.expectedDelivery) ?? '9999-99-99';
   if (firstDay !== secondDay) return firstDay.localeCompare(secondDay);
@@ -71,6 +74,9 @@ function comparePriority(first: ParcelWithEvents, second: ParcelWithEvents): num
 export function prioritizeActiveParcels(
   parcels: ParcelWithEvents[],
   now: number = Date.now(),
+  compare: (first: ParcelWithEvents, second: ParcelWithEvents) => number = (
+    compareParcelPriority
+  ),
 ): PrioritizedParcels {
   const attention: PrioritizedParcels['attention'] = [];
   const arrivingToday: ParcelWithEvents[] = [];
@@ -84,9 +90,9 @@ export function prioritizeActiveParcels(
     else onTheWay.push(parcel);
   }
 
-  attention.sort((first, second) => comparePriority(first.parcel, second.parcel));
-  arrivingToday.sort(comparePriority);
-  onTheWay.sort(comparePriority);
+  attention.sort((first, second) => compare(first.parcel, second.parcel));
+  arrivingToday.sort(compare);
+  onTheWay.sort(compare);
   return { attention, arrivingToday, onTheWay };
 }
 

@@ -325,6 +325,85 @@ button:disabled {
   color: var(--ink);
 }
 
+.parcel-view {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  box-shadow: 0 7px 22px rgba(25, 25, 22, 0.055);
+}
+
+.parcel-view label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.parcel-view__search {
+  position: relative;
+}
+
+.parcel-view__search svg {
+  position: absolute;
+  bottom: 13px;
+  left: 13px;
+  width: 18px;
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-linecap: round;
+  stroke-width: 1.8;
+  pointer-events: none;
+}
+
+.parcel-view input,
+.parcel-view select {
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #faf8f2;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.parcel-view input {
+  width: 100%;
+  padding-left: 39px;
+  font-size: 16px;
+}
+
+.parcel-view input:focus,
+.parcel-view select:focus {
+  border-color: var(--orange);
+  background: var(--paper);
+}
+
+.parcel-view__selects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.parcel-view__count {
+  margin: -2px 2px 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+
 .error-banner__action {
   display: inline-flex;
   min-height: 44px;
@@ -752,6 +831,15 @@ button:disabled {
   color: var(--ink);
   font-size: 24px;
   letter-spacing: -0.035em;
+}
+
+.empty-state--filtered {
+  min-height: 280px;
+}
+
+.empty-state--filtered .button {
+  flex: none;
+  margin-top: 18px;
 }
 
 .empty-state > p:last-child {
@@ -2022,6 +2110,14 @@ button:disabled {
 
   .app__subtitle {
     text-align: left;
+  }
+
+  .parcel-view__selects {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .parcel-view__selects label:last-child {
+    grid-column: 1 / -1;
   }
 
   .parcel-card {

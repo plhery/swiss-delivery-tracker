@@ -61,9 +61,46 @@ describe('App', () => {
     expect(within(past).getByText('Coffee beans ☕')).toBeInTheDocument();
   });
 
+  it('searches and clears the parcel list', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByText('Coffee beans ☕');
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search parcels' }), 'birthday');
+
+    expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
+    expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
+    expect(screen.queryByText('New sneakers 👟')).not.toBeInTheDocument();
+    expect(screen.getByText('1 shown')).toBeInTheDocument();
+
+    await user.clear(screen.getByRole('searchbox', { name: 'Search parcels' }));
+    await user.type(screen.getByRole('searchbox', { name: 'Search parcels' }), 'not here');
+    expect(screen.getByRole('heading', { name: 'No matching parcels' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(await screen.findByText('Coffee beans ☕')).toBeInTheDocument();
+    expect(screen.getByText('3 shown')).toBeInTheDocument();
+  });
+
+  it('filters parcels by status and carrier', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByText('Coffee beans ☕');
+
+    await user.selectOptions(screen.getByLabelText('Status'), 'delivered');
+    expect(screen.getByText('Coffee beans ☕')).toBeInTheDocument();
+    expect(screen.queryByText('Birthday gift 🎁')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Status'), 'all');
+    await user.selectOptions(screen.getByLabelText('Carrier'), 'intl-post');
+    expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
+    expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
+  });
+
   it('shows current stage badges on the cards', async () => {
     renderApp();
-    expect(await screen.findByText('Delivered')).toBeInTheDocument();
+    expect(await screen.findByText('Delivered', { selector: '.status-badge' }))
+      .toBeInTheDocument();
     expect(screen.getByText('Out for delivery')).toBeInTheDocument();
     expect(screen.getByText('At customs')).toBeInTheDocument();
   });
