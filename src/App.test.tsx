@@ -582,6 +582,7 @@ describe('App', () => {
 
     const cards = await screen.findAllByText('Delivered');
     expect(cards.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole('status')).toHaveTextContent('Tracking checks queued');
   });
 
   it('shows initial-load and refresh failures', async () => {
@@ -703,6 +704,7 @@ describe('App', () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /check now/i }));
     expect(repo.refreshParcel).toHaveBeenCalledWith(parcel.id);
+    expect(screen.getByText(/Tracking check queued/)).toBeInTheDocument();
   });
 
   it('shows a friendly empty state when there are no parcels', async () => {

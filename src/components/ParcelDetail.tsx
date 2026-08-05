@@ -36,6 +36,7 @@ export function ParcelDetail({
   const [titleError, setTitleError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
+  const [checkNotice, setCheckNotice] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -77,8 +78,10 @@ export function ParcelDetail({
     if (checking) return;
     setChecking(true);
     setCheckError(null);
+    setCheckNotice(null);
     try {
       await onRefresh(parcel);
+      setCheckNotice('Tracking check queued. Updates will appear automatically.');
     } catch (error) {
       setCheckError(error instanceof Error ? error.message : 'Could not queue a tracking check');
     } finally {
@@ -270,6 +273,7 @@ export function ParcelDetail({
 
       <footer className={`detail__footer${parcel.archivedAt ? ' detail__footer--single' : ''}`}>
         {checkError && <p className="detail__check-error" role="alert">{checkError}</p>}
+        {checkNotice && <p className="detail__check-notice" role="status">{checkNotice}</p>}
         {parcel.archivedAt ? (
           <button
             type="button"

@@ -1260,6 +1260,14 @@ button:disabled {
   font-size: 12px;
 }
 
+.detail__check-notice {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .detail__footer--single {
   grid-template-columns: 1fr;
 }
@@ -1278,6 +1286,24 @@ button:disabled {
   gap: 16px;
   margin: 0 auto;
   padding: 10px 12px 10px 16px;
+  border-radius: 14px;
+  background: var(--ink);
+  box-shadow: 0 14px 38px rgba(25, 25, 22, 0.28);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.action-toast {
+  position: fixed;
+  z-index: 30;
+  right: 16px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  left: 16px;
+  width: min(calc(100% - 32px), 440px);
+  min-height: 52px;
+  margin: 0 auto;
+  padding: 16px;
   border-radius: 14px;
   background: var(--ink);
   box-shadow: 0 14px 38px rgba(25, 25, 22, 0.28);

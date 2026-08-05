@@ -170,6 +170,7 @@ export function ParcelsProvider({
       }
     } catch (e) {
       rememberError(e);
+      throw e;
     } finally {
       if (mounted.current) setRefreshing(false);
     }

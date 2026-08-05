@@ -31,6 +31,7 @@ export default function App() {
   const [undoParcel, setUndoParcel] = useState<ParcelWithEvents | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
   );
@@ -49,6 +50,12 @@ export default function App() {
     const timeout = window.setTimeout(() => setUndoParcel(null), 7_000);
     return () => window.clearTimeout(timeout);
   }, [undoParcel, undoing, undoError]);
+
+  useEffect(() => {
+    if (!refreshNotice) return;
+    const timeout = window.setTimeout(() => setRefreshNotice(null), 4_000);
+    return () => window.clearTimeout(timeout);
+  }, [refreshNotice]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -144,6 +151,16 @@ export default function App() {
     }
   }
 
+  async function refreshAll() {
+    setRefreshNotice(null);
+    try {
+      await refresh();
+      setRefreshNotice('Tracking checks queued. Updates will appear automatically.');
+    } catch {
+      // The shared error banner contains the actionable failure message.
+    }
+  }
+
   return (
     <div className="app">
       <header className="app__header">
@@ -162,8 +179,9 @@ export default function App() {
             <button
               type="button"
               className="icon-button"
-              aria-label="Refresh tracking"
-              onClick={() => void refresh()}
+              aria-label={refreshing ? 'Queueing tracking checks' : 'Refresh tracking'}
+              aria-busy={refreshing}
+              onClick={() => void refreshAll()}
               disabled={refreshing}
             >
               <svg
@@ -367,6 +385,10 @@ export default function App() {
             {undoing ? 'Restoring…' : undoError ? 'Retry' : 'Undo'}
           </button>
         </div>
+      )}
+
+      {refreshNotice && !undoParcel && (
+        <div className="action-toast" role="status">{refreshNotice}</div>
       )}
     </div>
   );
