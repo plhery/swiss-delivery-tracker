@@ -78,6 +78,7 @@ environment, never in a `VITE_` variable.
 | --- | --- | --- |
 | `SUPABASE_URL` | Production | Supabase project URL used only by the Python service. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Production | Server-only database key. |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | Recommended in production | Enables origin-side signature, issuer and application-audience validation for the Cloudflare Access JWT on every `/api/*` request. Configure both or neither. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | For push | Stable Web Push key pair. |
 | `VAPID_SUBJECT` | For push | HTTPS URL or `mailto:` contact; defaults to the production Parcel Post URL. |
 | `DPD_POSTCODE` | Optional | Four-digit delivery postcode. It unlocks DPD's verified scan history and delivery window when available. |
@@ -101,7 +102,9 @@ The backend endpoints are:
 - `DELETE /api/push/subscriptions`
 - `GET /health`
 
-They intentionally rely on the deployment's Cloudflare Access boundary. Do not
+They rely on the deployment's Cloudflare Access boundary. In production, set
+`CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as defense in depth so the origin
+also rejects API requests without a valid Access application token. Do not
 expose the application origin directly to the public internet.
 
 `DELETE /api/packages/:id` is a compatibility-shaped soft delete: it sets

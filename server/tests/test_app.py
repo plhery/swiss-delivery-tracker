@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import server.app as app
+from server.cloudflare_access import AccessValidationError
 from server.supabase_client import SupabaseError
 from server.tests.contract import CONTRACT, assert_contract
 from server.tracking_sync import SyncSummary
@@ -95,6 +96,7 @@ class AppHttpTests(unittest.TestCase):
         self.original_dist = app.DIST
         self.original_service = app.SERVICE
         self.original_sync_jobs = app.SYNC_JOBS
+        self.original_access_validator = app.ACCESS_VALIDATOR
         self.original_state = dict(app.STATE)
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
@@ -104,6 +106,7 @@ class AppHttpTests(unittest.TestCase):
         app.DIST = root.resolve()
         app.SERVICE = FakeService()
         app.SYNC_JOBS = Mock(service=app.SERVICE)
+        app.ACCESS_VALIDATOR = None
         app.SYNC_JOBS.enqueue_all.return_value = True
         app.SYNC_JOBS.enqueue_package.return_value = True
         app.SYNC_JOBS.pending_count.return_value = 1
@@ -121,6 +124,7 @@ class AppHttpTests(unittest.TestCase):
         app.DIST = self.original_dist
         app.SERVICE = self.original_service
         app.SYNC_JOBS = self.original_sync_jobs
+        app.ACCESS_VALIDATOR = self.original_access_validator
         app.STATE.clear()
         app.STATE.update(self.original_state)
 
@@ -165,6 +169,30 @@ class AppHttpTests(unittest.TestCase):
             status, _, body = self.request("GET", "/api/openapi.json")
         self.assertEqual(status, 503)
         assert_contract("ErrorResponse", json.loads(body))
+
+    def test_api_routes_validate_cloudflare_access_tokens_when_configured(self):
+        app.ACCESS_VALIDATOR = Mock()
+
+        status, _, body = self.request("GET", "/api/packages")
+        self.assertEqual(status, 401)
+        self.assertEqual(json.loads(body), {"error": "Authentication is required"})
+
+        status, _, _ = self.request(
+            "GET",
+            "/api/packages",
+            headers={"Cf-Access-Jwt-Assertion": "valid-token"},
+        )
+        self.assertEqual(status, 200)
+        app.ACCESS_VALIDATOR.validate.assert_called_with("valid-token")
+
+        app.ACCESS_VALIDATOR.validate.side_effect = AccessValidationError("expired")
+        status, _, body = self.request(
+            "POST",
+            "/api/sync",
+            headers={"Cf-Access-Jwt-Assertion": "expired-token"},
+        )
+        self.assertEqual(status, 401)
+        self.assertEqual(json.loads(body), {"error": "Authentication is required"})
 
     def test_static_shell_assets_spa_fallback_and_path_safety(self):
         status, headers, body = self.request("GET", "/")
@@ -570,6 +598,25 @@ class AppLifecycleTests(unittest.TestCase):
             service_class.assert_called_once_with(
                 client_class.return_value, notifier=push_class.return_value
             )
+
+    def test_access_validator_requires_complete_configuration(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(app.build_access_validator())
+
+        with patch.dict(os.environ, {"CF_ACCESS_TEAM_DOMAIN": "team.example"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "configured together"):
+                app.build_access_validator()
+
+        with (
+            patch.dict(
+                os.environ,
+                {"CF_ACCESS_TEAM_DOMAIN": "team.example", "CF_ACCESS_AUD": "audience"},
+                clear=True,
+            ),
+            patch("server.app.CloudflareAccessValidator") as validator_class,
+        ):
+            self.assertIs(app.build_access_validator(), validator_class.return_value)
+            validator_class.assert_called_once_with("team.example", "audience")
 
     def test_schedule_uses_ten_minutes_by_day_and_hourly_by_night(self):
         cases = [

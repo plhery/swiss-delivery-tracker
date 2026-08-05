@@ -19,6 +19,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from .api_contract import CARRIER_IDS
+from .cloudflare_access import AccessValidationError, CloudflareAccessValidator
 from .planzer_shared import (
     is_planzer_shared_tracking_number,
     validate_planzer_shared_url,
@@ -40,6 +41,18 @@ SYNC_TIMEZONE = ZoneInfo("Europe/Zurich")
 MAX_JSON_BODY = 16_384
 AUTO_ARCHIVE_DAYS = 60
 VALID_CARRIERS = CARRIER_IDS
+
+
+def build_access_validator() -> CloudflareAccessValidator | None:
+    team_domain = os.environ.get("CF_ACCESS_TEAM_DOMAIN", "").strip()
+    audience = os.environ.get("CF_ACCESS_AUD", "").strip()
+    if not team_domain and not audience:
+        return None
+    if not team_domain or not audience:
+        raise RuntimeError(
+            "CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD must be configured together"
+        )
+    return CloudflareAccessValidator(team_domain, audience)
 
 
 def build_service() -> TrackingSyncService | None:
@@ -143,6 +156,7 @@ class SyncJobQueue:
 
 SERVICE = build_service()
 SYNC_JOBS: SyncJobQueue | None = SyncJobQueue(SERVICE) if SERVICE else None
+ACCESS_VALIDATOR = build_access_validator()
 
 
 def sync_jobs(service: TrackingSyncService) -> SyncJobQueue:
@@ -224,9 +238,25 @@ class Handler(BaseHTTPRequestHandler):
             "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
         )
 
+    def _authorize_api(self, path: str) -> bool:
+        if not path.startswith("/api/") or ACCESS_VALIDATOR is None:
+            return True
+        token = self.headers.get("Cf-Access-Jwt-Assertion")
+        if not token:
+            self._json(HTTPStatus.UNAUTHORIZED, {"error": "Authentication is required"})
+            return False
+        try:
+            ACCESS_VALIDATOR.validate(token)
+        except AccessValidationError:
+            self._json(HTTPStatus.UNAUTHORIZED, {"error": "Authentication is required"})
+            return False
+        return True
+
     def do_GET(self) -> None:  # noqa: N802
         parsed_url = urlparse(self.path)
         path = parsed_url.path
+        if not self._authorize_api(path):
+            return
         if path == "/reauth":
             # Cloudflare returns here after login. Serving a fresh document at
             # this distinct URL prevents Safari from restoring the page whose
@@ -278,6 +308,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if not self._authorize_api(path):
+            return
         if path == "/reauth":
             self._serve_static("/", head_only=True)
             return
@@ -289,6 +321,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if not self._authorize_api(path):
+            return
         if not SERVICE:
             self._json(503, {"error": "The delivery database is not configured"})
             return
@@ -432,6 +466,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if not self._authorize_api(path):
+            return
         if not SERVICE:
             self._json(503, {"error": "The delivery database is not configured"})
             return
@@ -462,6 +498,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PATCH(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if not self._authorize_api(path):
+            return
         if not SERVICE:
             self._json(503, {"error": "The delivery database is not configured"})
             return
