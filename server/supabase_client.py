@@ -154,6 +154,7 @@ class SupabaseServiceClient:
             ),
             ("archived_at", "is.null"),
             ("current_stage", "not.in.(delivered,returned)"),
+            ("sync_status", "neq.unsupported"),
             ("order", "created_at.asc"),
         ]
         query = urllib.parse.urlencode(params, safe="().,*")

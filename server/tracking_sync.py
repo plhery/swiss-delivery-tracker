@@ -297,7 +297,9 @@ class TrackingSyncService:
                 {
                     "sync_status": "unsupported",
                     "sync_error": "Choose a carrier with an automatic adapter or use the carrier link.",
-                    "last_synced_at": now.isoformat(),
+                    # No carrier request happened, so do not present this as a
+                    # successful "last checked" time in the detail view.
+                    "last_synced_at": None,
                 },
             )
             return "unsupported"

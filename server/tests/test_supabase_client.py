@@ -159,6 +159,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
         parsed = urllib.parse.urlsplit(path)
         query = urllib.parse.parse_qs(parsed.query)
         self.assertEqual(query["current_stage"], ["not.in.(delivered,returned)"])
+        self.assertEqual(query["sync_status"], ["neq.unsupported"])
         self.assertNotIn("user_id", query)
 
         self.client._request.reset_mock()
