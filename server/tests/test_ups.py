@@ -1,7 +1,7 @@
-from datetime import date
-from email.message import Message
 import json
 import unittest
+from datetime import date
+from email.message import Message
 from unittest.mock import patch
 
 from server.ups import (
@@ -12,7 +12,6 @@ from server.ups import (
     parse_tracking_response,
     tracking_url,
 )
-
 
 TRACKING_NUMBER = "1Z999AA10123456784"
 TRACKING_HTML = f"""

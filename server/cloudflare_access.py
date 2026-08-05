@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 import jwt
-from jwt import PyJWKClient
+from jwt import PyJWK, PyJWKClient
 from jwt.exceptions import PyJWTError
 
 
@@ -14,7 +14,7 @@ class AccessValidationError(ValueError):
 
 
 class JwkClient(Protocol):
-    def get_signing_key_from_jwt(self, token: str) -> object: ...
+    def get_signing_key_from_jwt(self, token: str) -> PyJWK: ...
 
 
 class CloudflareAccessValidator:
@@ -46,7 +46,7 @@ class CloudflareAccessValidator:
             signing_key = self.jwk_client.get_signing_key_from_jwt(token)
             claims = jwt.decode(
                 token,
-                getattr(signing_key, "key"),
+                signing_key.key,
                 algorithms=["RS256"],
                 audience=self.audience,
                 issuer=self.team_domain,

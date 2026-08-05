@@ -8,7 +8,6 @@ from server.planzer_shared import (
     validate_planzer_shared_url,
 )
 
-
 TRACKING_NUMBER = "999.90.03316119"
 ACCESS_KEY = "abcdefghijklmnopqrstuvwxyzABCDEFGH"
 TRACKING_URL = (

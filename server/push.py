@@ -11,7 +11,6 @@ from pywebpush import webpush
 
 from .supabase_client import SupabaseServiceClient
 
-
 STAGE_LABELS = {
     "pending": "Not announced yet",
     "registered": "Shipment announced",

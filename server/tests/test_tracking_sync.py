@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
 import json
 import sys
-from types import ModuleType
 import unittest
+from datetime import datetime, timezone
+from types import ModuleType
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -15,8 +15,8 @@ from server.tracking_sync import (
     event_timestamp,
     infer_stage,
     provider_event_id,
-    result_timezone,
     result_stage,
+    result_timezone,
 )
 
 

@@ -204,7 +204,10 @@ class SupabaseServiceClient:
         ) or []
         if not rows:
             raise SupabaseError("Supabase did not return the push subscription")
-        return rows[0]
+        row = rows[0]
+        if not isinstance(row, dict):
+            raise SupabaseError("Supabase returned an invalid push subscription")
+        return row
 
     def delete_push_subscription(self, endpoint: str) -> None:
         query = urllib.parse.urlencode({"endpoint": f"eq.{endpoint}"})

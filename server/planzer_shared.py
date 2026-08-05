@@ -15,7 +15,6 @@ from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
-
 PLANZER_SHARED_HOST = "trackandtrace.planzergroup.com"
 PLANZER_SHARED_PATH = re.compile(r"^/shared/sendungen/([^/]+)/?$")
 PLANZER_ACCESS_KEY = re.compile(r"^[A-Za-z0-9_-]{32,256}$")

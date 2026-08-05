@@ -11,12 +11,11 @@ import threading
 import time
 from datetime import datetime
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
 
 DPD_TRACKING_BASE = "https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming"
 DPD_FETCH_BASE = "https://www.dpdgroup.com/ch/mydpd/my-parcels/track"
@@ -771,15 +770,16 @@ class DPDTracker:
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
-                body = response.read(MAX_RESPONSE_BYTES + 1)
+                body = cast(bytes, response.read(MAX_RESPONSE_BYTES + 1))
                 if len(body) > MAX_RESPONSE_BYTES:
                     raise RuntimeError("DPD response was unexpectedly large")
-                return body.decode(response.headers.get_content_charset() or "utf-8", "replace")
+                charset = str(response.headers.get_content_charset() or "utf-8")
+                return body.decode(charset, "replace")
         except HTTPError as exc:
-            body = exc.read(MAX_RESPONSE_BYTES).decode("utf-8", "replace")
+            error_body = exc.read(MAX_RESPONSE_BYTES).decode("utf-8", "replace")
             if exc.code == 403 and (
                 exc.headers.get("cf-mitigated") == "challenge"
-                or re.search(r"Just a moment|Enable JavaScript and cookies", body, re.I)
+                or re.search(r"Just a moment|Enable JavaScript and cookies", error_body, re.I)
             ):
                 raise DPDChallengeError("DPD returned a Cloudflare browser challenge") from exc
             raise RuntimeError(f"DPD returned HTTP {exc.code}") from exc

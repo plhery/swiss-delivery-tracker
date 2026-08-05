@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
 from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -27,7 +28,6 @@ from .planzer_shared import (
 from .push import PushNotificationService
 from .supabase_client import SupabaseError, SupabaseServiceClient
 from .tracking_sync import TrackingSyncService
-
 
 DIST = Path(os.environ.get("STATIC_DIR", "/app/dist")).resolve()
 API_CONTRACT = Path(
@@ -295,7 +295,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(502, {"error": str(exc)})
             return
         if path == "/api/push/config":
-            notifier = SERVICE.notifier if SERVICE else None
+            notifier = cast(
+                PushNotificationService | None,
+                SERVICE.notifier if SERVICE else None,
+            )
             self._json(
                 200,
                 {
@@ -379,7 +382,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/push/subscriptions":
-            notifier = SERVICE.notifier
+            notifier = cast(PushNotificationService | None, SERVICE.notifier)
             if not notifier:
                 self._json(503, {"error": "Push notifications are not configured"})
                 return
@@ -413,9 +416,11 @@ class Handler(BaseHTTPRequestHandler):
             label = payload.get("label", "")
             carrier = payload.get("carrier", "unknown")
             raw_tracking_url = payload.get("trackingUrl", "")
-            if not all(
-                isinstance(value, str)
-                for value in (raw_tracking, label, carrier, raw_tracking_url)
+            if (
+                not isinstance(raw_tracking, str)
+                or not isinstance(label, str)
+                or not isinstance(carrier, str)
+                or not isinstance(raw_tracking_url, str)
             ):
                 raise ValueError("Tracking number, label, carrier and tracking URL must be text")
             tracking_number = re.sub(r"[\s.\-]", "", raw_tracking).upper()
@@ -552,8 +557,11 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Send a valid push endpoint")
         if not isinstance(keys, dict):
             raise ValueError("Send valid push encryption keys")
-        p256dh, auth = keys.get("p256dh"), keys.get("auth")
-        if not all(isinstance(value, str) and 8 <= len(value) <= 512 for value in (p256dh, auth)):
+        p256dh = keys.get("p256dh")
+        auth = keys.get("auth")
+        if not isinstance(p256dh, str) or not isinstance(auth, str):
+            raise ValueError("Send valid push encryption keys")
+        if not 8 <= len(p256dh) <= 512 or not 8 <= len(auth) <= 512:
             raise ValueError("Send valid push encryption keys")
         return endpoint, p256dh, auth
 

@@ -1,2 +1,4 @@
 -r requirements.txt
 coverage==7.15.1
+mypy==2.3.0
+ruff==0.16.1

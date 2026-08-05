@@ -9,7 +9,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
 
-
 CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "openapi.json"
 CONTRACT = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 

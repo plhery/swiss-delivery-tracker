@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone, tzinfo
 from typing import Any, Protocol
@@ -14,7 +15,6 @@ from .dpd import DPDTracker
 from .planzer_shared import PlanzerSharedTracker
 from .supabase_client import SupabaseServiceClient
 from .ups import UPSTracker
-
 
 CARRIER_NAMES = {
     "swiss-post": "Swiss Post",
@@ -77,9 +77,14 @@ class UpstreamTrackerAdapter:
         module = self.modules.get(carrier_name)
         if not module:
             raise LookupError(f"The upstream tracker has no {carrier_name} adapter")
-        if carrier_name == "Dachser":
-            return module.fetch(tracking_number, tracking_url)
-        return module.fetch(tracking_number)
+        result = (
+            module.fetch(tracking_number, tracking_url)
+            if carrier_name == "Dachser"
+            else module.fetch(tracking_number)
+        )
+        if not isinstance(result, dict):
+            raise ValueError(f"The {carrier_name} adapter returned an invalid response")
+        return result
 
 
 @dataclass
@@ -251,7 +256,7 @@ class TrackingSyncService:
         client: SupabaseServiceClient,
         adapter: CarrierAdapter | None = None,
         notifier: NotificationDispatcher | None = None,
-        now=lambda: datetime.now(timezone.utc),
+        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
         self.client = client
         self.adapter = adapter or UpstreamTrackerAdapter()

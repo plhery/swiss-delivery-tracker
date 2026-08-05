@@ -1,11 +1,11 @@
 import http.client
 import json
 import os
-from pathlib import Path
 import tempfile
 import threading
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import server.app as app
@@ -13,7 +13,6 @@ from server.cloudflare_access import AccessValidationError
 from server.supabase_client import SupabaseError
 from server.tests.contract import CONTRACT, assert_contract
 from server.tracking_sync import SyncSummary
-
 
 PACKAGE = {
     "id": "40000000-0000-0000-0000-000000000004",

@@ -1,7 +1,7 @@
-from email.message import Message
-from io import BytesIO
 import json
 import unittest
+from email.message import Message
+from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
@@ -14,7 +14,6 @@ from server.dpd import (
     parse_tracking_html,
     tracking_url,
 )
-
 
 TRACKING_NUMBER = "06086514587082"
 TRACKING_HTML = f"""

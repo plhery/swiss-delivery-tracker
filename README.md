@@ -54,6 +54,9 @@ npm run dev
 Run `npm run lint:frontend`, `npm run test:coverage` and `npm run build` before
 shipping frontend changes.
 
+For backend changes, install `requirements-dev.txt`, then run
+`python -m ruff check server`, `python -m mypy server` and the unittest suite.
+
 The Vite development server starts in demo mode. To exercise the real API,
 build and run the production container with a Supabase database:
 

@@ -18,7 +18,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, unquote, urlsplit
 from urllib.request import Request, urlopen
 
-
 UPS_TRACKING_BASE = "https://www.ups.com/track"
 UPS_STATUS_API = "https://webapis.ups.com/track/api/Track/GetStatus?loc=en_US"
 DEFAULT_TIMEOUT = 90
@@ -125,7 +124,7 @@ class _UPSHTTPSession:
         return payload
 
     def seed_browser_cookies(
-        self, cookies: list[dict[str, Any]], user_agent: Any = None
+        self, cookies: list[object], user_agent: Any = None
     ) -> None:
         """Import a TRAWL browser jar without depending on its Redis cache."""
         browser_user_agent = _clean(user_agent)
@@ -146,10 +145,12 @@ class _UPSHTTPSession:
             if not path.startswith("/"):
                 path = "/"
             raw_expires = item.get("expires")
-            try:
-                expires_value = float(raw_expires)
-            except (TypeError, ValueError):
-                expires_value = -1
+            expires_value = -1.0
+            if isinstance(raw_expires, (int, float, str)):
+                try:
+                    expires_value = float(raw_expires)
+                except ValueError:
+                    pass
             self._set_cookie(
                 name=name,
                 value=value,
@@ -320,7 +321,7 @@ class _UPSHTTPSession:
                 discard=expires is None,
                 comment=None,
                 comment_url=None,
-                rest=rest,
+                rest=rest,  # type: ignore[arg-type]  # Cookie accepts None for flag values.
                 rfc2109=False,
             )
         )
