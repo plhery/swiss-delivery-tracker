@@ -309,7 +309,12 @@ class TrackingSyncService:
             )
             events = build_events(package, result, now)
             self.client.insert_events(events)
-            stage = result_stage(result)
+            reported_stage = result_stage(result)
+            latest_event = max(events, key=lambda event: str(event["occurred_at"])) if events else None
+            # Carrier summaries are occasionally missing or lag behind their event
+            # history. Keep the denormalized package stage aligned with the newest
+            # event because scheduling and automatic archiving rely on this column.
+            stage = str(latest_event["stage"]) if latest_event else reported_stage
             has_update = bool(
                 (stage and stage != "pending")
                 or any(event["stage"] != "pending" for event in events)

@@ -273,6 +273,25 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(pending_client.updates[-1][1]["current_stage"], "pending")
         self.assertEqual(pending_client.updates[-1][1]["sync_status"], "waiting")
 
+        history_client = FakeClient([self.package("pkg-history")])
+        from_history = TrackingSyncService(
+            history_client,
+            FakeAdapter(
+                result={
+                    "status": "unknown",
+                    "events": [
+                        {
+                            "description": "Delivered",
+                            "time": "2026-07-15T12:00:00+00:00",
+                        }
+                    ],
+                }
+            ),
+        ).sync()
+        self.assertEqual(from_history.updated, 1)
+        self.assertEqual(history_client.events[-1]["stage"], "delivered")
+        self.assertEqual(history_client.updates[-1][1]["current_stage"], "delivered")
+
         json_client = FakeClient([self.package("pkg-json")])
         json_error = json.JSONDecodeError("bad", "<html>", 0)
         errored = TrackingSyncService(json_client, FakeAdapter(error=json_error)).sync()
