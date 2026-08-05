@@ -39,8 +39,8 @@ code. Every device admitted by Cloudflare Access sees the same packages.
   automatically updating offline shell. An open app reloads as soon as an
   installed update takes control.
 - **Phone-native navigation** — parcel details can be dismissed with the back
-  button or a deliberate swipe to the left without interfering with vertical
-  timeline scrolling.
+  button or the familiar iPhone back gesture from the left edge without
+  interfering with vertical timeline scrolling.
 - **Local demo mode** — Vite development uses local sample data unless
   `VITE_USE_API=true` is set.
 

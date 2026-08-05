@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { isLeftSwipe } from './swipe';
+import { isBackSwipe } from './swipe';
 
-describe('isLeftSwipe', () => {
-  it('accepts a deliberate horizontal swipe to the left', () => {
-    expect(isLeftSwipe({ x: 280, y: 160 }, { x: 150, y: 172 })).toBe(true);
+describe('isBackSwipe', () => {
+  it('accepts an iOS-style swipe right from the left edge', () => {
+    expect(isBackSwipe({ x: 12, y: 160 }, { x: 142, y: 172 })).toBe(true);
   });
 
-  it('ignores short, rightward, and mostly vertical gestures', () => {
-    expect(isLeftSwipe({ x: 200, y: 100 }, { x: 150, y: 100 })).toBe(false);
-    expect(isLeftSwipe({ x: 100, y: 100 }, { x: 220, y: 100 })).toBe(false);
-    expect(isLeftSwipe({ x: 250, y: 100 }, { x: 160, y: 240 })).toBe(false);
+  it('ignores short, off-edge, leftward, and mostly vertical gestures', () => {
+    expect(isBackSwipe({ x: 12, y: 100 }, { x: 62, y: 100 })).toBe(false);
+    expect(isBackSwipe({ x: 80, y: 100 }, { x: 200, y: 100 })).toBe(false);
+    expect(isBackSwipe({ x: 20, y: 100 }, { x: -80, y: 100 })).toBe(false);
+    expect(isBackSwipe({ x: 12, y: 100 }, { x: 102, y: 240 })).toBe(false);
   });
 });

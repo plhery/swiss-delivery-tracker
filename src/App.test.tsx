@@ -397,7 +397,7 @@ describe('App', () => {
       detail,
       new MouseEvent('pointerdown', {
         bubbles: true,
-        clientX: 280,
+        clientX: 12,
         clientY: 180,
       }),
     );
@@ -405,7 +405,7 @@ describe('App', () => {
       detail,
       new MouseEvent('pointerup', {
         bubbles: true,
-        clientX: 150,
+        clientX: 142,
         clientY: 190,
       }),
     );

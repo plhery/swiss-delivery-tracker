@@ -4,7 +4,7 @@ import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { formatExpectedDelivery } from '../lib/format';
 import { parcelDisplayStatus } from '../lib/parcelStatus';
 import { currentEvent } from '../lib/stages';
-import { isLeftSwipe, type TouchPoint } from '../lib/swipe';
+import { isBackSwipe, type TouchPoint } from '../lib/swipe';
 import { useModalDialog } from '../lib/modal';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
@@ -118,8 +118,9 @@ export function ParcelDetail({
       swipeStart.current = null;
       return;
     }
+    const detailBounds = event.currentTarget.getBoundingClientRect();
     swipeStart.current = {
-      x: event.clientX,
+      x: event.clientX - detailBounds.left,
       y: event.clientY,
     };
   }
@@ -127,7 +128,11 @@ export function ParcelDetail({
   function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
     const start = swipeStart.current;
     swipeStart.current = null;
-    if (start && isLeftSwipe(start, { x: event.clientX, y: event.clientY })) {
+    const detailBounds = event.currentTarget.getBoundingClientRect();
+    if (start && isBackSwipe(start, {
+      x: event.clientX - detailBounds.left,
+      y: event.clientY,
+    })) {
       onBack();
     }
   }

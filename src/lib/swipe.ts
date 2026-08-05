@@ -3,15 +3,17 @@ export interface TouchPoint {
   y: number;
 }
 
-export function isLeftSwipe(
+export function isBackSwipe(
   start: TouchPoint,
   end: TouchPoint,
   minimumDistance = 72,
+  edgeWidth = 36,
 ): boolean {
   const horizontal = end.x - start.x;
   const vertical = end.y - start.y;
   return (
-    horizontal <= -minimumDistance &&
+    start.x <= edgeWidth &&
+    horizontal >= minimumDistance &&
     Math.abs(horizontal) > Math.abs(vertical) * 1.25
   );
 }
