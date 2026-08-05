@@ -1,3 +1,4 @@
+import { useRef, useState, type PointerEvent } from 'react';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import {
   localizedExpectedDelivery,
@@ -12,10 +13,12 @@ import { ProgressTrack } from './ProgressTrack';
 export function ParcelCard({
   parcel,
   onOpen,
+  onArchive,
   notice,
 }: {
   parcel: ParcelWithEvents;
   onOpen: (parcel: ParcelWithEvents) => void;
+  onArchive?: (parcel: ParcelWithEvents) => Promise<unknown>;
   notice?: string;
 }) {
   const { t } = useI18n();
@@ -27,16 +30,87 @@ export function ParcelCard({
     : null;
   const statusLabel = t(parcelDisplayStatusKey(parcel));
   const parcelName = parcel.label || t('common.parcel');
+  const dragStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const suppressClick = useRef(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
+  async function archive() {
+    if (!onArchive || archiving) return;
+    setArchiving(true);
+    setDragOffset(-88);
+    try {
+      await onArchive(parcel);
+    } catch {
+      setArchiving(false);
+      setDragOffset(0);
+    }
+  }
+
+  function handlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (!onArchive || event.isPrimary === false) return;
+    dragStart.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    setDragging(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    const start = dragStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const horizontal = event.clientX - start.x;
+    const vertical = event.clientY - start.y;
+    if (horizontal >= 0 || Math.abs(horizontal) <= Math.abs(vertical)) return;
+    event.preventDefault();
+    suppressClick.current = true;
+    setDragOffset(Math.max(-132, horizontal));
+  }
+
+  function finishSwipe(event: PointerEvent<HTMLButtonElement>) {
+    const start = dragStart.current;
+    dragStart.current = null;
+    setDragging(false);
+    if (!start || start.pointerId !== event.pointerId) return;
+    const horizontal = event.clientX - start.x;
+    const vertical = event.clientY - start.y;
+    if (Math.abs(horizontal) > 8) suppressClick.current = true;
+    if (horizontal <= -96 && Math.abs(horizontal) > Math.abs(vertical) * 1.25) {
+      void archive();
+    } else {
+      setDragOffset(horizontal <= -36 && Math.abs(horizontal) > Math.abs(vertical) ? -88 : 0);
+    }
+    window.setTimeout(() => { suppressClick.current = false; }, 0);
+  }
+
+  function cancelSwipe() {
+    dragStart.current = null;
+    setDragging(false);
+    setDragOffset(0);
+    window.setTimeout(() => { suppressClick.current = false; }, 0);
+  }
 
   return (
-    <button
-      type="button"
-      className={`parcel-card parcel-card--${status.tone}`}
-      onClick={() => onOpen(parcel)}
-      aria-label={expectedDelivery
-        ? t('parcel.ariaExpected', { name: parcelName, status: statusLabel, date: expectedDelivery })
-        : t('parcel.aria', { name: parcelName, status: statusLabel })}
-    >
+    <div className={`parcel-card-swipe${onArchive ? ' parcel-card-swipe--enabled' : ''}`}>
+      <button
+        type="button"
+        className={`parcel-card parcel-card--${status.tone}${onArchive ? ' parcel-card--swipeable' : ''}${dragging ? ' parcel-card--dragging' : ''}`}
+        style={onArchive ? { transform: `translateX(${dragOffset}px)` } : undefined}
+        onClick={() => {
+          if (suppressClick.current) return;
+          if (dragOffset !== 0) {
+            setDragOffset(0);
+            return;
+          }
+          onOpen(parcel);
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishSwipe}
+        onPointerCancel={cancelSwipe}
+        aria-label={expectedDelivery
+          ? t('parcel.ariaExpected', { name: parcelName, status: statusLabel, date: expectedDelivery })
+          : t('parcel.aria', { name: parcelName, status: statusLabel })}
+      >
       <div className="parcel-card__stamp" aria-hidden="true">
         <svg viewBox="0 0 32 32">
           <path d="m6 10 10-5 10 5-10 5-10-5Z" />
@@ -77,6 +151,20 @@ export function ParcelCard({
       <div className="parcel-card__chevron" aria-hidden="true">
         <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
       </div>
-    </button>
+      </button>
+      {onArchive && (
+        <button
+          type="button"
+          className="parcel-card-swipe__archive"
+          aria-label={t('parcel.archiveAria', { name: parcelName })}
+          aria-busy={archiving}
+          disabled={archiving}
+          onFocus={() => setDragOffset(-88)}
+          onClick={() => void archive()}
+        >
+          {archiving ? t('detail.archiving') : t('parcel.archive')}
+        </button>
+      )}
+    </div>
   );
 }

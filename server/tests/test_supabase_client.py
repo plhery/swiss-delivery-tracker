@@ -174,6 +174,13 @@ class SupabaseServiceClientTests(unittest.TestCase):
         restore = self.client._request.call_args
         self.assertEqual(restore.kwargs["body"], {"archived_at": None})
 
+        self.client._request = Mock(return_value=[{"id": "pkg/1"}])
+        self.assertTrue(self.client.delete_archived_package("pkg/1"))
+        delete = self.client._request.call_args
+        self.assertIn("id=eq.pkg%2F1", delete.args[0])
+        self.assertIn("archived_at=not.is.null", delete.args[0])
+        self.assertEqual(delete.kwargs["method"], "DELETE")
+
     def test_create_package_requires_insert_and_reload_results(self):
         self.client._request = Mock(return_value=[])
         with self.assertRaisesRegex(SupabaseError, "did not return"):
@@ -354,6 +361,11 @@ class SupabaseUserClientMutationTests(unittest.TestCase):
 
         self.client.restore_package("pkg-1")
         self.assertFalse(self.client._request.call_args.kwargs["body"]["p_archived"])
+
+        self.assertTrue(self.client.delete_archived_package("pkg-1"))
+        delete = self.client._request.call_args
+        self.assertEqual(delete.args[0], "/rest/v1/rpc/delete_owned_archived_package")
+        self.assertEqual(delete.kwargs["body"], {"p_package_id": "pkg-1"})
 
         self.client.update_package("pkg-1", {"notifications_muted": True})
         notifications = self.client._request.call_args

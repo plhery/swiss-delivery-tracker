@@ -161,6 +161,17 @@ class SupabaseClient:
     def restore_package(self, package_id: str) -> None:
         self.update_package(package_id, {"archived_at": None})
 
+    def delete_archived_package(self, package_id: str) -> bool:
+        query = urllib.parse.urlencode(
+            {"id": f"eq.{package_id}", "archived_at": "not.is.null"}
+        )
+        rows = self._request(
+            f"/rest/v1/packages?{query}",
+            method="DELETE",
+            prefer="return=representation",
+        ) or []
+        return len(rows) == 1
+
     def archive_delivered_before(self, cutoff: datetime) -> int:
         if cutoff.tzinfo is None:
             raise ValueError("Archive cutoff must include a timezone")
@@ -387,6 +398,14 @@ class SupabaseUserClient(SupabaseClient):
             raise ValueError("User-scoped package updates must use an approved mutation")
         if changed is not True:
             raise SupabaseError("Package not found", status=404)
+
+    def delete_archived_package(self, package_id: str) -> bool:
+        deleted = self._request(
+            "/rest/v1/rpc/delete_owned_archived_package",
+            method="POST",
+            body={"p_package_id": package_id},
+        )
+        return deleted is True
 
     def get_notification_preferences(self) -> dict[str, Any]:
         query = urllib.parse.urlencode(

@@ -17,6 +17,7 @@ export function ParcelDetail({
   onSetNotificationsMuted,
   onRefresh,
   onRestore,
+  onArchive,
   onDelete,
 }: {
   parcel: ParcelWithEvents;
@@ -28,6 +29,7 @@ export function ParcelDetail({
   ) => Promise<unknown>;
   onRefresh: (parcel: ParcelWithEvents) => Promise<unknown>;
   onRestore: (parcel: ParcelWithEvents) => Promise<unknown>;
+  onArchive: (parcel: ParcelWithEvents) => Promise<unknown>;
   onDelete: (parcel: ParcelWithEvents) => Promise<unknown>;
 }) {
   const { languageTag, t } = useI18n();
@@ -44,8 +46,9 @@ export function ParcelDetail({
   const [checkError, setCheckError] = useState<string | null>(null);
   const [checkNotice, setCheckNotice] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
-  const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
@@ -115,10 +118,22 @@ export function ParcelDetail({
     setArchiving(true);
     setCheckError(null);
     try {
-      await onDelete(parcel);
+      await onArchive(parcel);
     } catch (error) {
       setCheckError(error instanceof Error ? error.message : t('detail.archiveFailed'));
       setArchiving(false);
+    }
+  }
+
+  async function deleteNow() {
+    if (deleting) return;
+    setDeleting(true);
+    setCheckError(null);
+    try {
+      await onDelete(parcel);
+    } catch (error) {
+      setCheckError(error instanceof Error ? error.message : t('detail.deleteFailed'));
+      setDeleting(false);
     }
   }
 
@@ -330,52 +345,64 @@ export function ParcelDetail({
         <Timeline events={parcel.events} syncing={status.syncing} />
       </section>
 
-      <footer className={`detail__footer${parcel.archivedAt ? ' detail__footer--single' : ''}`}>
+      <footer className="detail__footer">
         {checkError && <p className="detail__check-error" role="alert">{checkError}</p>}
         {checkNotice && <p className="detail__check-notice" role="status">{checkNotice}</p>}
-        {parcel.archivedAt ? (
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => void restoreNow()}
-            disabled={restoring}
-          >
-            {restoring ? t('common.restoring') : t('detail.restore')}
-          </button>
-        ) : confirmingArchive ? (
+        {parcel.archivedAt && confirmingDelete ? (
           <div
-            className="detail__archive-confirm"
+            className="detail__danger-confirm"
             role="group"
-            aria-label={t('detail.archiveQuestionAria', {
+            aria-label={t('detail.deleteQuestionAria', {
               name: parcel.label || t('common.parcel').toLocaleLowerCase(languageTag),
             })}
           >
             <p>
-              <strong>{t('detail.archiveQuestion')}</strong>
-              <span>{t('detail.archiveDescription')}</span>
+              <strong>{t('detail.deleteQuestion')}</strong>
+              <span>{t('detail.deleteDescription')}</span>
             </p>
-            <div className="detail__archive-actions">
+            <div className="detail__danger-actions">
               <button
                 type="button"
                 className="button button--secondary"
                 onClick={() => {
-                  setConfirmingArchive(false);
+                  setConfirmingDelete(false);
                   setCheckError(null);
                 }}
-                disabled={archiving}
+                disabled={deleting}
               >
-                {t('detail.keep')}
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 className="button button--danger"
-                onClick={() => void archiveNow()}
-                disabled={archiving}
+                onClick={() => void deleteNow()}
+                disabled={deleting}
               >
-                {archiving ? t('detail.archiving') : t('detail.confirmArchive')}
+                {deleting ? t('detail.deleting') : t('detail.delete')}
               </button>
             </div>
           </div>
+        ) : parcel.archivedAt ? (
+          <>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void restoreNow()}
+              disabled={restoring}
+            >
+              {restoring ? t('common.restoring') : t('detail.restore')}
+            </button>
+            <button
+              type="button"
+              className="button button--danger"
+              onClick={() => {
+                setCheckError(null);
+                setConfirmingDelete(true);
+              }}
+            >
+              {t('detail.delete')}
+            </button>
+          </>
         ) : (
           <>
             <button
@@ -389,12 +416,10 @@ export function ParcelDetail({
             <button
               type="button"
               className="button button--danger"
-              onClick={() => {
-                setCheckError(null);
-                setConfirmingArchive(true);
-              }}
+              onClick={() => void archiveNow()}
+              disabled={archiving}
             >
-              {t('detail.archive')}
+              {archiving ? t('detail.archiving') : t('detail.archive')}
             </button>
           </>
         )}

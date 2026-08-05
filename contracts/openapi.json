@@ -633,6 +633,40 @@
         }
       }
     },
+    "/api/packages/{packageId}/permanent": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PackageId"
+        }
+      ],
+      "delete": {
+        "operationId": "deleteArchivedPackage",
+        "responses": {
+          "200": {
+            "description": "Archived parcel permanently deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
     "/api/packages/{packageId}/notifications": {
       "parameters": [
         {

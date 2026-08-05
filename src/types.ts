@@ -59,8 +59,11 @@ export interface ParcelRepo {
   add(input: NewParcelInput): Promise<ParcelWithEvents>;
   rename(id: string, label: string): Promise<ParcelWithEvents>;
   setNotificationsMuted?(id: string, muted: boolean): Promise<ParcelWithEvents>;
+  /** Soft-delete an active parcel so it can still be restored. */
   remove(id: string): Promise<void>;
   restore?(id: string): Promise<ParcelWithEvents>;
+  /** Permanently delete a parcel that has already been archived. */
+  deleteArchived?(id: string): Promise<void>;
   /** Re-sync tracking; in demo mode this advances the simulation. */
   refresh(): Promise<ParcelWithEvents[]>;
   /** Re-sync one parcel without waiting for every active carrier. */

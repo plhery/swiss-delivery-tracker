@@ -707,17 +707,12 @@ describe('App', () => {
     expect(await screen.findByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
   });
 
-  it('archives a parcel after confirmation and offers undo', async () => {
+  it('archives a parcel immediately and offers undo', async () => {
     const user = userEvent.setup();
     renderApp();
 
     await user.click(await screen.findByText('Coffee beans ☕'));
     await user.click(screen.getByRole('button', { name: /archive parcel/i }));
-    expect(screen.getByRole('heading', { name: 'Coffee beans ☕' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /archive coffee beans/i })).toHaveTextContent(
-      'tracking history will stay available',
-    );
-    await user.click(screen.getByRole('button', { name: /confirm archive/i }));
 
     expect(screen.queryByRole('dialog', { name: 'Coffee beans ☕' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Coffee beans ☕ archived');
@@ -729,18 +724,18 @@ describe('App', () => {
     expect(screen.queryByRole('region', { name: 'Archived' })).not.toBeInTheDocument();
   });
 
-  it('keeps the parcel active when archiving is declined', async () => {
-    const user = userEvent.setup();
+  it('archives a parcel with a long swipe to the left', async () => {
     renderApp();
 
-    await user.click(await screen.findByText('Coffee beans ☕'));
-    await user.click(screen.getByRole('button', { name: /archive parcel/i }));
-    await user.click(screen.getByRole('button', { name: /keep parcel/i }));
+    const label = await screen.findByText('Coffee beans ☕');
+    const card = label.closest('button');
+    expect(card).not.toBeNull();
+    fireEvent.pointerDown(card!, { pointerId: 1, isPrimary: true, clientX: 240, clientY: 100 });
+    fireEvent.pointerMove(card!, { pointerId: 1, isPrimary: true, clientX: 110, clientY: 105 });
+    fireEvent.pointerUp(card!, { pointerId: 1, isPrimary: true, clientX: 110, clientY: 105 });
 
-    // Detail stays open and the parcel is still there.
-    expect(
-      screen.getByRole('dialog', { name: 'Coffee beans ☕' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('Coffee beans ☕ archived');
+    expect(screen.getByRole('region', { name: 'Archived' })).toBeInTheDocument();
   });
 
   it('keeps archive failures inside the parcel dialog', async () => {
@@ -753,7 +748,6 @@ describe('App', () => {
 
     await user.click(await screen.findByText('Coffee beans ☕'));
     await user.click(screen.getByRole('button', { name: /archive parcel/i }));
-    await user.click(screen.getByRole('button', { name: /confirm archive/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Archive service unavailable');
     expect(screen.getByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
@@ -800,6 +794,46 @@ describe('App', () => {
       within(await screen.findByRole('region', { name: 'Past deliveries' }))
         .getByText('Old delivery'),
     ).toBeInTheDocument();
+  });
+
+  it('permanently deletes an archived parcel after confirmation', async () => {
+    const archived: ParcelWithEvents = {
+      id: 'parcel-archived',
+      trackingNumber: '993412345612345678',
+      label: 'Old delivery',
+      carrier: 'swiss-post',
+      createdAt: '2026-05-01T10:00:00Z',
+      archivedAt: '2026-08-01T10:00:00Z',
+      syncStatus: 'ok',
+      events: [],
+    };
+    const deleteArchived = vi.fn().mockResolvedValue(undefined);
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([archived]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      restore: vi.fn(),
+      deleteArchived,
+      refresh: vi.fn().mockResolvedValue([archived]),
+    };
+    const user = userEvent.setup();
+    renderApp(repo);
+
+    const archive = await screen.findByRole('region', { name: 'Archived' });
+    await user.click(within(archive).getByText('Archived'));
+    await user.click(within(archive).getByRole('button', { name: /old delivery/i }));
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    expect(screen.getByRole('group', { name: /permanently delete old delivery/i }))
+      .toHaveTextContent('cannot be undone');
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    expect(deleteArchived).toHaveBeenCalledWith(archived.id);
+    expect(screen.queryByRole('dialog', { name: 'Old delivery' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Archived' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Old delivery permanently deleted');
   });
 
   it('advances the simulation when refreshing in demo mode', async () => {

@@ -276,6 +276,14 @@ export function createDemoRepo(
       return restored;
     },
 
+    async deleteArchived(id: string) {
+      const parcels = getAll();
+      const parcel = parcels.find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Parcel not found');
+      if (!parcel.archivedAt) throw new Error('Archive the parcel before permanently deleting it');
+      save(storage, parcels.filter((candidate) => candidate.id !== id));
+    },
+
     async refresh() {
       const advanced = getAll().map(advance);
       save(storage, advanced);

@@ -755,6 +755,30 @@ class Handler(BaseHTTPRequestHandler):
         if not path.startswith("/api/packages/"):
             self._json(404, {"error": "Not found"})
             return
+        package_permanent = re.fullmatch(r"/api/packages/([^/]+)/permanent", path)
+        if package_permanent:
+            try:
+                package_id = str(UUID(package_permanent.group(1)))
+                client = self._user_database()
+                package = client.get_package(package_id)
+                if not package:
+                    self._json(404, {"error": "Package not found"})
+                    return
+                if package.get("archived_at") is None:
+                    self._json(
+                        HTTPStatus.CONFLICT,
+                        {"error": "Archive the parcel before permanently deleting it"},
+                    )
+                    return
+                if not client.delete_archived_package(package_id):
+                    self._json(404, {"error": "Package not found"})
+                    return
+                self._json(200, {"ok": True})
+            except ValueError:
+                self._json(400, {"error": "Invalid package id"})
+            except SupabaseError as exc:
+                self._database_failure(exc)
+            return
         try:
             package_id = str(UUID(path.removeprefix("/api/packages/")))
             client = self._user_database()

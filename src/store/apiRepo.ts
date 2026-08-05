@@ -199,6 +199,22 @@ export function createApiRepo(
       return toParcel(row);
     },
 
+    async deleteArchived(id: string): Promise<void> {
+      await request<ApiOkResponse>(
+        `/api/packages/${encodeURIComponent(id)}/permanent`,
+        auth,
+        { method: 'DELETE' },
+      );
+      const cached = cachedParcels(storage, cacheKey);
+      if (cached) {
+        saveCachedParcels(
+          storage,
+          cacheKey,
+          cached.filter((parcel) => parcel.id !== id),
+        );
+      }
+    },
+
     async refresh(): Promise<ParcelWithEvents[]> {
       await request<ApiQueueResponse>('/api/sync', auth, { method: 'POST' });
       setHasActiveSync(true);

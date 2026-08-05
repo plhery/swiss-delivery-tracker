@@ -128,6 +128,19 @@ describe('createDemoRepo', () => {
     expect(listed.find((candidate) => candidate.id === parcel.id)?.archivedAt).toBeUndefined();
   });
 
+  it('only permanently deletes parcels after they are archived', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Delete me' });
+
+    await expect(repo.deleteArchived!(parcel.id)).rejects.toThrow(
+      'Archive the parcel before permanently deleting it',
+    );
+    await repo.remove(parcel.id);
+    await repo.deleteArchived!(parcel.id);
+
+    expect((await repo.list()).find((candidate) => candidate.id === parcel.id)).toBeUndefined();
+  });
+
   it('persists per-parcel notification mutes', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = (await repo.list())[0];

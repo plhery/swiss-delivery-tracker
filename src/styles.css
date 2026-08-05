@@ -577,6 +577,36 @@ button:disabled {
   gap: 11px;
 }
 
+.parcel-card-swipe {
+  position: relative;
+  border-radius: 18px;
+}
+
+.parcel-card-swipe--enabled {
+  overflow: hidden;
+  background: #a43d28;
+  box-shadow: var(--shadow);
+}
+
+.parcel-card-swipe__archive {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  width: 88px;
+  padding: 10px;
+  place-items: center;
+  border: 0;
+  background: #a43d28;
+  color: white;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .parcel-card {
   position: relative;
   display: grid;
@@ -594,6 +624,20 @@ button:disabled {
   text-align: left;
   cursor: pointer;
   transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.parcel-card--swipeable {
+  z-index: 1;
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+.parcel-card-swipe--enabled .parcel-card {
+  box-shadow: none;
+}
+
+.parcel-card--dragging {
+  transition: none;
 }
 
 .parcel-card::before {
@@ -1633,7 +1677,7 @@ button:disabled {
   font-weight: 700;
 }
 
-.detail__archive-confirm {
+.detail__danger-confirm {
   display: grid;
   grid-column: 1 / -1;
   gap: 10px;
@@ -1643,26 +1687,22 @@ button:disabled {
   background: #fff7f1;
 }
 
-.detail__archive-confirm p {
+.detail__danger-confirm p {
   display: grid;
   gap: 2px;
   margin: 0;
   font-size: 13px;
 }
 
-.detail__archive-confirm span {
+.detail__danger-confirm span {
   color: var(--ink-soft);
   font-size: 12px;
 }
 
-.detail__archive-actions {
+.detail__danger-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 9px;
-}
-
-.detail__footer--single {
-  grid-template-columns: 1fr;
 }
 
 .undo-toast {

@@ -96,6 +96,10 @@ begin
     'authenticated',
     'public.set_owned_package_notifications_muted(uuid,boolean)',
     'EXECUTE'
+  ) or not has_function_privilege(
+    'authenticated',
+    'public.delete_owned_archived_package(uuid)',
+    'EXECUTE'
   ) then
     raise exception 'authenticated cannot execute notification preference RPCs';
   end if;
@@ -346,6 +350,27 @@ begin
 end;
 $$;
 
+do $$
+declare
+  deletable_id uuid;
+begin
+  select id into deletable_id
+  from public.create_owned_package('DELETEARCHIVE1', 'Delete test', 'unknown', null, null);
+
+  if public.delete_owned_archived_package(deletable_id) then
+    raise exception 'an active package was permanently deleted';
+  end if;
+  perform public.set_owned_package_archived(deletable_id, true);
+  if not public.delete_owned_archived_package(deletable_id) then
+    raise exception 'an owner could not permanently delete an archived package';
+  end if;
+  if exists (select 1 from public.packages where id = deletable_id)
+    or exists (select 1 from public.tracking_events where package_id = deletable_id) then
+    raise exception 'permanent deletion did not cascade through package history';
+  end if;
+end;
+$$;
+
 reset role;
 
 -- The second user sees their copy of the tracking number and nothing from the
@@ -400,6 +425,11 @@ begin
     true
   ) then
     raise exception 'second user muted a first-user package through the RPC';
+  end if;
+  if public.delete_owned_archived_package(
+    '40000000-0000-0000-0000-000000000004'
+  ) then
+    raise exception 'second user deleted a first-user archived package through the RPC';
   end if;
 end;
 $$;

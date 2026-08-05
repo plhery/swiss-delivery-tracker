@@ -55,6 +55,7 @@ class FakeService:
         self.client.update_package.side_effect = self._update_package
         self.client.archive_package.side_effect = self._archive_package
         self.client.restore_package.side_effect = self._restore_package
+        self.client.delete_archived_package.return_value = True
         self.client.archive_delivered_before.return_value = 0
         self.client.upsert_push_subscription.return_value = {
             "id": "sub-1",
@@ -453,6 +454,25 @@ class AppHttpTests(unittest.TestCase):
 
         self.assertEqual(status, 409)
         self.assertIn("parcel limit", json.loads(body)["error"])
+
+    def test_only_archived_packages_can_be_permanently_deleted(self):
+        status, _, body = self.request(
+            "DELETE", f"/api/packages/{PACKAGE['id']}/permanent"
+        )
+        self.assertEqual(status, 409)
+        self.assertIn("Archive", json.loads(body)["error"])
+        app.SERVICE.client.delete_archived_package.assert_not_called()
+
+        app.SERVICE.client.get_package.return_value = {
+            **PACKAGE,
+            "archived_at": "2026-08-06T10:00:00Z",
+        }
+        status, _, body = self.request(
+            "DELETE", f"/api/packages/{PACKAGE['id']}/permanent"
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["ok"])
+        app.SERVICE.client.delete_archived_package.assert_called_once_with(PACKAGE["id"])
 
     def test_account_export_and_confirmed_permanent_deletion(self):
         status, headers, body = self.request("GET", "/api/account/export")

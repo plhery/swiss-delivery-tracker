@@ -67,6 +67,7 @@ class ApiContractTests(unittest.TestCase):
                 ("PATCH", "/api/packages/{packageId}"),
                 ("DELETE", "/api/packages/{packageId}"),
                 ("POST", "/api/packages/{packageId}/restore"),
+                ("DELETE", "/api/packages/{packageId}/permanent"),
                 ("PATCH", "/api/packages/{packageId}/notifications"),
                 ("POST", "/api/packages/{packageId}/sync"),
                 ("POST", "/api/sync"),

@@ -235,6 +235,28 @@ describe('createApiRepo', () => {
     );
   });
 
+  it('permanently deletes an archived parcel through its distinct endpoint', async () => {
+    const fetch = vi.fn().mockResolvedValue(response({ ok: true }));
+    vi.stubGlobal('fetch', fetch);
+    window.localStorage.setItem(API_CACHE_KEY, JSON.stringify([{
+      id: packageRow.id,
+      trackingNumber: packageRow.tracking_number,
+      label: packageRow.label,
+      carrier: packageRow.carrier,
+      createdAt: packageRow.created_at,
+      syncStatus: packageRow.sync_status,
+      events: [],
+    }]));
+
+    await createApiRepo().deleteArchived!(packageRow.id);
+
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/packages/${packageRow.id}/permanent`,
+      expect.objectContaining({ method: 'DELETE', cache: 'no-store', redirect: 'manual' }),
+    );
+    expect(JSON.parse(window.localStorage.getItem(API_CACHE_KEY) ?? 'null')).toEqual([]);
+  });
+
   it('mutes parcel notifications through the owner-scoped API', async () => {
     const mutedRow = { ...packageRow, notifications_muted: true };
     const fetch = vi.fn().mockResolvedValue(response(mutedRow));

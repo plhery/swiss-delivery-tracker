@@ -62,6 +62,7 @@ export default function App({
     setParcelNotificationsMuted,
     removeParcel,
     restoreParcel,
+    deleteArchivedParcel,
     refresh,
     refreshParcel,
     retryLoad,
@@ -202,10 +203,19 @@ export default function App({
 
   async function handleArchive(parcel: ParcelWithEvents) {
     await removeParcel(parcel.id);
-    closeParcelDetail();
+    if (openParcelId === parcel.id) closeParcelDetail();
     setUndoError(null);
     setUndoing(false);
     setUndoParcel(parcel);
+  }
+
+  async function handleDelete(parcel: ParcelWithEvents) {
+    await deleteArchivedParcel(parcel.id);
+    if (openParcelId === parcel.id) closeParcelDetail();
+    setUndoParcel((current) => current?.id === parcel.id ? null : current);
+    setRefreshNotice(t('app.deletedToast', {
+      name: parcel.label || t('common.parcel'),
+    }));
   }
 
   async function handleRestore(parcel: ParcelWithEvents) {
@@ -424,6 +434,7 @@ export default function App({
                   parcel={parcel}
                   notice={t(ATTENTION_LABELS[reason])}
                   onOpen={(p) => openParcelDetail(p.id)}
+                  onArchive={handleArchive}
                 />
               ))}
             </div>
@@ -446,6 +457,7 @@ export default function App({
                   parcel={parcel}
                   notice={t('parcel.expectedToday')}
                   onOpen={(p) => openParcelDetail(p.id)}
+                  onArchive={handleArchive}
                 />
               ))}
             </div>
@@ -467,6 +479,7 @@ export default function App({
                   key={parcel.id}
                   parcel={parcel}
                   onOpen={(p) => openParcelDetail(p.id)}
+                  onArchive={handleArchive}
                 />
               ))}
             </div>
@@ -488,6 +501,7 @@ export default function App({
                   key={parcel.id}
                   parcel={parcel}
                   onOpen={(p) => openParcelDetail(p.id)}
+                  onArchive={handleArchive}
                 />
               ))}
             </div>
@@ -509,6 +523,7 @@ export default function App({
                   key={parcel.id}
                   parcel={parcel}
                   onOpen={(p) => openParcelDetail(p.id)}
+                  onArchive={handleArchive}
                 />
               ))}
             </div>
@@ -568,7 +583,8 @@ export default function App({
             setParcelNotificationsMuted(p.id, muted)}
           onRefresh={(p) => refreshParcel(p.id)}
           onRestore={(p) => handleRestore(p)}
-          onDelete={(p) => handleArchive(p)}
+          onArchive={(p) => handleArchive(p)}
+          onDelete={(p) => handleDelete(p)}
         />
       )}
 
