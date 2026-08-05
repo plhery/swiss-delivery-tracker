@@ -1295,6 +1295,34 @@ button:disabled {
   font-weight: 700;
 }
 
+.detail__archive-confirm {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2bdaa;
+  border-radius: 12px;
+  background: #fff7f1;
+}
+
+.detail__archive-confirm p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.detail__archive-confirm span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.detail__archive-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
 .detail__footer--single {
   grid-template-columns: 1fr;
 }

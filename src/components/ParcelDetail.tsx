@@ -209,25 +209,6 @@ export function ParcelDetail({
               </button>
             </div>
           </form>
-        ) : confirmingArchive ? (
-          <>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => setConfirmingArchive(false)}
-              disabled={archiving}
-            >
-              Keep parcel
-            </button>
-            <button
-              type="button"
-              className="button button--danger"
-              onClick={() => void archiveNow()}
-              disabled={archiving}
-            >
-              {archiving ? 'Archiving…' : 'Confirm archive'}
-            </button>
-          </>
         ) : (
           <div className="detail__title-row">
             <h1 className="detail__title">{parcel.label || 'Parcel'}</h1>
@@ -312,6 +293,38 @@ export function ParcelDetail({
           >
             {restoring ? 'Restoring…' : 'Restore parcel'}
           </button>
+        ) : confirmingArchive ? (
+          <div
+            className="detail__archive-confirm"
+            role="group"
+            aria-label={`Archive ${parcel.label || 'parcel'}?`}
+          >
+            <p>
+              <strong>Archive this parcel?</strong>
+              <span>Its tracking history will stay available.</span>
+            </p>
+            <div className="detail__archive-actions">
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => {
+                  setConfirmingArchive(false);
+                  setCheckError(null);
+                }}
+                disabled={archiving}
+              >
+                Keep parcel
+              </button>
+              <button
+                type="button"
+                className="button button--danger"
+                onClick={() => void archiveNow()}
+                disabled={archiving}
+              >
+                {archiving ? 'Archiving…' : 'Confirm archive'}
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <button
@@ -325,7 +338,10 @@ export function ParcelDetail({
             <button
               type="button"
               className="button button--danger"
-              onClick={() => setConfirmingArchive(true)}
+              onClick={() => {
+                setCheckError(null);
+                setConfirmingArchive(true);
+              }}
             >
               Archive parcel
             </button>

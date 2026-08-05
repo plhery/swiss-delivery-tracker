@@ -502,6 +502,10 @@ describe('App', () => {
 
     await user.click(await screen.findByText('Coffee beans ☕'));
     await user.click(screen.getByRole('button', { name: /archive parcel/i }));
+    expect(screen.getByRole('heading', { name: 'Coffee beans ☕' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /archive coffee beans/i })).toHaveTextContent(
+      'tracking history will stay available',
+    );
     await user.click(screen.getByRole('button', { name: /confirm archive/i }));
 
     expect(screen.queryByRole('dialog', { name: 'Coffee beans ☕' })).not.toBeInTheDocument();
