@@ -91,6 +91,23 @@ for (const [carrierId, definition] of Object.entries(carrierCapabilities)) {
   ) {
     throw new Error(`x-carriers.${carrierId} has an invalid tracking adapter`);
   }
+  if (tracking.mode === 'automatic') {
+    let canaryUrl;
+    try {
+      canaryUrl = new URL(definition.canaryUrl);
+    } catch {
+      throw new Error(`x-carriers.${carrierId} must define a valid canaryUrl`);
+    }
+    if (
+      canaryUrl.protocol !== 'https:'
+      || canaryUrl.username
+      || canaryUrl.password
+      || canaryUrl.search
+      || canaryUrl.hash
+    ) {
+      throw new Error(`x-carriers.${carrierId} must define a public HTTPS canaryUrl`);
+    }
+  }
   const fields = new Set();
   for (const requirement of tracking.requirements ?? []) {
     const validators = carrierInputValidators[requirement.field];

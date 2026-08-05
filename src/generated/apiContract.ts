@@ -11,6 +11,7 @@ export const CARRIER_CAPABILITIES = {
       "adapter": "upstream",
       "upstreamName": "Swiss Post"
     },
+    "canaryUrl": "https://service.post.ch/",
     "trackingUrlTemplate": "https://service.post.ch/ekp-web/ui/entry/search/{trackingNumber}",
     "linkRules": [
       {
@@ -42,6 +43,7 @@ export const CARRIER_CAPABILITIES = {
       "adapter": "upstream",
       "upstreamName": "Quickpac"
     },
+    "canaryUrl": "https://quickpac.ch/",
     "trackingUrlTemplate": "https://quickpac.ch/en/tracking?parcel={trackingNumber}",
     "linkRules": [
       {
@@ -81,6 +83,7 @@ export const CARRIER_CAPABILITIES = {
         }
       ]
     },
+    "canaryUrl": "https://tracking.app.planzer.ch/",
     "trackingUrlTemplate": "https://tracking.app.planzer.ch/delivery/info?deliveryNumber={trackingNumber}",
     "linkRules": [
       {
@@ -120,6 +123,7 @@ export const CARRIER_CAPABILITIES = {
       "adapter": "upstream",
       "upstreamName": "AliExpress"
     },
+    "canaryUrl": "https://global.cainiao.com/",
     "trackingUrlTemplate": "https://global.cainiao.com/detail.htm?mailNoList={trackingNumber}",
     "linkRules": [
       {
@@ -143,6 +147,7 @@ export const CARRIER_CAPABILITIES = {
       "adapter": "upstream",
       "upstreamName": "SunYou"
     },
+    "canaryUrl": "https://sypost.net/",
     "trackingUrlTemplate": "https://sypost.net/search?trackNumber={trackingNumber}",
     "linkRules": [
       {
@@ -170,6 +175,7 @@ export const CARRIER_CAPABILITIES = {
       "mode": "automatic",
       "adapter": "hermes"
     },
+    "canaryUrl": "https://myhes.de/",
     "linkRules": [],
     "detectionRules": []
   },
@@ -183,6 +189,7 @@ export const CARRIER_CAPABILITIES = {
       "adapter": "upstream",
       "upstreamName": "Spring GDS"
     },
+    "canaryUrl": "https://postnl.post/",
     "trackingUrlTemplate": "https://postnl.post/details/{trackingNumber}",
     "linkRules": [
       {
@@ -204,6 +211,7 @@ export const CARRIER_CAPABILITIES = {
       "adapter": "upstream",
       "upstreamName": "PostLogistics"
     },
+    "canaryUrl": "https://service.post.ch/",
     "linkRules": [],
     "detectionRules": []
   },
@@ -226,6 +234,7 @@ export const CARRIER_CAPABILITIES = {
         }
       ]
     },
+    "canaryUrl": "https://customeriberia.dachser.com/customerarea/",
     "linkRules": [
       {
         "domains": [
@@ -281,6 +290,7 @@ export const CARRIER_CAPABILITIES = {
       "mode": "automatic",
       "adapter": "ups"
     },
+    "canaryUrl": "https://www.ups.com/assets/resources/webcontent/en_US/terms_service.pdf",
     "trackingUrlTemplate": "https://www.ups.com/track?tracknum={trackingNumber}",
     "linkRules": [
       {
@@ -355,6 +365,7 @@ export const CARRIER_CAPABILITIES = {
         }
       ]
     },
+    "canaryUrl": "https://www.dpdgroup.com/ch/",
     "trackingUrlTemplate": "https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming?parcelNumber={trackingNumber}",
     "linkRules": [
       {

@@ -25,6 +25,7 @@
     "test": "vitest run",
     "test:contract": "node scripts/generate-api-contract.mjs --check",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "test:pwa": "node scripts/test-pwa-build.mjs",
     "test:watch": "vitest",
     "icons": "node scripts/generate-icons.mjs",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@resvg/resvg-js": "^2.6.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.0",

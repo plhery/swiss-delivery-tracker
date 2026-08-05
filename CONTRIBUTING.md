@@ -23,6 +23,7 @@ Run:
 npm run lint:frontend
 npm run test:contract
 npm run test:coverage
+npm run test:e2e
 npm run build
 npm run test:pwa
 python -m ruff check server
@@ -30,6 +31,10 @@ python -m mypy server
 python -m coverage run -m unittest discover -s server/tests -v
 python -m coverage report
 ```
+
+Install Chromium once before the first browser run with
+`npx playwright install chromium`. The journeys run against the fictional demo
+data at desktop and mobile viewport sizes.
 
 Database changes must be append-only migrations with corresponding assertions
 in `supabase/tests/assertions.sql`. Keep commits small enough to review on their
@@ -42,6 +47,9 @@ After changing Python requirements, regenerate both hashed lock files with
 Carrier sites and undocumented APIs can change without notice. New adapters
 must use bounded timeouts and response sizes, avoid personal-data logging, and
 degrade to a carrier link when reliable automatic tracking is unavailable.
+Every automatic carrier also needs a public, credential-free `canaryUrl` in the
+carrier contract. The daily canary reports only carrier IDs, hostnames and HTTP
+statuses; it never sends or logs tracking numbers.
 
 By contributing, you agree that your contribution is licensed under the
 repository's Apache License 2.0.
