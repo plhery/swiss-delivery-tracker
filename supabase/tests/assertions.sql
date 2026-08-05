@@ -316,12 +316,15 @@ begin
   if not public.set_owned_package_notifications_muted(
     (select id from public.packages where tracking_number = 'CROSSTENANT9'),
     true
-  ) or not exists (
+  ) then
+    raise exception 'owner could not mute package notifications';
+  end if;
+  if not exists (
     select 1 from public.packages
     where tracking_number = 'CROSSTENANT9'
       and notifications_muted
   ) then
-    raise exception 'owner could not mute package notifications';
+    raise exception 'package notification mute was not stored';
   end if;
 
   begin
