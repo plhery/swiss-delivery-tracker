@@ -215,6 +215,36 @@ begin
 end;
 $$;
 
+-- Archive support retains the parcel and every tracking event.
+set role service_role;
+update public.packages
+set archived_at = now()
+where id = '50000000-0000-0000-0000-000000000005';
+
+do $$
+begin
+  if not exists (
+    select 1 from public.packages
+    where id = '50000000-0000-0000-0000-000000000005'
+      and archived_at is not null
+  ) then
+    raise exception 'soft archive removed or failed to mark the parcel';
+  end if;
+  if not exists (
+    select 1 from public.tracking_events
+    where package_id = '50000000-0000-0000-0000-000000000005'
+      and provider_event_id = 'provider:event-1'
+  ) then
+    raise exception 'soft archive removed tracking history';
+  end if;
+end;
+$$;
+
+update public.packages
+set archived_at = null
+where id = '50000000-0000-0000-0000-000000000005';
+reset role;
+
 -- Protect/recovery infrastructure is gone from the final schema.
 do $$
 begin

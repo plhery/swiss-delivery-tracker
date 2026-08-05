@@ -46,6 +46,7 @@ export interface Parcel {
   syncStatus: SyncStatus;
   syncError?: string;
   trackingUrl?: string;
+  archivedAt?: string;
 }
 
 export interface TrackingEvent {
@@ -75,6 +76,7 @@ export interface ParcelRepo {
   add(input: NewParcelInput): Promise<ParcelWithEvents>;
   rename(id: string, label: string): Promise<ParcelWithEvents>;
   remove(id: string): Promise<void>;
+  restore?(id: string): Promise<ParcelWithEvents>;
   /** Re-sync tracking; in demo mode this advances the simulation. */
   refresh(): Promise<ParcelWithEvents[]>;
   /** Re-sync one parcel without waiting for every active carrier. */

@@ -25,6 +25,7 @@ PACKAGE = {
     "sync_status": "pending",
     "sync_error": None,
     "tracking_url": None,
+    "archived_at": None,
     "tracking_events": [],
 }
 
@@ -43,7 +44,9 @@ class FakeService:
         self.client.create_package.side_effect = self._create_package
         self.client.get_package.return_value = PACKAGE
         self.client.update_package.side_effect = self._update_package
-        self.client.delete_package.side_effect = self._delete_package
+        self.client.archive_package.side_effect = self._archive_package
+        self.client.restore_package.side_effect = self._restore_package
+        self.client.archive_delivered_before.return_value = 0
         self.client.upsert_push_subscription.return_value = {
             "id": "sub-1",
             "endpoint": "https://push.example.test/token",
@@ -58,7 +61,7 @@ class FakeService:
         if self.error:
             raise self.error
 
-    def _list_packages(self):
+    def _list_packages(self, include_archived=False):
         self._maybe_raise()
         return [PACKAGE]
 
@@ -72,7 +75,10 @@ class FakeService:
             "tracking_url": tracking_url,
         }
 
-    def _delete_package(self, package_id):
+    def _archive_package(self, package_id):
+        self._maybe_raise()
+
+    def _restore_package(self, package_id):
         self._maybe_raise()
 
     def _update_package(self, package_id, values):
@@ -183,10 +189,15 @@ class AppHttpTests(unittest.TestCase):
                 body, b"<html>current shell</html>" if method == "GET" else b""
             )
 
-    def test_shared_package_list_create_rename_and_delete(self):
+    def test_shared_package_list_create_rename_archive_and_restore(self):
         status, _, body = self.request("GET", "/api/packages")
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["packages"][0]["id"], PACKAGE["id"])
+        app.SERVICE.client.list_packages.assert_called_with(include_archived=False)
+
+        status, _, body = self.request("GET", "/api/packages?includeArchived=true")
+        self.assertEqual(status, 200)
+        app.SERVICE.client.list_packages.assert_called_with(include_archived=True)
 
         status, _, body = self.request(
             "POST",
@@ -255,7 +266,11 @@ class AppHttpTests(unittest.TestCase):
         status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)["ok"])
-        app.SERVICE.client.delete_package.assert_called_once_with(PACKAGE["id"])
+        app.SERVICE.client.archive_package.assert_called_once_with(PACKAGE["id"])
+
+        status, _, body = self.request("POST", f"/api/packages/{PACKAGE['id']}/restore")
+        self.assertEqual(status, 200)
+        app.SERVICE.client.restore_package.assert_called_once_with(PACKAGE["id"])
 
     def test_push_configuration_subscription_and_unsubscribe(self):
         status, _, body = self.request("GET", "/api/push/config")
@@ -436,10 +451,10 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("Invalid", json.loads(body)["error"])
 
-        app.SERVICE = FakeService(error=SupabaseError("delete failed"))
+        app.SERVICE = FakeService(error=SupabaseError("archive failed"))
         status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
         self.assertEqual(status, 502)
-        self.assertIn("delete failed", json.loads(body)["error"])
+        self.assertIn("archive failed", json.loads(body)["error"])
 
         app.SERVICE = FakeService(error=SupabaseError("rename failed"))
         status, _, body = self.request(
@@ -551,6 +566,7 @@ class AppLifecycleTests(unittest.TestCase):
                 app.scheduler()
         self.assertEqual(app.STATE["last_summary"]["waiting"], 2)
         self.assertIsNone(app.STATE["last_error"])
+        service.client.archive_delivered_before.assert_called_once()
 
         app.STATE.clear()
         app.SERVICE = FakeService(error=RuntimeError("database unavailable"))

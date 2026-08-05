@@ -102,12 +102,16 @@ describe('createDemoRepo', () => {
     expect(parcel.trackingUrl).toBe(trackingUrl);
   });
 
-  it('removes a parcel', async () => {
+  it('archives and restores a parcel without deleting it', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Bye' });
     await repo.remove(parcel.id);
-    const listed = await repo.list();
-    expect(listed.some((p) => p.id === parcel.id)).toBe(false);
+    let listed = await repo.list();
+    expect(listed.find((candidate) => candidate.id === parcel.id)?.archivedAt).toBeTruthy();
+
+    await repo.restore!(parcel.id);
+    listed = await repo.list();
+    expect(listed.find((candidate) => candidate.id === parcel.id)?.archivedAt).toBeUndefined();
   });
 
   it('renames and persists a parcel', async () => {

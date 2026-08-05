@@ -428,29 +428,79 @@ describe('App', () => {
     expect(await screen.findByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
   });
 
-  it('removes a parcel after confirmation', async () => {
+  it('archives a parcel after confirmation and offers undo', async () => {
     const user = userEvent.setup();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderApp();
 
     await user.click(await screen.findByText('Coffee beans ☕'));
-    await user.click(screen.getByRole('button', { name: /remove parcel/i }));
+    await user.click(screen.getByRole('button', { name: /archive parcel/i }));
 
     expect(window.confirm).toHaveBeenCalled();
-    expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Coffee beans ☕' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Coffee beans ☕ archived');
+    expect(screen.getByRole('region', { name: 'Archived' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(await screen.findByText('Coffee beans ☕')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Archived' })).not.toBeInTheDocument();
   });
 
-  it('keeps the parcel when confirmation is declined', async () => {
+  it('keeps the parcel active when archiving is declined', async () => {
     const user = userEvent.setup();
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderApp();
 
     await user.click(await screen.findByText('Coffee beans ☕'));
-    await user.click(screen.getByRole('button', { name: /remove parcel/i }));
+    await user.click(screen.getByRole('button', { name: /archive parcel/i }));
 
     // Detail stays open and the parcel is still there.
     expect(
       screen.getByRole('dialog', { name: 'Coffee beans ☕' }),
+    ).toBeInTheDocument();
+  });
+
+  it('restores a parcel from the collapsed archive', async () => {
+    const archived: ParcelWithEvents = {
+      id: 'parcel-archived',
+      trackingNumber: '993412345612345678',
+      label: 'Old delivery',
+      carrier: 'swiss-post',
+      createdAt: '2026-05-01T10:00:00Z',
+      archivedAt: '2026-08-01T10:00:00Z',
+      syncStatus: 'ok',
+      events: [{
+        id: 'delivered-event',
+        parcelId: 'parcel-archived',
+        stage: 'delivered',
+        description: 'Delivered',
+        occurredAt: '2026-05-04T10:00:00Z',
+      }],
+    };
+    const restored = { ...archived, archivedAt: undefined };
+    const restore = vi.fn().mockResolvedValue(restored);
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([archived]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      restore,
+      refresh: vi.fn().mockResolvedValue([archived]),
+    };
+    const user = userEvent.setup();
+    renderApp(repo);
+
+    const archive = await screen.findByRole('region', { name: 'Archived' });
+    await user.click(within(archive).getByText('Archived'));
+    await user.click(within(archive).getByRole('button', { name: /old delivery/i }));
+    await user.click(screen.getByRole('button', { name: /restore parcel/i }));
+
+    expect(restore).toHaveBeenCalledWith(archived.id);
+    expect(
+      within(await screen.findByRole('region', { name: 'Past deliveries' }))
+        .getByText('Old delivery'),
     ).toBeInTheDocument();
   });
 
@@ -556,14 +606,16 @@ describe('App', () => {
   });
 
   it('shows a friendly empty state when there are no parcels', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const user = userEvent.setup();
-    renderApp();
-
-    for (const label of ['Coffee beans ☕', 'New sneakers 👟', 'Birthday gift 🎁']) {
-      await user.click(await screen.findByText(label));
-      await user.click(screen.getByRole('button', { name: /remove parcel/i }));
-    }
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      restore: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([]),
+    };
+    renderApp(repo);
 
     expect(await screen.findByText(/no parcels yet/i)).toBeInTheDocument();
     expect(screen.getByText(/nothing on the way right now/i)).toBeInTheDocument();

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -31,6 +31,7 @@ DIST = Path(os.environ.get("STATIC_DIR", "/app/dist")).resolve()
 PORT = int(os.environ.get("PORT", "3000"))
 SYNC_TIMEZONE = ZoneInfo("Europe/Zurich")
 MAX_JSON_BODY = 16_384
+AUTO_ARCHIVE_DAYS = 60
 VALID_CARRIERS = {
     "swiss-post", "quickpac", "planzer", "aliexpress", "sunyou", "hermes",
     "spring-gds", "postlogistics", "dachser", "dhl", "ups", "fedex", "dpd",
@@ -62,6 +63,7 @@ STATE: dict[str, object] = {
     "next_scheduled_sync": None,
     "last_summary": None,
     "last_error": None,
+    "last_auto_archived": 0,
 }
 
 
@@ -167,8 +169,14 @@ def scheduler() -> None:
     while SERVICE:
         try:
             summary = SERVICE.sync()
+            archived = SERVICE.client.archive_delivered_before(
+                datetime.now(timezone.utc) - timedelta(days=AUTO_ARCHIVE_DAYS)
+            )
             STATE.update(
-                last_scheduled_sync=time.time(), last_summary=summary.to_dict(), last_error=None
+                last_scheduled_sync=time.time(),
+                last_summary=summary.to_dict(),
+                last_error=None,
+                last_auto_archived=archived,
             )
         except Exception as exc:
             STATE.update(last_scheduled_sync=time.time(), last_error=str(exc)[:500])
@@ -203,7 +211,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
 
     def do_GET(self) -> None:  # noqa: N802
-        path = urlparse(self.path).path
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
         if path == "/reauth":
             # Cloudflare returns here after login. Serving a fresh document at
             # this distinct URL prevents Safari from restoring the page whose
@@ -223,7 +232,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(503, {"error": "The delivery database is not configured"})
                 return
             try:
-                self._json(200, {"packages": SERVICE.client.list_packages()})
+                include_archived = parse_qs(parsed_url.query).get("includeArchived") == ["true"]
+                self._json(
+                    200,
+                    {
+                        "packages": SERVICE.client.list_packages(
+                            include_archived=include_archived
+                        )
+                    },
+                )
             except SupabaseError as exc:
                 self._json(502, {"error": str(exc)})
             return
@@ -286,6 +303,23 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"error": "Invalid package id"})
             except SyncQueueFull as exc:
                 self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": str(exc)})
+            except SupabaseError as exc:
+                self._json(502, {"error": str(exc)})
+            return
+
+        package_restore = re.fullmatch(r"/api/packages/([^/]+)/restore", path)
+        if package_restore:
+            try:
+                package_id = str(UUID(package_restore.group(1)))
+                package = SERVICE.client.get_package(package_id)
+                if not package:
+                    self._json(404, {"error": "Package not found"})
+                    return
+                SERVICE.client.restore_package(package_id)
+                restored = SERVICE.client.get_package(package_id)
+                self._json(200, restored or {**package, "archived_at": None})
+            except ValueError:
+                self._json(400, {"error": "Invalid package id"})
             except SupabaseError as exc:
                 self._json(502, {"error": str(exc)})
             return
@@ -395,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             package_id = str(UUID(path.removeprefix("/api/packages/")))
-            SERVICE.client.delete_package(package_id)
+            SERVICE.client.archive_package(package_id)
             self._json(200, {"ok": True})
         except ValueError:
             self._json(400, {"error": "Invalid package id"})

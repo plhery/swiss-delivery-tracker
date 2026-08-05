@@ -30,7 +30,8 @@ code. Every device admitted by Cloudflare Access sees the same packages.
   PostLogistics, DPD and UPS, with carrier-link or manual fallbacks for the
   remaining choices.
 - **Durable history** — provider events are deduplicated and carrier failures
-  remain visible without deleting the parcel.
+  remain visible without deleting the parcel. Removed parcels are archived and
+  can be restored; delivered parcels are archived automatically after 60 days.
 - **Installable PWA** — standalone home-screen display, safe-area layout and an
   automatically updating offline shell. An open app reloads as soon as an
   installed update takes control.
@@ -88,6 +89,7 @@ The backend endpoints are:
 - `GET /api/packages`
 - `POST /api/packages`
 - `DELETE /api/packages/:id`
+- `POST /api/packages/:id/restore`
 - `POST /api/sync`
 - `POST /api/packages/:id/sync`
 - `GET /api/push/config`
@@ -97,6 +99,9 @@ The backend endpoints are:
 
 They intentionally rely on the deployment's Cloudflare Access boundary. Do not
 expose the application origin directly to the public internet.
+
+`DELETE /api/packages/:id` is a compatibility-shaped soft delete: it sets
+`archived_at` and retains the parcel plus its complete event history.
 
 On iPhone, install Parcel Post with Safari's **Add to Home Screen**, open the
 installed app and enable notifications from the bell. Each device opts in

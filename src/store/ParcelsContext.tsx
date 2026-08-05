@@ -21,6 +21,7 @@ interface ParcelsState {
   addParcel: (input: NewParcelInput) => Promise<ParcelWithEvents>;
   renameParcel: (id: string, label: string) => Promise<ParcelWithEvents>;
   removeParcel: (id: string) => Promise<void>;
+  restoreParcel: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
   refreshParcel: (id: string) => Promise<void>;
 }
@@ -122,6 +123,23 @@ export function ParcelsProvider({
     [repo, rememberError],
   );
 
+  const restoreParcel = useCallback(async (id: string) => {
+    try {
+      if (!repo.restore) throw new Error('Restoring archived parcels is unavailable');
+      const restored = await repo.restore(id);
+      if (mounted.current) {
+        setParcels((current) =>
+          current.map((parcel) => parcel.id === restored.id ? restored : parcel),
+        );
+        setError(null);
+        setAuthenticationRequired(false);
+      }
+    } catch (error) {
+      rememberError(error);
+      throw error;
+    }
+  }, [repo, rememberError]);
+
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -168,6 +186,7 @@ export function ParcelsProvider({
       addParcel,
       renameParcel,
       removeParcel,
+      restoreParcel,
       refresh,
       refreshParcel,
     }),
@@ -181,6 +200,7 @@ export function ParcelsProvider({
       addParcel,
       renameParcel,
       removeParcel,
+      restoreParcel,
       refresh,
       refreshParcel,
     ],

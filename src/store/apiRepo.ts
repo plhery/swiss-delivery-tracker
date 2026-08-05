@@ -24,6 +24,7 @@ interface PackageRow {
   sync_status: string | null;
   sync_error: string | null;
   tracking_url: string | null;
+  archived_at: string | null;
   tracking_events: EventRow[] | null;
 }
 
@@ -60,6 +61,7 @@ function toParcel(row: PackageRow): ParcelWithEvents {
     syncStatus: (row.sync_status ?? 'pending') as ParcelWithEvents['syncStatus'],
     syncError: row.sync_error ?? undefined,
     trackingUrl: row.tracking_url ?? undefined,
+    archivedAt: row.archived_at ?? undefined,
     events: (row.tracking_events ?? []).map(toEvent),
   };
 }
@@ -84,7 +86,9 @@ export function createApiRepo(
   let hasActiveSync = false;
 
   async function list(): Promise<ParcelWithEvents[]> {
-    const payload = await request<{ packages: PackageRow[] }>('/api/packages');
+    const payload = await request<{ packages: PackageRow[] }>(
+      '/api/packages?includeArchived=true',
+    );
     const parcels = payload.packages.map(toParcel);
     hasActiveSync = parcels.some(
       (parcel) => parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing',
@@ -128,6 +132,14 @@ export function createApiRepo(
       await request<{ ok: boolean }>(`/api/packages/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
+    },
+
+    async restore(id: string): Promise<ParcelWithEvents> {
+      const row = await request<PackageRow>(
+        `/api/packages/${encodeURIComponent(id)}/restore`,
+        { method: 'POST' },
+      );
+      return toParcel(row);
     },
 
     async refresh(): Promise<ParcelWithEvents[]> {

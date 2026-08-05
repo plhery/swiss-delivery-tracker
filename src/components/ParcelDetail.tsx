@@ -15,12 +15,14 @@ export function ParcelDetail({
   onBack,
   onRename,
   onRefresh,
+  onRestore,
   onDelete,
 }: {
   parcel: ParcelWithEvents;
   onBack: () => void;
   onRename: (parcel: ParcelWithEvents, label: string) => Promise<unknown>;
   onRefresh: (parcel: ParcelWithEvents) => Promise<unknown>;
+  onRestore: (parcel: ParcelWithEvents) => Promise<unknown>;
   onDelete: (parcel: ParcelWithEvents) => void;
 }) {
   const carrier = carrierInfo(parcel.carrier);
@@ -34,6 +36,7 @@ export function ParcelDetail({
   const [titleError, setTitleError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const backButton = useRef<HTMLButtonElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, onBack, backButton);
 
@@ -78,6 +81,18 @@ export function ParcelDetail({
       setCheckError(error instanceof Error ? error.message : 'Could not queue a tracking check');
     } finally {
       setChecking(false);
+    }
+  }
+
+  async function restoreNow() {
+    if (restoring) return;
+    setRestoring(true);
+    setCheckError(null);
+    try {
+      await onRestore(parcel);
+    } catch (error) {
+      setCheckError(error instanceof Error ? error.message : 'Could not restore the parcel');
+      setRestoring(false);
     }
   }
 
@@ -220,23 +235,36 @@ export function ParcelDetail({
         <Timeline events={parcel.events} syncing={status.syncing} />
       </section>
 
-      <footer className="detail__footer">
+      <footer className={`detail__footer${parcel.archivedAt ? ' detail__footer--single' : ''}`}>
         {checkError && <p className="detail__check-error" role="alert">{checkError}</p>}
-        <button
-          type="button"
-          className="button button--secondary"
-          onClick={() => void checkNow()}
-          disabled={checking}
-        >
-          {checking ? 'Queueing check…' : 'Check now'}
-        </button>
-        <button
-          type="button"
-          className="button button--danger"
-          onClick={() => onDelete(parcel)}
-        >
-          Remove parcel
-        </button>
+        {parcel.archivedAt ? (
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => void restoreNow()}
+            disabled={restoring}
+          >
+            {restoring ? 'Restoring…' : 'Restore parcel'}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => void checkNow()}
+              disabled={checking}
+            >
+              {checking ? 'Queueing check…' : 'Check now'}
+            </button>
+            <button
+              type="button"
+              className="button button--danger"
+              onClick={() => onDelete(parcel)}
+            >
+              Archive parcel
+            </button>
+          </>
+        )}
       </footer>
     </div>,
     document.body,

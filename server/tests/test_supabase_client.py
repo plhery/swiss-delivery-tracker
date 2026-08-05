@@ -1,4 +1,5 @@
 from io import BytesIO
+from datetime import datetime, timezone
 import json
 import unittest
 import urllib.error
@@ -89,6 +90,14 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertEqual(query["order"], ["created_at.desc"])
         self.assertIn("tracking_events", query["select"][0])
         self.assertIn("tracking_url", query["select"][0])
+        self.assertIn("archived_at", query["select"][0])
+
+        self.client._request.reset_mock()
+        self.client.list_packages(include_archived=True)
+        archived_query = urllib.parse.parse_qs(
+            urllib.parse.urlsplit(self.client._request.call_args.args[0]).query
+        )
+        self.assertNotIn("archived_at", archived_query)
 
         self.client._request.reset_mock()
         self.client.get_package("pkg-1")
@@ -97,7 +106,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.client._request.return_value = []
         self.assertIsNone(self.client.get_package("missing"))
 
-    def test_create_and_delete_package(self):
+    def test_create_archive_and_restore_package(self):
         self.client._request = Mock(side_effect=[[{"id": "pkg-1"}], [{"id": "pkg-1"}]])
         package = self.client.create_package("TRACKING1", "Coffee", "swiss-post")
         self.assertEqual(package, {"id": "pkg-1"})
@@ -123,10 +132,15 @@ class SupabaseServiceClientTests(unittest.TestCase):
         )
 
         self.client._request = Mock()
-        self.client.delete_package("pkg/1")
-        delete = self.client._request.call_args
-        self.assertIn("id=eq.pkg%2F1", delete.args[0])
-        self.assertEqual(delete.kwargs["method"], "DELETE")
+        self.client.archive_package("pkg/1")
+        archive = self.client._request.call_args
+        self.assertIn("id=eq.pkg%2F1", archive.args[0])
+        self.assertEqual(archive.kwargs["method"], "PATCH")
+        self.assertIsNotNone(archive.kwargs["body"]["archived_at"])
+
+        self.client.restore_package("pkg/1")
+        restore = self.client._request.call_args
+        self.assertEqual(restore.kwargs["body"], {"archived_at": None})
 
     def test_create_package_requires_insert_and_reload_results(self):
         self.client._request = Mock(return_value=[])
@@ -152,6 +166,23 @@ class SupabaseServiceClientTests(unittest.TestCase):
         update = self.client._request.call_args
         self.assertIn("id=eq.pkg%2F1", update.args[0])
         self.assertEqual(update.kwargs["method"], "PATCH")
+
+    def test_old_deliveries_are_archived_in_one_update(self):
+        self.client._request = Mock(return_value=[{"id": "old-1"}, {"id": "old-2"}])
+        cutoff = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+        self.assertEqual(self.client.archive_delivered_before(cutoff), 2)
+
+        call = self.client._request.call_args
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(call.args[0]).query)
+        self.assertEqual(query["archived_at"], ["is.null"])
+        self.assertEqual(query["current_stage"], ["eq.delivered"])
+        self.assertEqual(query["last_synced_at"], ["lt.2026-06-01T00:00:00+00:00"])
+        self.assertEqual(call.kwargs["method"], "PATCH")
+        self.assertEqual(call.kwargs["prefer"], "return=representation")
+
+        with self.assertRaisesRegex(ValueError, "timezone"):
+            self.client.archive_delivered_before(cutoff.replace(tzinfo=None))
 
     def test_event_inserts_are_idempotent_and_empty_batches_are_skipped(self):
         self.client._request = Mock()

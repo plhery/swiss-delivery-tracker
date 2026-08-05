@@ -21,10 +21,12 @@ export default function App() {
     addParcel,
     renameParcel,
     removeParcel,
+    restoreParcel,
     refresh,
     refreshParcel,
   } = useParcels();
   const [adding, setAdding] = useState(false);
+  const [undoParcel, setUndoParcel] = useState<ParcelWithEvents | null>(null);
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
   );
@@ -37,6 +39,12 @@ export default function App() {
       `/${window.location.search}${window.location.hash}`,
     );
   }, []);
+
+  useEffect(() => {
+    if (!undoParcel) return;
+    const timeout = window.setTimeout(() => setUndoParcel(null), 7_000);
+    return () => window.clearTimeout(timeout);
+  }, [undoParcel]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -83,6 +91,7 @@ export default function App() {
 
   const activeParcels = useMemo(
     () => parcels.filter((parcel) => {
+      if (parcel.archivedAt) return false;
       const stage = currentStage(parcel.events);
       return stage === null || !isFinal(stage);
     }),
@@ -90,19 +99,32 @@ export default function App() {
   );
   const activeCount = activeParcels.length;
   const deliveredParcels = useMemo(
-    () => parcels.filter((p) => isDelivered(p.events)),
+    () => parcels.filter((p) => !p.archivedAt && isDelivered(p.events)),
     [parcels],
   );
   const returnedParcels = useMemo(
-    () => parcels.filter((parcel) => currentStage(parcel.events) === 'returned'),
+    () => parcels.filter(
+      (parcel) => !parcel.archivedAt && currentStage(parcel.events) === 'returned',
+    ),
+    [parcels],
+  );
+  const archivedParcels = useMemo(
+    () => parcels.filter((parcel) => Boolean(parcel.archivedAt)),
     [parcels],
   );
 
-  async function handleDelete(parcel: ParcelWithEvents) {
+  async function handleArchive(parcel: ParcelWithEvents) {
     const name = parcel.label || 'this parcel';
-    if (!window.confirm(`Remove ${name} from your deliveries?`)) return;
+    if (!window.confirm(`Archive ${name}? You can restore it later.`)) return;
     await removeParcel(parcel.id);
     closeParcelDetail();
+    setUndoParcel(parcel);
+  }
+
+  async function handleRestore(parcel: ParcelWithEvents) {
+    await restoreParcel(parcel.id);
+    setUndoParcel((current) => current?.id === parcel.id ? null : current);
+    if (openParcelId === parcel.id) closeParcelDetail();
   }
 
   return (
@@ -256,6 +278,29 @@ export default function App() {
             </div>
           </section>
         )}
+
+        {!loading && archivedParcels.length > 0 && (
+          <section
+            className="parcel-section archived-section"
+            aria-labelledby="archived-parcels-title"
+          >
+            <details>
+              <summary>
+                <span id="archived-parcels-title">Archived</span>
+                <span className="archived-section__count">{archivedParcels.length}</span>
+              </summary>
+              <div className="parcel-grid">
+                {archivedParcels.map((parcel) => (
+                  <ParcelCard
+                    key={parcel.id}
+                    parcel={parcel}
+                    onOpen={(p) => openParcelDetail(p.id)}
+                  />
+                ))}
+              </div>
+            </details>
+          </section>
+        )}
       </main>
 
       <button
@@ -278,8 +323,18 @@ export default function App() {
           onBack={closeParcelDetail}
           onRename={(p, label) => renameParcel(p.id, label)}
           onRefresh={(p) => refreshParcel(p.id)}
-          onDelete={(p) => void handleDelete(p)}
+          onRestore={(p) => handleRestore(p)}
+          onDelete={(p) => void handleArchive(p)}
         />
+      )}
+
+      {undoParcel && (
+        <div className="undo-toast" role="status">
+          <span>{undoParcel.label || 'Parcel'} archived</span>
+          <button type="button" onClick={() => void handleRestore(undoParcel)}>
+            Undo
+          </button>
+        </div>
       )}
     </div>
   );

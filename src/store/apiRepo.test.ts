@@ -14,6 +14,7 @@ const packageRow = {
   sync_status: 'ok',
   sync_error: null,
   tracking_url: null,
+  archived_at: null,
   tracking_events: [
     {
       id: 'event-1',
@@ -47,7 +48,7 @@ describe('createApiRepo', () => {
 
     const parcels = await createApiRepo().list();
 
-    expect(fetch).toHaveBeenCalledWith('/api/packages', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/packages?includeArchived=true', expect.objectContaining({
       cache: 'no-store',
       redirect: 'manual',
     }));
@@ -133,14 +134,15 @@ describe('createApiRepo', () => {
     }));
   });
 
-  it('deletes and queues global or per-parcel syncs through the same-origin API', async () => {
+  it('archives, restores, and queues syncs through the same-origin API', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(response({ ok: true }))
       .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
       .mockResolvedValueOnce(response({ packages: [packageRow] }))
       .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
-      .mockResolvedValueOnce(response({ packages: [packageRow] }));
+      .mockResolvedValueOnce(response({ packages: [packageRow] }))
+      .mockResolvedValueOnce(response(packageRow));
     vi.stubGlobal('fetch', fetch);
     const repo = createApiRepo();
 
@@ -167,6 +169,14 @@ describe('createApiRepo', () => {
       expect.objectContaining({ method: 'POST', cache: 'no-store', redirect: 'manual' }),
     );
     expect(parcel.id).toBe(packageRow.id);
+
+    const restored = await repo.restore!(packageRow.id);
+    expect(fetch).toHaveBeenNthCalledWith(
+      6,
+      `/api/packages/${packageRow.id}/restore`,
+      expect.objectContaining({ method: 'POST', cache: 'no-store', redirect: 'manual' }),
+    );
+    expect(restored.archivedAt).toBeUndefined();
   });
 
   it('renames a parcel through the same-origin API', async () => {

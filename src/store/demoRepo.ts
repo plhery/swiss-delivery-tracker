@@ -185,6 +185,7 @@ export function createDemoRepo(
     [...parcels].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const advance = (parcel: ParcelWithEvents): ParcelWithEvents => {
+    if (parcel.archivedAt) return parcel;
     const stage = currentStage(parcel.events);
     if (stage === null || isFinal(stage)) return parcel;
     const next = nextStage(stage);
@@ -242,10 +243,23 @@ export function createDemoRepo(
     },
 
     async remove(id: string) {
+      const archivedAt = new Date(now()).toISOString();
       save(
         storage,
-        getAll().filter((p) => p.id !== id),
+        getAll().map((parcel) => parcel.id === id ? { ...parcel, archivedAt } : parcel),
       );
+    },
+
+    async restore(id: string) {
+      const parcels = getAll();
+      const parcel = parcels.find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Parcel not found');
+      const { archivedAt: _archivedAt, ...restored } = parcel;
+      save(
+        storage,
+        parcels.map((candidate) => candidate.id === id ? restored : candidate),
+      );
+      return restored;
     },
 
     async refresh() {

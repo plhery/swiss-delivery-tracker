@@ -62,17 +62,18 @@ class SupabaseServiceClient:
         except urllib.error.URLError as exc:
             raise SupabaseError(f"Supabase is unreachable: {exc.reason}") from exc
 
-    def list_packages(self) -> list[dict[str, Any]]:
+    def list_packages(self, include_archived: bool = False) -> list[dict[str, Any]]:
         params = [
             (
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
                 "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
-                "tracking_events(id,package_id,stage,description,location,occurred_at)",
+                "archived_at,tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
-            ("archived_at", "is.null"),
             ("order", "created_at.desc"),
         ]
+        if not include_archived:
+            params.append(("archived_at", "is.null"))
         query = urllib.parse.urlencode(params, safe="().,*")
         return self._request(f"/rest/v1/packages?{query}") or []
 
@@ -82,7 +83,7 @@ class SupabaseServiceClient:
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
                 "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
-                "tracking_events(id,package_id,stage,description,location,occurred_at)",
+                "archived_at,tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
             ("id", f"eq.{package_id}"),
             ("limit", "1"),
@@ -119,13 +120,31 @@ class SupabaseServiceClient:
             raise SupabaseError("The new package could not be reloaded")
         return package
 
-    def delete_package(self, package_id: str) -> None:
-        query = urllib.parse.urlencode({"id": f"eq.{package_id}"})
-        self._request(
-            f"/rest/v1/packages?{query}",
-            method="DELETE",
-            prefer="return=minimal",
+    def archive_package(self, package_id: str) -> None:
+        self.update_package(
+            package_id,
+            {"archived_at": datetime.now(timezone.utc).isoformat()},
         )
+
+    def restore_package(self, package_id: str) -> None:
+        self.update_package(package_id, {"archived_at": None})
+
+    def archive_delivered_before(self, cutoff: datetime) -> int:
+        if cutoff.tzinfo is None:
+            raise ValueError("Archive cutoff must include a timezone")
+        params = [
+            ("archived_at", "is.null"),
+            ("current_stage", "eq.delivered"),
+            ("last_synced_at", f"lt.{cutoff.astimezone(timezone.utc).isoformat()}"),
+        ]
+        query = urllib.parse.urlencode(params)
+        rows = self._request(
+            f"/rest/v1/packages?{query}",
+            method="PATCH",
+            body={"archived_at": datetime.now(timezone.utc).isoformat()},
+            prefer="return=representation",
+        ) or []
+        return len(rows)
 
     def list_active_packages(self) -> list[dict[str, Any]]:
         params: list[tuple[str, str]] = [
