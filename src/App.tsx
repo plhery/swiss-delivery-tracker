@@ -5,6 +5,7 @@ import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
 import type { ApiAuth } from './lib/apiClient';
+import { clearSharedParcelInput, readSharedParcelInput } from './lib/shareTarget';
 import { currentStage, isDelivered, isFinal } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
@@ -40,7 +41,8 @@ export default function App({
     refreshParcel,
     retryLoad,
   } = useParcels();
-  const [adding, setAdding] = useState(false);
+  const [sharedParcelInput] = useState(() => readSharedParcelInput());
+  const [adding, setAdding] = useState(() => Boolean(sharedParcelInput));
   const [undoParcel, setUndoParcel] = useState<ParcelWithEvents | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
@@ -48,6 +50,10 @@ export default function App({
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
   );
+
+  useEffect(() => {
+    if (sharedParcelInput) clearSharedParcelInput();
+  }, [sharedParcelInput]);
 
   useEffect(() => {
     if (!undoParcel || undoing || undoError) return;
@@ -384,6 +390,8 @@ export default function App({
           onAdd={addParcel}
           onClose={() => setAdding(false)}
           lastDpdPostcode={lastDpdPostcode}
+          initialLabel={sharedParcelInput?.label}
+          initialTrackingInput={sharedParcelInput?.trackingInput}
         />
       )}
 

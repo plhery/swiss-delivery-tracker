@@ -16,13 +16,17 @@ export function AddParcelSheet({
   onAdd,
   onClose,
   lastDpdPostcode,
+  initialLabel = '',
+  initialTrackingInput = '',
 }: {
   onAdd: (input: NewParcelInput) => Promise<unknown>;
   onClose: () => void;
   lastDpdPostcode?: string;
+  initialLabel?: string;
+  initialTrackingInput?: string;
 }) {
-  const [label, setLabel] = useState('');
-  const [trackingInputValue, setTrackingInputValue] = useState('');
+  const [label, setLabel] = useState(initialLabel);
+  const [trackingInputValue, setTrackingInputValue] = useState(initialTrackingInput);
   const [carrierInputs, setCarrierInputs] = useState<Record<CarrierInputField, string>>({
     trackingUrl: '',
     dpdPostcode: lastDpdPostcode ?? '',

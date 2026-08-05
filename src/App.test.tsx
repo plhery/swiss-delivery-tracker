@@ -21,6 +21,23 @@ beforeEach(() => {
 });
 
 describe('App', () => {
+  it('opens a prefilled add sheet for content shared to the installed PWA', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/?share-target=1&title=Coffee%20delivery&text=Track%20993412345612345678',
+    );
+
+    renderApp();
+
+    const sheet = await screen.findByRole('dialog', { name: 'Add a parcel' });
+    expect(within(sheet).getByLabelText(/what's inside/i)).toHaveValue('Coffee delivery');
+    expect(within(sheet).getByLabelText(/tracking number or link/i)).toHaveValue(
+      'Track 993412345612345678',
+    );
+    expect(window.location.search).toBe('');
+  });
+
   it('shows the seeded demo parcels and the demo banner', async () => {
     renderApp();
     expect(screen.getByRole('heading', {

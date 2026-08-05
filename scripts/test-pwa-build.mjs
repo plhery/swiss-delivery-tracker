@@ -38,6 +38,11 @@ assert.equal(manifest.start_url, '/');
 assert.equal(manifest.scope, '/');
 assert.equal(manifest.display, 'standalone');
 assert.equal(manifest.id, '/');
+assert.deepEqual(manifest.share_target, {
+  action: '/?share-target=1',
+  method: 'GET',
+  params: { title: 'title', text: 'text', url: 'url' },
+});
 assert.match(privacy, /Download my data/, 'the public build must include the privacy notice');
 
 console.log(`PWA build contract passed for ${asset}`);
