@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffcf00" />
+    <meta name="robots" content="index,follow" />
+    <title>Privacy — Swiss Delivery Tracker</title>
+    <link rel="stylesheet" href="/privacy.css" />
+  </head>
+  <body>
+    <main>
+      <a class="back" href="/">← Back to Swiss Delivery Tracker</a>
+      <p class="eyebrow">Swiss Delivery Tracker</p>
+      <h1>Privacy notice</h1>
+      <p class="effective">Effective 5 August 2026</p>
+
+      <p>
+        Swiss Delivery Tracker stores only the information needed to authenticate you and
+        follow deliveries. It does not sell personal data, serve ads, or include
+        third-party behavioral analytics.
+      </p>
+
+      <h2>What is processed</h2>
+      <ul>
+        <li>
+          Your email address, account ID, session metadata, authentication
+          events, and basic profile data when you choose Google sign-in.
+        </li>
+        <li>
+          Parcel labels, tracking numbers, carriers, status, tracking history,
+          and a delivery postcode supplied for a DPD parcel.
+        </li>
+        <li>An optional Planzer shared tracking link.</li>
+        <li>
+          Push endpoints, encryption keys, browser user agent, and delivery
+          acknowledgements when you enable notifications.
+        </li>
+        <li>
+          Network metadata processed by the hosting, proxy, authentication, and
+          email infrastructure, such as IP address, timestamp, and user agent.
+        </li>
+      </ul>
+
+      <h2>How it is used</h2>
+      <p>
+        Supabase provides authentication and database access. Google provides
+        social sign-in, and the configured SMTP provider sends codes when email
+        OTP is enabled. Cloudflare and the container host may process network
+        metadata. The selected carrier receives its tracking number so Swiss
+        Delivery Tracker can retrieve updates. DPD may also receive the
+        parcel's supplied delivery postcode for recipient verification, and
+        Planzer receives a shared-link capability when you provide one. Web Push
+        endpoints receive encrypted notifications you requested.
+      </p>
+
+      <h2>Retention and your controls</h2>
+      <p>
+        Parcel data remains until you delete the account. Archiving hides a
+        parcel from the active list but retains its history. Infrastructure
+        backups and security logs may remain for their operator's limited
+        retention period.
+      </p>
+      <p>
+        Use <strong>Download my data</strong> in the account menu for a JSON
+        export. Use <strong>Delete account</strong> to permanently remove your
+        Auth user, parcels, events, and push subscriptions. Signing out clears
+        account-scoped local state, including the offline parcel snapshot; browser
+        controls can clear the remaining PWA cache and notification permission.
+      </p>
+
+      <h2>Security and contact</h2>
+      <p>
+        The service uses HTTPS, short-lived access tokens, rotating refresh
+        tokens, Postgres row-level security, account rate limits, and server-only
+        secrets. No internet service can guarantee absolute security.
+      </p>
+      <p>
+        Report a privacy or security concern through GitHub's
+        <a href="https://github.com/plhery/swiss-delivery-tracker/security/advisories/new"
+          >private vulnerability reporting</a
+        >. Never put a real tracking number, sign-in code, token, or shared
+        tracking link in a public issue.
+      </p>
+
+      <p class="forks">
+        This notice covers the official Swiss Delivery Tracker service. Third-party forks
+        are operated independently and must publish their own notice.
+      </p>
+    </main>
+  </body>
+</html>

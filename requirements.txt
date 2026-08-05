@@ -1,0 +1,5 @@
+pywebpush==2.3.0
+requests==2.34.2
+# Build the pinned carrier source archive without an unpinned isolated backend.
+setuptools==83.0.0
+setuptools-scm==10.2.1

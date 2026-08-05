@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:frontend
+      - run: npm run test:contract
+      - run: npm run test:coverage
+      - run: npm run build
+      - run: npm run test:pwa
+      - run: npm audit --omit=dev
+
+  python:
+    name: Python service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - run: python -m pip install --require-hashes -r requirements-dev.lock
+      - run: python -m ruff check server
+      - run: python -m mypy server
+      - run: python -m coverage run -m unittest discover -s server/tests -v
+      - run: python -m coverage report
+
+  migrations:
+    name: Supabase migrations and RLS
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
+        env:
+          POSTGRES_DB: delivery_test
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d delivery_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/delivery_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: scripts/test-migrations.sh
+
+  container:
+    name: Production container smoke
+    runs-on: ubuntu-latest
+    needs: [frontend, python, migrations]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build production image
+        run: docker build -t swiss-delivery-tracker:test .
+      - name: Start and verify the application port
+        run: |
+          set -euo pipefail
+          docker run -d --name swiss-delivery-tracker-test -p 127.0.0.1:3000:3000 \
+            -e SUPABASE_URL=http://supabase.invalid \
+            -e SUPABASE_PUBLISHABLE_KEY=test-public-key \
+            -e SUPABASE_SERVICE_ROLE_KEY=test-service-key \
+            swiss-delivery-tracker:test
+          trap 'docker logs swiss-delivery-tracker-test; docker rm -f swiss-delivery-tracker-test' EXIT
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3000/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          scripts/smoke-url.sh http://127.0.0.1:3000

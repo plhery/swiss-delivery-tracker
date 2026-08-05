@@ -1,0 +1,24 @@
+name: Production origin smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: Public application URL to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Verify Cloudflare Access to the uncached origin
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.DELIVERY_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.DELIVERY_CF_ACCESS_CLIENT_SECRET }}
+          TARGET_URL: ${{ inputs.target_url }}
+        run: scripts/smoke-url.sh "$TARGET_URL"

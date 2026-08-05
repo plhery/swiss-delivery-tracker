@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Postal-yellow rounded tile -->
+  <rect width="512" height="512" rx="116" fill="#ffcf00"/>
+  <!-- Parcel -->
+  <g>
+    <rect x="126" y="166" width="260" height="220" rx="26" fill="#fffaf0"/>
+    <!-- lid shading -->
+    <rect x="126" y="166" width="260" height="58" rx="26" fill="#f1e9e0"/>
+    <rect x="126" y="198" width="260" height="26" fill="#f1e9e0"/>
+    <!-- tape -->
+    <rect x="236" y="166" width="40" height="220" fill="#e0d5c8"/>
+    <!-- bold parcel label -->
+    <rect x="202" y="278" width="108" height="70" rx="10" fill="#171714"/>
+    <path d="M224 301h64M224 321h42" stroke="#ffcf00" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>

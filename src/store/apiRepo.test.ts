@@ -1,0 +1,361 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiAuthenticationError } from '../lib/apiClient';
+import { API_CACHE_KEY, clearApiCache, createApiRepo } from './apiRepo';
+
+const packageRow = {
+  id: '40000000-0000-0000-0000-000000000004',
+  tracking_number: '993412345612345678',
+  label: 'Coffee beans',
+  carrier: 'swiss-post',
+  created_at: '2026-07-15T00:00:00Z',
+  expected_delivery: '2026-07-16',
+  last_status_text: 'Sorted',
+  last_synced_at: '2026-07-15T01:00:00Z',
+  sync_status: 'ok',
+  sync_error: null,
+  tracking_url: null,
+  dpd_postcode: null,
+  archived_at: null,
+  tracking_events: [
+    {
+      id: 'event-1',
+      package_id: '40000000-0000-0000-0000-000000000004',
+      stage: 'in_transit',
+      description: 'Sorted at the parcel center',
+      location: 'Härkingen',
+      occurred_at: '2026-07-15T01:00:00Z',
+    },
+  ],
+};
+
+function response(body: unknown, ok = true, status = 200) {
+  return { ok, status, json: vi.fn().mockResolvedValue(body) };
+}
+
+describe('createApiRepo', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('loads and maps the account package collection', async () => {
+    const fetch = vi.fn().mockResolvedValue(response({ packages: [packageRow] }));
+    vi.stubGlobal('fetch', fetch);
+
+    const parcels = await createApiRepo().list();
+
+    expect(fetch).toHaveBeenCalledWith('/api/packages?includeArchived=true', expect.objectContaining({
+      cache: 'no-store',
+      redirect: 'manual',
+    }));
+    const requestHeaders = new Headers(fetch.mock.calls[0][1]?.headers);
+    expect(requestHeaders.get('X-Requested-With')).toBe('XMLHttpRequest');
+    expect(parcels[0]).toMatchObject({
+      trackingNumber: '993412345612345678',
+      label: 'Coffee beans',
+      carrier: 'swiss-post',
+      expectedDelivery: '2026-07-16',
+      lastStatusText: 'Sorted',
+      syncStatus: 'ok',
+    });
+    expect(parcels[0].events[0]).toMatchObject({
+      parcelId: packageRow.id,
+      stage: 'in_transit',
+      location: 'Härkingen',
+    });
+    expect(JSON.parse(window.localStorage.getItem(API_CACHE_KEY) ?? 'null')).toHaveLength(1);
+    expect(createApiRepo().cachedList?.()?.[0].id).toBe(packageRow.id);
+  });
+
+  it('ignores a corrupted offline snapshot', () => {
+    window.localStorage.setItem(API_CACHE_KEY, '[{"id":"incomplete"}]');
+    expect(createApiRepo().cachedList?.()).toBeNull();
+  });
+
+  it('clears only the signed-out account and the legacy shared cache', () => {
+    window.localStorage.setItem(API_CACHE_KEY, 'legacy');
+    window.localStorage.setItem(`${API_CACHE_KEY}.user-1`, 'first');
+    window.localStorage.setItem(`${API_CACHE_KEY}.user-2`, 'second');
+
+    clearApiCache(window.localStorage, 'user-1');
+
+    expect(window.localStorage.getItem(API_CACHE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(`${API_CACHE_KEY}.user-1`)).toBeNull();
+    expect(window.localStorage.getItem(`${API_CACHE_KEY}.user-2`)).toBe('second');
+  });
+
+  it('normalises additions and keeps explicit carrier choices', async () => {
+    const fetch = vi.fn().mockResolvedValue(response(packageRow));
+    vi.stubGlobal('fetch', fetch);
+
+    await createApiRepo().add({
+      trackingNumber: '99.34.123456.12345678',
+      label: 'Coffee beans',
+    });
+    expect(fetch).toHaveBeenCalledWith('/api/packages', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        trackingNumber: '993412345612345678',
+        label: 'Coffee beans',
+        carrier: 'swiss-post',
+      }),
+      cache: 'no-store',
+      redirect: 'manual',
+    }));
+    const requestHeaders = new Headers(fetch.mock.calls[0][1]?.headers);
+    expect(requestHeaders.get('Content-Type')).toBe('application/json');
+    expect(requestHeaders.get('X-Requested-With')).toBe('XMLHttpRequest');
+
+    await createApiRepo().add({
+      trackingNumber: '44.00.123456.12345678',
+      label: 'Quickpac parcel',
+    });
+    expect(fetch).toHaveBeenLastCalledWith('/api/packages', expect.objectContaining({
+      body: JSON.stringify({
+        trackingNumber: '440012345612345678',
+        label: 'Quickpac parcel',
+        carrier: 'quickpac',
+      }),
+    }));
+
+    await createApiRepo().add({
+      trackingNumber: 'ambiguous-123',
+      label: '',
+      carrier: 'planzer',
+    });
+    expect(fetch).toHaveBeenLastCalledWith('/api/packages', expect.objectContaining({
+      body: JSON.stringify({
+        trackingNumber: 'AMBIGUOUS123',
+        label: '',
+        carrier: 'planzer',
+      }),
+    }));
+
+    const trackingUrl =
+      'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';
+    await createApiRepo().add({
+      trackingNumber: '999.90.03316119',
+      label: 'Plants',
+      carrier: 'planzer',
+      trackingUrl,
+    });
+    expect(fetch).toHaveBeenLastCalledWith('/api/packages', expect.objectContaining({
+      body: JSON.stringify({
+        trackingNumber: '9999003316119',
+        label: 'Plants',
+        carrier: 'planzer',
+        trackingUrl,
+      }),
+    }));
+
+    await createApiRepo().add({
+      trackingNumber: '06086514587082',
+      label: 'DPD parcel',
+      carrier: 'dpd',
+      dpdPostcode: '8004',
+    });
+    expect(fetch).toHaveBeenLastCalledWith('/api/packages', expect.objectContaining({
+      body: JSON.stringify({
+        trackingNumber: '06086514587082',
+        label: 'DPD parcel',
+        carrier: 'dpd',
+        dpdPostcode: '8004',
+      }),
+    }));
+  });
+
+  it('archives, restores, and queues syncs through the same-origin API', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response({ ok: true }))
+      .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
+      .mockResolvedValueOnce(response({ packages: [packageRow] }))
+      .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
+      .mockResolvedValueOnce(response({ packages: [packageRow] }))
+      .mockResolvedValueOnce(response(packageRow));
+    vi.stubGlobal('fetch', fetch);
+    const repo = createApiRepo();
+
+    await repo.remove(packageRow.id);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `/api/packages/${packageRow.id}`,
+      expect.objectContaining({ method: 'DELETE', cache: 'no-store', redirect: 'manual' }),
+    );
+
+    const parcels = await repo.refresh();
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/sync', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: expect.any(Headers),
+      redirect: 'manual',
+    });
+    expect(parcels).toHaveLength(1);
+
+    const parcel = await repo.refreshParcel!(packageRow.id);
+    expect(fetch).toHaveBeenNthCalledWith(
+      4,
+      `/api/packages/${packageRow.id}/sync`,
+      expect.objectContaining({ method: 'POST', cache: 'no-store', redirect: 'manual' }),
+    );
+    expect(parcel.id).toBe(packageRow.id);
+
+    const restored = await repo.restore!(packageRow.id);
+    expect(fetch).toHaveBeenNthCalledWith(
+      6,
+      `/api/packages/${packageRow.id}/restore`,
+      expect.objectContaining({ method: 'POST', cache: 'no-store', redirect: 'manual' }),
+    );
+    expect(restored.archivedAt).toBeUndefined();
+  });
+
+  it('renames a parcel through the same-origin API', async () => {
+    const renamedRow = { ...packageRow, label: 'Espresso beans' };
+    const fetch = vi.fn().mockResolvedValue(response(renamedRow));
+    vi.stubGlobal('fetch', fetch);
+
+    const parcel = await createApiRepo().rename(packageRow.id, ' Espresso beans ');
+
+    expect(parcel.label).toBe('Espresso beans');
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/packages/${packageRow.id}`,
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ label: 'Espresso beans' }),
+        cache: 'no-store',
+        redirect: 'manual',
+      }),
+    );
+  });
+
+  it('surfaces API errors and malformed success responses', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response({ error: 'Database offline' }, false, 502))
+      .mockResolvedValueOnce({ ok: false, status: 503, json: vi.fn().mockRejectedValue(new Error()) })
+      .mockResolvedValueOnce(response(null));
+    vi.stubGlobal('fetch', fetch);
+    const repo = createApiRepo();
+
+    await expect(repo.list()).rejects.toThrow('Database offline');
+    await expect(repo.list()).rejects.toThrow('Delivery service failed (503)');
+    await expect(repo.list()).rejects.toThrow('empty response');
+  });
+
+  it('recognises redirects and expired authentication responses', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...response(null, false, 0),
+        type: 'opaqueredirect',
+        redirected: false,
+      })
+      .mockResolvedValueOnce({
+        ...response(null, false, 401),
+        type: 'basic',
+        redirected: false,
+      });
+    vi.stubGlobal('fetch', fetch);
+    const repo = createApiRepo();
+
+    await expect(repo.list()).rejects.toBeInstanceOf(ApiAuthenticationError);
+    await expect(repo.list()).rejects.toThrow('sign-in expired');
+  });
+
+  it('sends the current bearer token, refreshes once, and isolates the cache', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response({ error: 'Expired' }, false, 401))
+      .mockResolvedValueOnce(response({ packages: [packageRow] }));
+    vi.stubGlobal('fetch', fetch);
+    const getAccessToken = vi
+      .fn()
+      .mockResolvedValueOnce('old-token')
+      .mockResolvedValueOnce('fresh-token');
+    const onAuthenticationFailure = vi.fn();
+    const repo = createApiRepo(30_000, 1_000, window.localStorage, {
+      userId: 'user-1',
+      getAccessToken,
+      onAuthenticationFailure,
+    });
+
+    await expect(repo.list()).resolves.toHaveLength(1);
+
+    expect(getAccessToken).toHaveBeenNthCalledWith(1);
+    expect(getAccessToken).toHaveBeenNthCalledWith(2, true);
+    const firstHeaders = new Headers(fetch.mock.calls[0][1]?.headers);
+    const secondHeaders = new Headers(fetch.mock.calls[1][1]?.headers);
+    expect(firstHeaders.get('Authorization')).toBe('Bearer old-token');
+    expect(secondHeaders.get('Authorization')).toBe('Bearer fresh-token');
+    expect(onAuthenticationFailure).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(`${API_CACHE_KEY}.user-1`)).not.toBeNull();
+    expect(window.localStorage.getItem(API_CACHE_KEY)).toBeNull();
+  });
+
+  it('polls while visible, refreshes on visibility changes, and unsubscribes', async () => {
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    const onChange = vi.fn();
+    const unsubscribe = createApiRepo(1_000).subscribe?.(onChange);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onChange).toHaveBeenCalledOnce();
+
+    visibility = 'hidden';
+    vi.advanceTimersByTime(1_000);
+    expect(onChange).toHaveBeenCalledOnce();
+
+    visibility = 'visible';
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    unsubscribe?.();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('polls quickly until a newly added parcel finishes its first sync', async () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const pendingRow = {
+      ...packageRow,
+      last_synced_at: null,
+      sync_status: 'pending',
+      tracking_events: [
+        {
+          ...packageRow.tracking_events[0],
+          stage: 'pending',
+          description: 'Tracking added',
+        },
+      ],
+    };
+    const waitingRow = { ...pendingRow, sync_status: 'waiting' };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response(pendingRow))
+      .mockResolvedValueOnce(response({ packages: [waitingRow] }));
+    vi.stubGlobal('fetch', fetch);
+    const repo = createApiRepo(30_000, 1_000);
+    const onChange = vi.fn(async () => {
+      await repo.list();
+    });
+    const unsubscribe = repo.subscribe?.(onChange);
+
+    await repo.add({ trackingNumber: packageRow.tracking_number, label: 'Coffee' });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(onChange).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onChange).toHaveBeenCalledOnce();
+    unsubscribe?.();
+  });
+});

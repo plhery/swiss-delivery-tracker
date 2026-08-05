@@ -1,0 +1,936 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Swiss Delivery Tracker API",
+    "version": "1.0.0",
+    "description": "Same-origin API used by the Swiss Delivery Tracker PWA with Supabase Auth. Every private operation is scoped to the bearer-token owner."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "supabaseBearer": []
+    }
+  ],
+  "paths": {
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "getApiContract",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "This OpenAPI document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account/export": {
+      "get": {
+        "operationId": "exportAccount",
+        "responses": {
+          "200": {
+            "description": "Complete account and parcel-data export",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountExportResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/account": {
+      "delete": {
+        "operationId": "deleteAccount",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account and owned data deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/packages": {
+      "get": {
+        "operationId": "listPackages",
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed-in user's parcel collection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageListResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPackage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePackageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created parcel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageRow"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/packages/{packageId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PackageId"
+        }
+      ],
+      "patch": {
+        "operationId": "renamePackage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePackageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Renamed parcel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageRow"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "archivePackage",
+        "responses": {
+          "200": {
+            "description": "Parcel archived",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/packages/{packageId}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PackageId"
+        }
+      ],
+      "post": {
+        "operationId": "restorePackage",
+        "responses": {
+          "200": {
+            "description": "Restored parcel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageRow"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/packages/{packageId}/sync": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PackageId"
+        }
+      ],
+      "post": {
+        "operationId": "syncPackage",
+        "responses": {
+          "202": {
+            "description": "Tracking check queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/sync": {
+      "post": {
+        "operationId": "syncAllPackages",
+        "responses": {
+          "202": {
+            "description": "Tracking checks queued for the signed-in user's active parcels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/push/config": {
+      "get": {
+        "operationId": "getPushConfig",
+        "responses": {
+          "200": {
+            "description": "Web Push availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/subscriptions": {
+      "post": {
+        "operationId": "upsertPushSubscription",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Push subscription stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushSubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePushSubscription",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletePushSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Push subscription removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Configured service health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unconfigured service health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "supabaseBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Supabase access token",
+        "description": "Access token from the signed-in Supabase Auth session."
+      }
+    },
+    "parameters": {
+      "PackageId": {
+        "name": "packageId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "responses": {
+      "ApiError": {
+        "description": "Request or service error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "AccountExportResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exportedAt",
+          "account",
+          "packages"
+        ],
+        "properties": {
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "account": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "email"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "email"
+              }
+            }
+          },
+          "packages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageRow"
+            }
+          }
+        }
+      },
+      "DeleteAccountRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "confirmation"
+        ],
+        "properties": {
+          "confirmation": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "CarrierId": {
+        "type": "string",
+        "enum": [
+          "swiss-post",
+          "quickpac",
+          "planzer",
+          "aliexpress",
+          "sunyou",
+          "hermes",
+          "spring-gds",
+          "postlogistics",
+          "dachser",
+          "dhl",
+          "ups",
+          "fedex",
+          "dpd",
+          "shipup",
+          "intl-post",
+          "unknown"
+        ]
+      },
+      "Stage": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "registered",
+          "accepted",
+          "in_transit",
+          "out_for_delivery",
+          "delivered",
+          "customs",
+          "failed_attempt",
+          "ready_for_pickup",
+          "returned"
+        ]
+      },
+      "SyncStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "syncing",
+          "ok",
+          "waiting",
+          "error",
+          "unsupported"
+        ]
+      },
+      "TrackingEventRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "package_id",
+          "stage",
+          "description",
+          "location",
+          "occurred_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "package_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "description": {
+            "type": "string"
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PackageRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "tracking_number",
+          "label",
+          "carrier",
+          "created_at",
+          "expected_delivery",
+          "last_status_text",
+          "last_synced_at",
+          "sync_status",
+          "sync_error",
+          "tracking_url",
+          "dpd_postcode",
+          "archived_at",
+          "tracking_events"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tracking_number": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 40,
+            "pattern": "^(?=.*[0-9])[A-Z0-9]+$"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "carrier": {
+            "$ref": "#/components/schemas/CarrierId"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expected_delivery": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_status_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sync_status": {
+            "$ref": "#/components/schemas/SyncStatus"
+          },
+          "sync_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tracking_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "dpd_postcode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9]{4}$",
+            "description": "Recipient postcode used only to verify this DPD parcel."
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "tracking_events": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TrackingEventRow"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "PackageListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packages"
+        ],
+        "properties": {
+          "packages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageRow"
+            }
+          }
+        }
+      },
+      "CreatePackageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "trackingNumber"
+        ],
+        "properties": {
+          "trackingNumber": {
+            "type": "string",
+            "description": "Normalizes to an uppercase alphanumeric tracking number between 4 and 40 characters and containing at least one digit.",
+            "pattern": "^(?=.*[0-9])[A-Za-z0-9 .-]+$"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "default": ""
+          },
+          "carrier": {
+            "$ref": "#/components/schemas/CarrierId"
+          },
+          "trackingUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "dpdPostcode": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$",
+            "description": "Required when carrier is dpd and rejected for other carriers."
+          }
+        }
+      },
+      "RenamePackageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "QueueResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "queued",
+          "pending"
+        ],
+        "properties": {
+          "queued": {
+            "type": "boolean"
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "OkResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "PushConfigResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "available",
+          "publicKey"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "publicKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PushSubscriptionKeys": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "properties": {
+          "p256dh": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 512
+          },
+          "auth": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 512
+          }
+        }
+      },
+      "PushSubscriptionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "maxLength": 4096
+          },
+          "keys": {
+            "$ref": "#/components/schemas/PushSubscriptionKeys"
+          }
+        }
+      },
+      "DeletePushSubscriptionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "endpoint"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "maxLength": 4096
+          }
+        }
+      },
+      "PushSubscriptionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "testSent"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "testSent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "checked": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "integer"
+          },
+          "errors": {
+            "type": "integer"
+          },
+          "unsupported": {
+            "type": "integer"
+          },
+          "notifications_sent": {
+            "type": "integer"
+          },
+          "notification_errors": {
+            "type": "integer"
+          },
+          "subscriptions_expired": {
+            "type": "integer"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

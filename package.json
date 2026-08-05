@@ -1,0 +1,61 @@
+{
+  "name": "swiss-delivery-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "An open-source, iPhone-first PWA for following parcel deliveries.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plhery/swiss-delivery-tracker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/plhery/swiss-delivery-tracker/issues"
+  },
+  "homepage": "https://github.com/plhery/swiss-delivery-tracker#readme",
+  "engines": {
+    "node": "^22.22.2 || >=24.15.0 <25",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "contract:generate": "node scripts/generate-api-contract.mjs",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:contract": "node scripts/generate-api-contract.mjs --check",
+    "test:coverage": "vitest run --coverage",
+    "test:pwa": "node scripts/test-pwa-build.mjs",
+    "test:watch": "vitest",
+    "icons": "node scripts/generate-icons.mjs",
+    "lint:frontend": "eslint src --max-warnings=0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.10",
+    "ajv": "^8.20.0",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.9.0",
+    "jsdom": "^30.0.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.66.0",
+    "vite": "^8.2.0",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.10"
+  }
+}
