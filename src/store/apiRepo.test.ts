@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CloudflareAccessError } from '../lib/cloudflareAccess';
-import { createApiRepo } from './apiRepo';
+import { API_CACHE_KEY, createApiRepo } from './apiRepo';
 
 const packageRow = {
   id: '40000000-0000-0000-0000-000000000004',
@@ -67,6 +67,13 @@ describe('createApiRepo', () => {
       stage: 'in_transit',
       location: 'Härkingen',
     });
+    expect(JSON.parse(window.localStorage.getItem(API_CACHE_KEY) ?? 'null')).toHaveLength(1);
+    expect(createApiRepo().cachedList?.()?.[0].id).toBe(packageRow.id);
+  });
+
+  it('ignores a corrupted offline snapshot', () => {
+    window.localStorage.setItem(API_CACHE_KEY, '[{"id":"incomplete"}]');
+    expect(createApiRepo().cachedList?.()).toBeNull();
   });
 
   it('normalises additions and keeps explicit carrier choices', async () => {

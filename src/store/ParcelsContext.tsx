@@ -17,6 +17,7 @@ interface ParcelsState {
   refreshing: boolean;
   error: string | null;
   authenticationRequired: boolean;
+  usingCachedData: boolean;
   mode: ParcelRepo['mode'];
   addParcel: (input: NewParcelInput) => Promise<ParcelWithEvents>;
   renameParcel: (id: string, label: string) => Promise<ParcelWithEvents>;
@@ -24,6 +25,7 @@ interface ParcelsState {
   restoreParcel: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
   refreshParcel: (id: string) => Promise<void>;
+  retryLoad: () => Promise<void>;
 }
 
 const ParcelsContext = createContext<ParcelsState | null>(null);
@@ -40,7 +42,13 @@ export function ParcelsProvider({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authenticationRequired, setAuthenticationRequired] = useState(false);
+  const [usingCachedData, setUsingCachedData] = useState(false);
   const mounted = useRef(true);
+  const parcelsRef = useRef<ParcelWithEvents[]>([]);
+
+  useEffect(() => {
+    parcelsRef.current = parcels;
+  }, [parcels]);
 
   useEffect(() => {
     mounted.current = true;
@@ -62,13 +70,24 @@ export function ParcelsProvider({
         setParcels(list);
         setError(null);
         setAuthenticationRequired(false);
+        setUsingCachedData(false);
       }
     } catch (e) {
+      const cached = repo.cachedList?.() ?? null;
+      if (mounted.current) {
+        if (parcelsRef.current.length === 0 && cached?.length) setParcels(cached);
+        setUsingCachedData(parcelsRef.current.length > 0 || Boolean(cached?.length));
+      }
       rememberError(e);
     } finally {
       if (mounted.current) setLoading(false);
     }
   }, [repo, rememberError]);
+
+  const retryLoad = useCallback(async () => {
+    if (parcelsRef.current.length === 0) setLoading(true);
+    await reload();
+  }, [reload]);
 
   useEffect(() => {
     void reload();
@@ -182,6 +201,7 @@ export function ParcelsProvider({
       refreshing,
       error,
       authenticationRequired,
+      usingCachedData,
       mode: repo.mode,
       addParcel,
       renameParcel,
@@ -189,6 +209,7 @@ export function ParcelsProvider({
       restoreParcel,
       refresh,
       refreshParcel,
+      retryLoad,
     }),
     [
       parcels,
@@ -196,6 +217,7 @@ export function ParcelsProvider({
       refreshing,
       error,
       authenticationRequired,
+      usingCachedData,
       repo.mode,
       addParcel,
       renameParcel,
@@ -203,6 +225,7 @@ export function ParcelsProvider({
       restoreParcel,
       refresh,
       refreshParcel,
+      retryLoad,
     ],
   );
 

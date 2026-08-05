@@ -572,22 +572,54 @@ describe('App', () => {
   it('shows initial-load and refresh failures', async () => {
     const failingRepo: ParcelRepo = {
       mode: 'api',
-      list: vi.fn().mockRejectedValue(new Error('Could not load deliveries')),
+      list: vi.fn()
+        .mockRejectedValueOnce(new Error('Could not load deliveries'))
+        .mockResolvedValueOnce([]),
       add: vi.fn(),
       rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn(),
     };
+    const user = userEvent.setup();
     const first = renderApp(failingRepo);
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load deliveries');
+    expect(screen.queryByText('No parcels yet')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('No parcels yet')).toBeInTheDocument();
     first.unmount();
 
     const base = createDemoRepo(window.localStorage);
-    const user = userEvent.setup();
     renderApp({ ...base, refresh: vi.fn().mockRejectedValue(new Error('Sync unavailable')) });
     await screen.findByText('Coffee beans ☕');
     await user.click(screen.getByRole('button', { name: /refresh tracking/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Sync unavailable');
+  });
+
+  it('shows the last saved parcels when the API is temporarily unavailable', async () => {
+    const cached: ParcelWithEvents = {
+      id: 'cached-parcel',
+      trackingNumber: '993412345612345678',
+      label: 'Saved coffee',
+      carrier: 'swiss-post',
+      createdAt: '2026-07-15T00:00:00Z',
+      syncStatus: 'ok',
+      events: [],
+    };
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockRejectedValue(new Error('You are offline')),
+      cachedList: () => [cached],
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn(),
+    };
+
+    renderApp(repo);
+
+    expect(await screen.findByText('Saved coffee')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('last parcel data saved');
+    expect(screen.queryByText('No parcels yet')).not.toBeInTheDocument();
   });
 
   it('offers an uncached sign-in route when Cloudflare Access expires', async () => {

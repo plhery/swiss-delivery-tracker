@@ -19,6 +19,39 @@ import type {
   TrackingEvent,
 } from '../types';
 
+export const API_CACHE_KEY = 'parcel-post.api-cache.v1';
+
+function cachedParcels(storage: Storage | null): ParcelWithEvents[] | null {
+  if (!storage) return null;
+  try {
+    const value: unknown = JSON.parse(storage.getItem(API_CACHE_KEY) ?? 'null');
+    if (!Array.isArray(value)) return null;
+    const valid = value.every((parcel) => {
+      if (!parcel || typeof parcel !== 'object') return false;
+      const candidate = parcel as Partial<ParcelWithEvents>;
+      return typeof candidate.id === 'string'
+        && typeof candidate.trackingNumber === 'string'
+        && typeof candidate.label === 'string'
+        && typeof candidate.carrier === 'string'
+        && typeof candidate.createdAt === 'string'
+        && typeof candidate.syncStatus === 'string'
+        && Array.isArray(candidate.events);
+    });
+    return valid ? value as ParcelWithEvents[] : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedParcels(storage: Storage | null, parcels: ParcelWithEvents[]) {
+  if (!storage) return;
+  try {
+    storage.setItem(API_CACHE_KEY, JSON.stringify(parcels));
+  } catch {
+    // Storage can be unavailable in private browsing or on a full device.
+  }
+}
+
 function toEvent(row: ApiTrackingEventRow): TrackingEvent {
   return {
     id: row.id,
@@ -64,6 +97,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function createApiRepo(
   pollIntervalMs = 30_000,
   activePollIntervalMs = 1_000,
+  storage: Storage | null = typeof window === 'undefined' ? null : window.localStorage,
 ): ParcelRepo {
   let hasActiveSync = false;
   let pollingModeChanged: (() => void) | null = null;
@@ -82,12 +116,14 @@ export function createApiRepo(
     setHasActiveSync(parcels.some(
       (parcel) => parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing',
     ));
+    saveCachedParcels(storage, parcels);
     return parcels;
   }
 
   return {
     mode: 'api',
     list,
+    cachedList: () => cachedParcels(storage),
 
     async add(input: NewParcelInput): Promise<ParcelWithEvents> {
       const trackingNumber = normalizeTrackingNumber(input.trackingNumber);

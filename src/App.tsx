@@ -17,6 +17,7 @@ export default function App() {
     refreshing,
     error,
     authenticationRequired,
+    usingCachedData,
     mode,
     addParcel,
     renameParcel,
@@ -24,6 +25,7 @@ export default function App() {
     restoreParcel,
     refresh,
     refreshParcel,
+    retryLoad,
   } = useParcels();
   const [adding, setAdding] = useState(false);
   const [undoParcel, setUndoParcel] = useState<ParcelWithEvents | null>(null);
@@ -171,6 +173,8 @@ export default function App() {
           <p className="app__subtitle">
             {loading
               ? 'Opening your delivery box…'
+              : error && parcels.length === 0
+                ? 'Your delivery box could not be loaded'
               : activeCount === 0
                 ? 'Nothing on the way right now'
                 : 'Every shipment, from first lookup to arrival.'}
@@ -192,10 +196,20 @@ export default function App() {
               {authenticationRequired ? 'Sign-in needed.' : 'Tracking is taking a break.'}
             </strong>
             <span>{error}</span>
+            {usingCachedData && <span>Showing the last parcel data saved on this device.</span>}
             {authenticationRequired && (
               <a className="error-banner__action" href={REAUTH_PATH}>
                 Sign in again
               </a>
+            )}
+            {!authenticationRequired && (
+              <button
+                className="error-banner__action"
+                type="button"
+                onClick={() => void retryLoad()}
+              >
+                Try again
+              </button>
             )}
           </div>
         )}
@@ -207,7 +221,7 @@ export default function App() {
           </div>
         )}
 
-        {!loading && parcels.length === 0 && (
+        {!loading && !error && parcels.length === 0 && (
           <div className="empty-state">
             <div className="empty-state__mailbox" aria-hidden="true"><span /></div>
             <p className="empty-state__eyebrow">Delivery box empty</p>

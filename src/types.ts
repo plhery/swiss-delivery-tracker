@@ -63,4 +63,6 @@ export interface ParcelRepo {
   refreshParcel?(id: string): Promise<ParcelWithEvents>;
   /** Optional shared-data polling. Returns unsubscribe. */
   subscribe?(onChange: () => void | Promise<void>): () => void;
+  /** Last successfully loaded API snapshot for read-only offline fallback. */
+  cachedList?(): ParcelWithEvents[] | null;
 }
