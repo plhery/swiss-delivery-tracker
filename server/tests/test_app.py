@@ -173,6 +173,9 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(headers["Cache-Control"], "no-store, max-age=0, must-revalidate")
         self.assertEqual(headers["Pragma"], "no-cache")
         self.assertEqual(headers["X-Frame-Options"], "DENY")
+        self.assertIn("default-src 'self'", headers["Content-Security-Policy"])
+        self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
+        self.assertIn("camera=()", headers["Permissions-Policy"])
 
         status, headers, body = self.request("GET", "/assets/app.js")
         self.assertEqual(status, 200)

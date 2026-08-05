@@ -212,6 +212,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         self.send_header("X-Frame-Options", "DENY")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; base-uri 'none'; connect-src 'self'; "
+            "font-src 'self'; form-action 'self'; frame-ancestors 'none'; "
+            "img-src 'self'; manifest-src 'self'; object-src 'none'; "
+            "script-src 'self'; style-src 'self'; worker-src 'self'",
+        )
+        self.send_header(
+            "Permissions-Policy",
+            "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+        )
 
     def do_GET(self) -> None:  # noqa: N802
         parsed_url = urlparse(self.path)
