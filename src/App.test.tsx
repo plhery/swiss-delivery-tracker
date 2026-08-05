@@ -483,13 +483,12 @@ describe('App', () => {
 
   it('archives a parcel after confirmation and offers undo', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderApp();
 
     await user.click(await screen.findByText('Coffee beans ☕'));
     await user.click(screen.getByRole('button', { name: /archive parcel/i }));
+    await user.click(screen.getByRole('button', { name: /confirm archive/i }));
 
-    expect(window.confirm).toHaveBeenCalled();
     expect(screen.queryByRole('dialog', { name: 'Coffee beans ☕' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Coffee beans ☕ archived');
     expect(screen.getByRole('region', { name: 'Archived' })).toBeInTheDocument();
@@ -502,16 +501,32 @@ describe('App', () => {
 
   it('keeps the parcel active when archiving is declined', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderApp();
 
     await user.click(await screen.findByText('Coffee beans ☕'));
     await user.click(screen.getByRole('button', { name: /archive parcel/i }));
+    await user.click(screen.getByRole('button', { name: /keep parcel/i }));
 
     // Detail stays open and the parcel is still there.
     expect(
       screen.getByRole('dialog', { name: 'Coffee beans ☕' }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps archive failures inside the parcel dialog', async () => {
+    const base = createDemoRepo(window.localStorage);
+    const user = userEvent.setup();
+    renderApp({
+      ...base,
+      remove: vi.fn().mockRejectedValue(new Error('Archive service unavailable')),
+    });
+
+    await user.click(await screen.findByText('Coffee beans ☕'));
+    await user.click(screen.getByRole('button', { name: /archive parcel/i }));
+    await user.click(screen.getByRole('button', { name: /confirm archive/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Archive service unavailable');
+    expect(screen.getByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
   });
 
   it('restores a parcel from the collapsed archive', async () => {

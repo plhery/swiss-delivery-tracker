@@ -29,6 +29,8 @@ export default function App() {
   } = useParcels();
   const [adding, setAdding] = useState(false);
   const [undoParcel, setUndoParcel] = useState<ParcelWithEvents | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
   );
@@ -43,10 +45,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!undoParcel) return;
+    if (!undoParcel || undoing || undoError) return;
     const timeout = window.setTimeout(() => setUndoParcel(null), 7_000);
     return () => window.clearTimeout(timeout);
-  }, [undoParcel]);
+  }, [undoParcel, undoing, undoError]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -116,10 +118,10 @@ export default function App() {
   );
 
   async function handleArchive(parcel: ParcelWithEvents) {
-    const name = parcel.label || 'this parcel';
-    if (!window.confirm(`Archive ${name}? You can restore it later.`)) return;
     await removeParcel(parcel.id);
     closeParcelDetail();
+    setUndoError(null);
+    setUndoing(false);
     setUndoParcel(parcel);
   }
 
@@ -127,6 +129,19 @@ export default function App() {
     await restoreParcel(parcel.id);
     setUndoParcel((current) => current?.id === parcel.id ? null : current);
     if (openParcelId === parcel.id) closeParcelDetail();
+  }
+
+  async function undoArchive() {
+    if (!undoParcel || undoing) return;
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      await handleRestore(undoParcel);
+    } catch (reason) {
+      setUndoError(reason instanceof Error ? reason.message : 'Could not restore the parcel');
+    } finally {
+      setUndoing(false);
+    }
   }
 
   return (
@@ -338,15 +353,18 @@ export default function App() {
           onRename={(p, label) => renameParcel(p.id, label)}
           onRefresh={(p) => refreshParcel(p.id)}
           onRestore={(p) => handleRestore(p)}
-          onDelete={(p) => void handleArchive(p)}
+          onDelete={(p) => handleArchive(p)}
         />
       )}
 
       {undoParcel && (
         <div className="undo-toast" role="status">
-          <span>{undoParcel.label || 'Parcel'} archived</span>
-          <button type="button" onClick={() => void handleRestore(undoParcel)}>
-            Undo
+          <span className="undo-toast__message">
+            <span>{undoParcel.label || 'Parcel'} archived</span>
+            {undoError && <small role="alert">{undoError}</small>}
+          </span>
+          <button type="button" disabled={undoing} onClick={() => void undoArchive()}>
+            {undoing ? 'Restoring…' : undoError ? 'Retry' : 'Undo'}
           </button>
         </div>
       )}

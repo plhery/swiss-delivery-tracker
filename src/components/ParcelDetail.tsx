@@ -23,7 +23,7 @@ export function ParcelDetail({
   onRename: (parcel: ParcelWithEvents, label: string) => Promise<unknown>;
   onRefresh: (parcel: ParcelWithEvents) => Promise<unknown>;
   onRestore: (parcel: ParcelWithEvents) => Promise<unknown>;
-  onDelete: (parcel: ParcelWithEvents) => void;
+  onDelete: (parcel: ParcelWithEvents) => Promise<unknown>;
 }) {
   const carrier = carrierInfo(parcel.carrier);
   const current = currentEvent(parcel.events);
@@ -37,6 +37,8 @@ export function ParcelDetail({
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const backButton = useRef<HTMLButtonElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, onBack, backButton);
 
@@ -93,6 +95,18 @@ export function ParcelDetail({
     } catch (error) {
       setCheckError(error instanceof Error ? error.message : 'Could not restore the parcel');
       setRestoring(false);
+    }
+  }
+
+  async function archiveNow() {
+    if (archiving) return;
+    setArchiving(true);
+    setCheckError(null);
+    try {
+      await onDelete(parcel);
+    } catch (error) {
+      setCheckError(error instanceof Error ? error.message : 'Could not archive the parcel');
+      setArchiving(false);
     }
   }
 
@@ -176,6 +190,25 @@ export function ParcelDetail({
               </button>
             </div>
           </form>
+        ) : confirmingArchive ? (
+          <>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => setConfirmingArchive(false)}
+              disabled={archiving}
+            >
+              Keep parcel
+            </button>
+            <button
+              type="button"
+              className="button button--danger"
+              onClick={() => void archiveNow()}
+              disabled={archiving}
+            >
+              {archiving ? 'Archiving…' : 'Confirm archive'}
+            </button>
+          </>
         ) : (
           <div className="detail__title-row">
             <h1 className="detail__title">{parcel.label || 'Parcel'}</h1>
@@ -259,7 +292,7 @@ export function ParcelDetail({
             <button
               type="button"
               className="button button--danger"
-              onClick={() => onDelete(parcel)}
+              onClick={() => setConfirmingArchive(true)}
             >
               Archive parcel
             </button>

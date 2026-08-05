@@ -1297,6 +1297,17 @@ button:disabled {
   cursor: pointer;
 }
 
+.undo-toast__message {
+  display: grid;
+  gap: 2px;
+}
+
+.undo-toast__message small {
+  color: #ffd8c2;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .timeline {
   margin: 0;
   padding: 0;
