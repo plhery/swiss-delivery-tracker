@@ -417,6 +417,8 @@ class AppHttpTests(unittest.TestCase):
         invalid_requests = [
             ({}, "between 4 and 40"),
             ({"trackingNumber": ["bad"], "label": "", "carrier": "unknown"}, "must be text"),
+            ({"trackingNumber": "hello there", "label": "", "carrier": "unknown"}, "include a digit"),
+            ({"trackingNumber": "12??", "label": "", "carrier": "unknown"}, "letters and numbers"),
             ({"trackingNumber": "1234", "label": "x" * 81, "carrier": "unknown"}, "at most 80"),
             ({"trackingNumber": "1234", "label": "", "carrier": "invented"}, "supported carrier"),
             (

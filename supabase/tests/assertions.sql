@@ -34,7 +34,7 @@ insert into public.packages (
   id, tracking_number, label, carrier
 ) values (
   '50000000-0000-0000-0000-000000000005',
-  'SHARED-TRACKING-2',
+  'SHAREDTRACKING2',
   'Shared parcel',
   'planzer'
 );
@@ -114,7 +114,7 @@ do $$
 begin
   begin
     insert into public.packages (tracking_number, carrier)
-    values ('SHARED-TRACKING-2', 'planzer');
+    values ('SHAREDTRACKING2', 'planzer');
     raise exception 'expected duplicate shared tracking number to fail';
   exception when unique_violation then
     null;

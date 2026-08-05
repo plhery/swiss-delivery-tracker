@@ -376,6 +376,10 @@ class Handler(BaseHTTPRequestHandler):
             tracking_number = re.sub(r"[\s.\-]", "", raw_tracking).upper()
             if not 4 <= len(tracking_number) <= 40:
                 raise ValueError("Enter a tracking number between 4 and 40 characters")
+            if not re.fullmatch(r"[A-Z0-9]+", tracking_number) or not re.search(
+                r"\d", tracking_number
+            ):
+                raise ValueError("Tracking numbers must use letters and numbers and include a digit")
             if len(label) > 80:
                 raise ValueError("Parcel names can be at most 80 characters")
             if carrier not in VALID_CARRIERS:

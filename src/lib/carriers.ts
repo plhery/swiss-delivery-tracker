@@ -265,7 +265,10 @@ function cleanLinkTrackingNumber(raw: string): string {
 
 function validTrackingNumber(raw: string): boolean {
   const normalized = normalizeTrackingNumber(raw);
-  return normalized.length >= 4 && normalized.length <= 40 && /^[A-Z0-9]+$/.test(normalized);
+  return normalized.length >= 4
+    && normalized.length <= 40
+    && /^[A-Z0-9]+$/.test(normalized)
+    && /\d/.test(normalized);
 }
 
 function queryParam(url: URL, names: string[]): string | undefined {

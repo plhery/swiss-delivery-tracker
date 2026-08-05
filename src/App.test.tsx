@@ -350,6 +350,9 @@ describe('App', () => {
     expect(
       within(sheet).getByRole('button', { name: /add parcel/i }),
     ).toBeDisabled();
+    await user.type(within(sheet).getByLabelText(/tracking number/i), 'hello there');
+    expect(within(sheet).getByText(/couldn't find a tracking number/i)).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: /add parcel/i })).toBeDisabled();
   });
 
   it('isolates the add sheet, focuses its primary field, and restores focus', async () => {

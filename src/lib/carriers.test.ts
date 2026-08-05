@@ -172,6 +172,11 @@ describe('parseTrackingInput', () => {
       carrier: 'unknown',
       source: 'none',
     });
+    expect(parseTrackingInput('hello there')).toEqual({
+      trackingNumber: '',
+      carrier: 'unknown',
+      source: 'none',
+    });
   });
 });
 

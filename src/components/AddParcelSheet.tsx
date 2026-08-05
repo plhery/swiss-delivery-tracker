@@ -109,6 +109,11 @@ export function AddParcelSheet({
               required
             />
           </label>
+          {trackingInputValue.trim() && !trackingNumber && (
+            <p className="sheet__error" role="status">
+              We couldn&apos;t find a tracking number. Paste the code itself or a carrier link.
+            </p>
+          )}
           {parsedTracking.source !== 'number' && trackingNumber && (
             <p className="sheet__carrier-hint">
               Found <strong>{formatTrackingNumber(trackingNumber)}</strong> in the pasted{' '}
