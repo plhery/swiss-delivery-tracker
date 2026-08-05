@@ -5,12 +5,26 @@ import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
 import type { ApiAuth } from './lib/apiClient';
+import {
+  isActiveParcel,
+  prioritizeActiveParcels,
+  type ParcelAttention,
+} from './lib/parcelPriority';
 import { clearSharedParcelInput, readSharedParcelInput } from './lib/shareTarget';
-import { currentStage, isDelivered, isFinal } from './lib/stages';
+import { currentStage, isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
 
 const DETAIL_HISTORY_KEY = 'parcelPostDetail';
+
+const ATTENTION_LABELS: Record<ParcelAttention, string> = {
+  sync_error: 'Tracking check failed',
+  failed_attempt: 'Delivery attempt needs action',
+  ready_for_pickup: 'Ready for pickup',
+  customs: 'Held at customs',
+  stalled: 'No tracking update for four days',
+  not_announced: 'Carrier has not published an update',
+};
 
 export default function App({
   accountEmail,
@@ -111,12 +125,12 @@ export default function App({
   );
 
   const activeParcels = useMemo(
-    () => parcels.filter((parcel) => {
-      if (parcel.archivedAt) return false;
-      const stage = currentStage(parcel.events);
-      return stage === null || !isFinal(stage);
-    }),
+    () => parcels.filter(isActiveParcel),
     [parcels],
+  );
+  const prioritized = useMemo(
+    () => prioritizeActiveParcels(activeParcels),
+    [activeParcels],
   );
   const activeCount = activeParcels.length;
   const deliveredParcels = useMemo(
@@ -288,17 +302,61 @@ export default function App({
           </div>
         )}
 
-        {!loading && activeParcels.length > 0 && (
+        {!loading && prioritized.attention.length > 0 && (
+          <section
+            className="parcel-section parcel-section--attention"
+            aria-labelledby="attention-parcels-title"
+          >
+            <div className="parcel-section__heading">
+              <h2 id="attention-parcels-title">Needs attention</h2>
+              <span>{prioritized.attention.length}</span>
+            </div>
+            <div className="parcel-grid">
+              {prioritized.attention.map(({ parcel, reason }) => (
+                <ParcelCard
+                  key={parcel.id}
+                  parcel={parcel}
+                  notice={ATTENTION_LABELS[reason]}
+                  onOpen={(p) => openParcelDetail(p.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loading && prioritized.arrivingToday.length > 0 && (
+          <section
+            className="parcel-section parcel-section--today"
+            aria-labelledby="today-parcels-title"
+          >
+            <div className="parcel-section__heading">
+              <h2 id="today-parcels-title">Arriving today</h2>
+              <span>{prioritized.arrivingToday.length}</span>
+            </div>
+            <div className="parcel-grid">
+              {prioritized.arrivingToday.map((parcel) => (
+                <ParcelCard
+                  key={parcel.id}
+                  parcel={parcel}
+                  notice="Expected today"
+                  onOpen={(p) => openParcelDetail(p.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loading && prioritized.onTheWay.length > 0 && (
           <section
             className="parcel-section"
             aria-labelledby="active-parcels-title"
           >
             <div className="parcel-section__heading">
               <h2 id="active-parcels-title">On the way</h2>
-              <span>{activeParcels.length}</span>
+              <span>{prioritized.onTheWay.length}</span>
             </div>
             <div className="parcel-grid">
-              {activeParcels.map((parcel) => (
+              {prioritized.onTheWay.map((parcel) => (
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}

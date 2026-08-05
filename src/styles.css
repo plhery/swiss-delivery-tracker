@@ -310,6 +310,14 @@ button:disabled {
   margin-top: 30px;
 }
 
+.parcel-section--attention .parcel-section__heading h2 {
+  color: #a33a16;
+}
+
+.parcel-section--today .parcel-section__heading h2 {
+  color: #17633b;
+}
+
 .archived-section details {
   border-top: 1px solid var(--line);
   padding-top: 16px;
@@ -547,6 +555,13 @@ button:disabled {
   color: #8a481f;
   font-size: 11px;
   font-weight: 700;
+}
+
+.parcel-card__notice {
+  margin: 7px 0 -4px;
+  color: #6b4b13;
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .parcel-card__eta {

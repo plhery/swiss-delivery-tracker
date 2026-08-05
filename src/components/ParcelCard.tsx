@@ -8,9 +8,11 @@ import { ProgressTrack } from './ProgressTrack';
 export function ParcelCard({
   parcel,
   onOpen,
+  notice,
 }: {
   parcel: ParcelWithEvents;
   onOpen: (parcel: ParcelWithEvents) => void;
+  notice?: string;
 }) {
   const carrier = carrierInfo(parcel.carrier);
   const current = currentEvent(parcel.events);
@@ -57,6 +59,9 @@ export function ParcelCard({
         )}
         {parcel.syncStatus === 'error' && (
           <p className="parcel-card__sync-error">Sync needs attention</p>
+        )}
+        {notice && parcel.syncStatus !== 'error' && (
+          <p className="parcel-card__notice">{notice}</p>
         )}
         <ProgressTrack stage={current?.stage ?? null} />
       </div>

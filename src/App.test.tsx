@@ -51,7 +51,11 @@ describe('App', () => {
 
     const active = screen.getByRole('region', { name: 'On the way' });
     expect(within(active).getByText('New sneakers 👟')).toBeInTheDocument();
-    expect(within(active).getByText('Birthday gift 🎁')).toBeInTheDocument();
+    expect(within(active).queryByText('Birthday gift 🎁')).not.toBeInTheDocument();
+
+    const attention = screen.getByRole('region', { name: 'Needs attention' });
+    expect(within(attention).getByText('Birthday gift 🎁')).toBeInTheDocument();
+    expect(within(attention).getByText('Held at customs')).toBeInTheDocument();
 
     const past = screen.getByRole('region', { name: 'Past deliveries' });
     expect(within(past).getByText('Coffee beans ☕')).toBeInTheDocument();
@@ -128,6 +132,43 @@ describe('App', () => {
     renderApp(repo);
 
     expect(await screen.findByText('Expected tomorrow')).toBeInTheDocument();
+  });
+
+  it('puts a non-actionable parcel with a delivery window in Arriving today', async () => {
+    const today = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    const expectedDelivery = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())} 13:00–15:00`;
+    const parcel: ParcelWithEvents = {
+      id: 'parcel-today',
+      trackingNumber: '993412345612345678',
+      label: 'Today parcel',
+      carrier: 'swiss-post',
+      createdAt: new Date().toISOString(),
+      expectedDelivery,
+      syncStatus: 'ok',
+      events: [{
+        id: 'event-today',
+        parcelId: 'parcel-today',
+        stage: 'out_for_delivery',
+        description: 'Out for delivery',
+        occurredAt: new Date().toISOString(),
+      }],
+    };
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([parcel]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([parcel]),
+    };
+
+    renderApp(repo);
+
+    const section = await screen.findByRole('region', { name: 'Arriving today' });
+    expect(within(section).getByText('Today parcel')).toBeInTheDocument();
+    expect(within(section).getByText('Expected today')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'On the way' })).not.toBeInTheDocument();
   });
 
   it('adds a parcel through the bottom sheet', async () => {
