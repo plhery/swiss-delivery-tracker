@@ -1,9 +1,11 @@
 import { useState, useRef, type FormEvent, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
 import { formatExpectedDelivery } from '../lib/format';
 import { parcelDisplayStatus } from '../lib/parcelStatus';
 import { currentEvent } from '../lib/stages';
 import { isLeftSwipe, type TouchPoint } from '../lib/swipe';
+import { useModalDialog } from '../lib/modal';
 import type { ParcelWithEvents } from '../types';
 import { ProgressTrack } from './ProgressTrack';
 import { Timeline } from './Timeline';
@@ -32,6 +34,8 @@ export function ParcelDetail({
   const [titleError, setTitleError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
+  const backButton = useRef<HTMLButtonElement>(null);
+  const dialog = useModalDialog<HTMLDivElement>(true, onBack, backButton);
 
   function beginTitleEdit() {
     setTitle(parcel.label);
@@ -96,17 +100,20 @@ export function ParcelDetail({
     }
   }
 
-  return (
+  return createPortal(
     <div
+      ref={dialog}
       className="detail"
       role="dialog"
+      aria-modal="true"
       aria-label={parcel.label || 'Parcel'}
+      tabIndex={-1}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={() => { swipeStart.current = null; }}
     >
       <header className="detail__header">
-        <button type="button" className="detail__back" onClick={onBack}>
+        <button ref={backButton} type="button" className="detail__back" onClick={onBack}>
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m13 4-6 6 6 6" /></svg>
           Back
         </button>
@@ -231,6 +238,7 @@ export function ParcelDetail({
           Remove parcel
         </button>
       </footer>
-    </div>
+    </div>,
+    document.body,
   );
 }

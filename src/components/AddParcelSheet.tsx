@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   carrierInfo,
   detectCarrier,
@@ -6,6 +7,7 @@ import {
   SELECTABLE_CARRIERS,
 } from '../lib/carriers';
 import type { CarrierId, NewParcelInput } from '../types';
+import { useModalDialog } from '../lib/modal';
 
 export function AddParcelSheet({
   onAdd,
@@ -20,6 +22,8 @@ export function AddParcelSheet({
   const [selectedCarrier, setSelectedCarrier] = useState<CarrierId | 'auto'>('auto');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const trackingInput = useRef<HTMLInputElement>(null);
+  const dialog = useModalDialog<HTMLDivElement>(true, onClose, trackingInput);
 
   const detectedCarrier = trackingNumber.trim() ? detectCarrier(trackingNumber) : 'unknown';
   const carrier = trackingNumber.trim()
@@ -47,19 +51,22 @@ export function AddParcelSheet({
     }
   }
 
-  return (
+  return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <div
+        ref={dialog}
         className="sheet"
         role="dialog"
-        aria-label="Add a parcel"
+        aria-modal="true"
+        aria-labelledby="add-parcel-title"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet__grabber" aria-hidden="true" />
         <div className="sheet__heading">
           <div>
             <p className="sheet__eyebrow">New shipment</p>
-            <h2 className="sheet__title">Add a parcel</h2>
+            <h2 className="sheet__title" id="add-parcel-title">Add a parcel</h2>
           </div>
           <button
             type="button"
@@ -89,6 +96,7 @@ export function AddParcelSheet({
             <span className="field__label">Tracking number</span>
             <input
               className="field__input"
+              ref={trackingInput}
               type="text"
               value={trackingNumber}
               placeholder="e.g. 99.34.123456.12345678"
@@ -168,6 +176,7 @@ export function AddParcelSheet({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

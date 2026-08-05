@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   disablePushNotifications,
   enablePushNotifications,
   inspectPushState,
   type PushState,
 } from '../lib/pushNotifications';
+import { useModalDialog } from '../lib/modal';
 
 export function NotificationControl() {
   const [open, setOpen] = useState(false);
@@ -12,6 +14,8 @@ export function NotificationControl() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const enabled = state?.kind === 'enabled';
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const dialog = useModalDialog<HTMLElement>(open, () => setOpen(false), closeButton);
 
   useEffect(() => {
     void inspectPushState().then(setState).catch((reason: unknown) => {
@@ -62,13 +66,15 @@ export function NotificationControl() {
         </svg>
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="sheet-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
           <section
+            ref={dialog}
             className="sheet notification-sheet"
             role="dialog"
             aria-modal="true"
             aria-labelledby="notifications-title"
+            tabIndex={-1}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="sheet__grabber" />
@@ -77,7 +83,7 @@ export function NotificationControl() {
                 <p className="sheet__eyebrow">Parcel alerts</p>
                 <h2 className="sheet__title" id="notifications-title">Notifications</h2>
               </div>
-              <button className="sheet__close" type="button" aria-label="Close" onClick={() => setOpen(false)}>×</button>
+              <button ref={closeButton} className="sheet__close" type="button" aria-label="Close" onClick={() => setOpen(false)}>×</button>
             </div>
 
             <div className={`notification-status${enabled ? ' notification-status--enabled' : ''}`}>
@@ -104,7 +110,8 @@ export function NotificationControl() {
               </button>
             )}
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

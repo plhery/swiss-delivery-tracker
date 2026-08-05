@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -299,6 +299,27 @@ describe('App', () => {
     ).toBeDisabled();
   });
 
+  it('isolates the add sheet, focuses its primary field, and restores focus', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const trigger = await screen.findByRole('button', { name: /add a parcel/i });
+
+    await user.click(trigger);
+
+    const dialog = screen.getByRole('dialog', { name: /add a parcel/i });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(within(dialog).getByLabelText(/tracking number/i)).toHaveFocus();
+    expect(document.querySelector('.app')).toHaveAttribute('inert');
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: /add a parcel/i })).not.toBeInTheDocument();
+    expect(document.querySelector('.app')).not.toHaveAttribute('inert');
+    expect(document.body.style.overflow).toBe('');
+    expect(trigger).toHaveFocus();
+  });
+
   it('opens the detail view with the full journey timeline', async () => {
     const user = userEvent.setup();
     renderApp();
@@ -387,6 +408,24 @@ describe('App', () => {
     expect(detail).toBeInTheDocument();
     await user.click(within(detail).getByRole('button', { name: /back/i }));
     expect(window.location.search).toBe('');
+  });
+
+  it('opens parcel details as a browser history entry', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByText('Coffee beans ☕'));
+    expect(window.location.search).toContain('parcel=');
+    expect(screen.getByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
+
+    act(() => window.history.back());
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Coffee beans ☕' })).not.toBeInTheDocument();
+    });
+    expect(window.location.search).toBe('');
+
+    act(() => window.history.forward());
+    expect(await screen.findByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
   });
 
   it('removes a parcel after confirmation', async () => {

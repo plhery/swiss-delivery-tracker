@@ -8,6 +8,8 @@ import { currentStage, isDelivered, isFinal } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
 
+const DETAIL_HISTORY_KEY = 'parcelPostDetail';
+
 export default function App() {
   const {
     parcels,
@@ -36,12 +38,42 @@ export default function App() {
     );
   }, []);
 
-  function showParcel(packageId: string | null) {
+  useEffect(() => {
+    const onPopState = () => {
+      setOpenParcelId(new URLSearchParams(window.location.search).get('parcel'));
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  function openParcelDetail(packageId: string) {
     const url = new URL(window.location.href);
-    if (packageId) url.searchParams.set('parcel', packageId);
-    else url.searchParams.delete('parcel');
-    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    url.searchParams.set('parcel', packageId);
+    const currentState = typeof window.history.state === 'object' && window.history.state
+      ? window.history.state
+      : {};
+    window.history.pushState(
+      { ...currentState, [DETAIL_HISTORY_KEY]: packageId },
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
     setOpenParcelId(packageId);
+  }
+
+  function closeParcelDetail() {
+    if (window.history.state?.[DETAIL_HISTORY_KEY] === openParcelId) {
+      setOpenParcelId(null);
+      window.history.back();
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete('parcel');
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+    setOpenParcelId(null);
   }
 
   const openParcel = useMemo(
@@ -70,7 +102,7 @@ export default function App() {
     const name = parcel.label || 'this parcel';
     if (!window.confirm(`Remove ${name} from your deliveries?`)) return;
     await removeParcel(parcel.id);
-    showParcel(null);
+    closeParcelDetail();
   }
 
   return (
@@ -176,7 +208,7 @@ export default function App() {
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  onOpen={(p) => showParcel(p.id)}
+                  onOpen={(p) => openParcelDetail(p.id)}
                 />
               ))}
             </div>
@@ -197,7 +229,7 @@ export default function App() {
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  onOpen={(p) => showParcel(p.id)}
+                  onOpen={(p) => openParcelDetail(p.id)}
                 />
               ))}
             </div>
@@ -218,7 +250,7 @@ export default function App() {
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  onOpen={(p) => showParcel(p.id)}
+                  onOpen={(p) => openParcelDetail(p.id)}
                 />
               ))}
             </div>
@@ -243,7 +275,7 @@ export default function App() {
       {openParcel && (
         <ParcelDetail
           parcel={openParcel}
-          onBack={() => showParcel(null)}
+          onBack={closeParcelDetail}
           onRename={(p, label) => renameParcel(p.id, label)}
           onRefresh={(p) => refreshParcel(p.id)}
           onDelete={(p) => void handleDelete(p)}
