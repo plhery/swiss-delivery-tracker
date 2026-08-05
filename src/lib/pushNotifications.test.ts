@@ -4,7 +4,9 @@ import {
   disablePushNotifications,
   enableAppBadgeClearing,
   enablePushNotifications,
+  getNotificationPreferences,
   inspectPushState,
+  saveNotificationPreferences,
   unsubscribePushNotificationsLocally,
 } from './pushNotifications';
 
@@ -56,6 +58,41 @@ describe('inspectPushState', () => {
 
     getSubscription.mockResolvedValueOnce({ endpoint: 'https://push.example/token' });
     await expect(inspectPushState()).resolves.toEqual({ kind: 'enabled', publicKey: 'AQID' });
+  });
+});
+
+describe('notification preferences', () => {
+  it('loads and saves account-wide event and quiet-hour settings', async () => {
+    const preferences = {
+      enabledStages: ['out_for_delivery', 'delivered'] as const,
+      quietHoursStart: '22:00',
+      quietHoursEnd: '08:00',
+      timezone: 'Europe/Zurich',
+    };
+    const auth = {
+      userId: 'user-1',
+      getAccessToken: vi.fn().mockResolvedValue('token'),
+    };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(response(preferences))
+      .mockResolvedValueOnce(response(preferences));
+
+    await expect(getNotificationPreferences(auth)).resolves.toEqual(preferences);
+    await expect(saveNotificationPreferences({
+      ...preferences,
+      enabledStages: [...preferences.enabledStages],
+    }, auth)).resolves.toEqual(preferences);
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/push/preferences',
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/push/preferences',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
   });
 });
 

@@ -595,6 +595,21 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /copy tracking number/i })).toHaveTextContent('Copied');
   });
 
+  it('mutes one parcel across the stored notification setting', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByText('New sneakers 👟'));
+
+    const toggle = screen.getByRole('switch', { name: 'Parcel alerts' });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await user.click(toggle);
+
+    expect(screen.getByRole('switch', { name: 'Parcel alerts' }))
+      .toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('switch', { name: 'Parcel alerts' }))
+      .toHaveTextContent('Muted');
+  });
+
   it('opens notification deep links and clears the parcel query on back', async () => {
     const parcel: ParcelWithEvents = {
       id: 'parcel-from-push',

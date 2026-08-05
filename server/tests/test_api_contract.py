@@ -21,6 +21,16 @@ class ApiContractTests(unittest.TestCase):
         assert_contract("PushConfigResponse", {"available": False, "publicKey": None})
         assert_contract("PushSubscriptionResponse", {"ok": True, "testSent": False})
         assert_contract(
+            "NotificationPreferences",
+            {
+                "enabledStages": ["out_for_delivery", "delivered"],
+                "quietHoursStart": "22:00",
+                "quietHoursEnd": "08:00",
+                "timezone": "Europe/Zurich",
+            },
+        )
+        assert_contract("PackageNotificationRequest", {"muted": True})
+        assert_contract(
             "AccountExportResponse",
             {
                 "exportedAt": "2026-08-05T12:00:00Z",
@@ -57,9 +67,12 @@ class ApiContractTests(unittest.TestCase):
                 ("PATCH", "/api/packages/{packageId}"),
                 ("DELETE", "/api/packages/{packageId}"),
                 ("POST", "/api/packages/{packageId}/restore"),
+                ("PATCH", "/api/packages/{packageId}/notifications"),
                 ("POST", "/api/packages/{packageId}/sync"),
                 ("POST", "/api/sync"),
                 ("GET", "/api/push/config"),
+                ("GET", "/api/push/preferences"),
+                ("PATCH", "/api/push/preferences"),
                 ("POST", "/api/push/subscriptions"),
                 ("DELETE", "/api/push/subscriptions"),
                 ("GET", "/health"),

@@ -96,7 +96,7 @@ class SupabaseClient:
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
                 "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
-                "dpd_postcode,archived_at,"
+                "dpd_postcode,archived_at,notifications_muted,"
                 "tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
             ("order", "created_at.desc"),
@@ -112,7 +112,7 @@ class SupabaseClient:
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
                 "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
-                "dpd_postcode,archived_at,"
+                "dpd_postcode,archived_at,notifications_muted,"
                 "tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
             ("id", f"eq.{package_id}"),
@@ -372,7 +372,69 @@ class SupabaseUserClient(SupabaseClient):
                     "p_archived": values["archived_at"] is not None,
                 },
             )
+        elif set(values) == {"notifications_muted"} and isinstance(
+            values["notifications_muted"], bool
+        ):
+            changed = self._request(
+                "/rest/v1/rpc/set_owned_package_notifications_muted",
+                method="POST",
+                body={
+                    "p_package_id": package_id,
+                    "p_muted": values["notifications_muted"],
+                },
+            )
         else:
             raise ValueError("User-scoped package updates must use an approved mutation")
         if changed is not True:
             raise SupabaseError("Package not found", status=404)
+
+    def get_notification_preferences(self) -> dict[str, Any]:
+        query = urllib.parse.urlencode(
+            {
+                "select": "enabled_stages,quiet_hours_start,quiet_hours_end,timezone",
+                "limit": "1",
+            },
+            safe=",",
+        )
+        rows = self._request(f"/rest/v1/notification_preferences?{query}") or []
+        if rows and isinstance(rows[0], dict):
+            return rows[0]
+        return {
+            "enabled_stages": [
+                "registered",
+                "accepted",
+                "in_transit",
+                "customs",
+                "out_for_delivery",
+                "failed_attempt",
+                "ready_for_pickup",
+                "delivered",
+                "returned",
+            ],
+            "quiet_hours_start": None,
+            "quiet_hours_end": None,
+            "timezone": "Europe/Zurich",
+        }
+
+    def set_notification_preferences(
+        self,
+        enabled_stages: list[str],
+        quiet_hours_start: str | None,
+        quiet_hours_end: str | None,
+        timezone_name: str,
+    ) -> dict[str, Any]:
+        row = self._request(
+            "/rest/v1/rpc/set_owned_notification_preferences",
+            method="POST",
+            body={
+                "p_enabled_stages": enabled_stages,
+                "p_quiet_hours_start": quiet_hours_start,
+                "p_quiet_hours_end": quiet_hours_end,
+                "p_timezone": timezone_name,
+            },
+        )
+        if isinstance(row, list) and len(row) == 1:
+            row = row[0]
+        if not isinstance(row, dict):
+            raise SupabaseError("Supabase did not return notification preferences")
+        return row

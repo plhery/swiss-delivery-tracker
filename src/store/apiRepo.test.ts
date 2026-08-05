@@ -16,6 +16,7 @@ const packageRow = {
   tracking_url: null,
   dpd_postcode: null,
   archived_at: null,
+  notifications_muted: false,
   tracking_events: [
     {
       id: 'event-1',
@@ -62,6 +63,7 @@ describe('createApiRepo', () => {
       expectedDelivery: '2026-07-16',
       lastStatusText: 'Sorted',
       syncStatus: 'ok',
+      notificationsMuted: false,
     });
     expect(parcels[0].events[0]).toMatchObject({
       parcelId: packageRow.id,
@@ -229,6 +231,23 @@ describe('createApiRepo', () => {
         body: JSON.stringify({ label: 'Espresso beans' }),
         cache: 'no-store',
         redirect: 'manual',
+      }),
+    );
+  });
+
+  it('mutes parcel notifications through the owner-scoped API', async () => {
+    const mutedRow = { ...packageRow, notifications_muted: true };
+    const fetch = vi.fn().mockResolvedValue(response(mutedRow));
+    vi.stubGlobal('fetch', fetch);
+
+    const parcel = await createApiRepo().setNotificationsMuted!(packageRow.id, true);
+
+    expect(parcel.notificationsMuted).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/packages/${packageRow.id}/notifications`,
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ muted: true }),
       }),
     );
   });

@@ -30,6 +30,7 @@ PACKAGE = {
     "tracking_url": None,
     "dpd_postcode": None,
     "archived_at": None,
+    "notifications_muted": False,
     "tracking_events": [],
 }
 PUSH_ENDPOINT = "https://fcm.googleapis.com/fcm/send/device-token"
@@ -61,6 +62,15 @@ class FakeService:
             "p256dh": PUSH_PUBLIC_KEY,
             "auth": PUSH_AUTH_KEY,
         }
+        self.client.get_notification_preferences.return_value = {
+            "enabled_stages": ["out_for_delivery", "delivered"],
+            "quiet_hours_start": "22:00:00",
+            "quiet_hours_end": "08:00:00",
+            "timezone": "Europe/Zurich",
+        }
+        self.client.set_notification_preferences.return_value = (
+            self.client.get_notification_preferences.return_value
+        )
         self.notifier = None
         self.sync = Mock(side_effect=self._sync)
         self.sync_package = Mock(side_effect=lambda package: self._sync())
@@ -606,6 +616,68 @@ class AppHttpTests(unittest.TestCase):
             "10000000-0000-0000-0000-000000000001",
             payload["endpoint"],
         )
+
+    def test_notification_preferences_and_parcel_muting(self):
+        status, _, body = self.request("GET", "/api/push/preferences")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            json.loads(body),
+            {
+                "enabledStages": ["out_for_delivery", "delivered"],
+                "quietHoursStart": "22:00",
+                "quietHoursEnd": "08:00",
+                "timezone": "Europe/Zurich",
+            },
+        )
+
+        payload = {
+            "enabledStages": ["customs", "out_for_delivery", "delivered"],
+            "quietHoursStart": "23:00",
+            "quietHoursEnd": "07:00",
+            "timezone": "Europe/Zurich",
+        }
+        status, _, body = self.request("PATCH", "/api/push/preferences", payload=payload)
+        self.assertEqual(status, 200)
+        assert_contract("NotificationPreferences", json.loads(body))
+        app.SERVICE.client.set_notification_preferences.assert_called_once_with(
+            payload["enabledStages"],
+            "23:00",
+            "07:00",
+            "Europe/Zurich",
+        )
+
+        muted = {**PACKAGE, "notifications_muted": True}
+        app.SERVICE.client.get_package.return_value = muted
+        status, _, body = self.request(
+            "PATCH",
+            f"/api/packages/{PACKAGE['id']}/notifications",
+            payload={"muted": True},
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["notifications_muted"])
+        app.SERVICE.client.update_package.assert_called_once_with(
+            PACKAGE["id"], {"notifications_muted": True}
+        )
+
+        invalid_preferences = [
+            {**payload, "enabledStages": []},
+            {**payload, "enabledStages": ["teleported"]},
+            {**payload, "quietHoursEnd": None},
+            {**payload, "quietHoursStart": "25:00"},
+            {**payload, "timezone": "Not/A_Real_Zone"},
+        ]
+        for invalid in invalid_preferences:
+            status, _, _ = self.request(
+                "PATCH", "/api/push/preferences", payload=invalid
+            )
+            self.assertEqual(status, 400)
+
+        status, _, _ = self.request(
+            "PATCH",
+            f"/api/packages/{PACKAGE['id']}/notifications",
+            payload={"muted": "yes"},
+        )
+        self.assertEqual(status, 400)
 
     def test_push_routes_validate_credentials_and_handle_test_failure(self):
         app.SERVICE.notifier = Mock(public_key="public")

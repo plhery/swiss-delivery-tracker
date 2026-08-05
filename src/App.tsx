@@ -51,6 +51,7 @@ export default function App({
     mode,
     addParcel,
     renameParcel,
+    setParcelNotificationsMuted,
     removeParcel,
     restoreParcel,
     refresh,
@@ -461,6 +462,8 @@ export default function App({
           parcel={openParcel}
           onBack={closeParcelDetail}
           onRename={(p, label) => renameParcel(p.id, label)}
+          onSetNotificationsMuted={(p, muted) =>
+            setParcelNotificationsMuted(p.id, muted)}
           onRefresh={(p) => refreshParcel(p.id)}
           onRestore={(p) => handleRestore(p)}
           onDelete={(p) => handleArchive(p)}

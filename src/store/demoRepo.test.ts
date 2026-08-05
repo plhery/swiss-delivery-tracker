@@ -128,6 +128,17 @@ describe('createDemoRepo', () => {
     expect(listed.find((candidate) => candidate.id === parcel.id)?.archivedAt).toBeUndefined();
   });
 
+  it('persists per-parcel notification mutes', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    const parcel = (await repo.list())[0];
+
+    const muted = await repo.setNotificationsMuted!(parcel.id, true);
+
+    expect(muted.notificationsMuted).toBe(true);
+    expect((await repo.list()).find((candidate) => candidate.id === parcel.id))
+      .toMatchObject({ notificationsMuted: true });
+  });
+
   it('renames and persists a parcel', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Old title' });

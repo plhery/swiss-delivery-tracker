@@ -243,6 +243,18 @@ export function createDemoRepo(
       return renamed;
     },
 
+    async setNotificationsMuted(id: string, muted: boolean) {
+      const parcels = getAll();
+      const parcel = parcels.find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Parcel not found');
+      const updated = { ...parcel, notificationsMuted: muted };
+      save(
+        storage,
+        parcels.map((candidate) => candidate.id === id ? updated : candidate),
+      );
+      return updated;
+    },
+
     async remove(id: string) {
       const archivedAt = new Date(now()).toISOString();
       save(

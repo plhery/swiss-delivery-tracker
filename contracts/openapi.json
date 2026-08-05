@@ -622,6 +622,47 @@
         }
       }
     },
+    "/api/packages/{packageId}/notifications": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PackageId"
+        }
+      ],
+      "patch": {
+        "operationId": "setPackageNotifications",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated parcel notification setting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageRow"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
     "/api/packages/{packageId}/sync": {
       "parameters": [
         {
@@ -692,6 +733,57 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/push/preferences": {
+      "get": {
+        "operationId": "getNotificationPreferences",
+        "responses": {
+          "200": {
+            "description": "Account notification preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "setNotificationPreferences",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved account notification preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
           }
         }
       }
@@ -982,6 +1074,7 @@
           "tracking_url",
           "dpd_postcode",
           "archived_at",
+          "notifications_muted",
           "tracking_events"
         ],
         "properties": {
@@ -1055,6 +1148,9 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "notifications_muted": {
+            "type": "boolean"
           },
           "tracking_events": {
             "anyOf": [
@@ -1131,6 +1227,18 @@
           }
         }
       },
+      "PackageNotificationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "muted"
+        ],
+        "properties": {
+          "muted": {
+            "type": "boolean"
+          }
+        }
+      },
       "QueueResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -1188,6 +1296,59 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "NotificationStage": {
+        "type": "string",
+        "enum": [
+          "registered",
+          "accepted",
+          "in_transit",
+          "customs",
+          "out_for_delivery",
+          "failed_attempt",
+          "ready_for_pickup",
+          "delivered",
+          "returned"
+        ]
+      },
+      "NotificationPreferences": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabledStages",
+          "quietHoursStart",
+          "quietHoursEnd",
+          "timezone"
+        ],
+        "properties": {
+          "enabledStages": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/NotificationStage"
+            }
+          },
+          "quietHoursStart": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "quietHoursEnd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
           }
         }
       },

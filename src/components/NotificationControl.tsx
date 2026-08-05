@@ -1,14 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ALL_NOTIFICATION_STAGES,
+  DELIVERY_DAY_NOTIFICATION_STAGES,
   disablePushNotifications,
   enablePushNotifications,
+  getNotificationPreferences,
+  IMPORTANT_NOTIFICATION_STAGES,
   inspectPushState,
+  saveNotificationPreferences,
+  type NotificationPreferences,
+  type NotificationStage,
   type PushState,
 } from '../lib/pushNotifications';
 import type { ApiAuth } from '../lib/apiClient';
 import { useModalDialog } from '../lib/modal';
 import { type Translate, useI18n } from '../i18n';
+
+type EventPreset = 'all' | 'important' | 'delivery-day';
+
+const PRESET_STAGES: Record<EventPreset, NotificationStage[]> = {
+  all: ALL_NOTIFICATION_STAGES,
+  important: IMPORTANT_NOTIFICATION_STAGES,
+  'delivery-day': DELIVERY_DAY_NOTIFICATION_STAGES,
+};
 
 export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
   const { t } = useI18n();
@@ -16,6 +31,13 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+  const [preset, setPreset] = useState<EventPreset>('all');
+  const [quietHours, setQuietHours] = useState(false);
+  const [quietStart, setQuietStart] = useState('22:00');
+  const [quietEnd, setQuietEnd] = useState('08:00');
+  const [preferencesBusy, setPreferencesBusy] = useState(false);
+  const [preferencesNotice, setPreferencesNotice] = useState<string | null>(null);
   const enabled = state?.kind === 'enabled';
   const closeButton = useRef<HTMLButtonElement>(null);
   const dialog = useModalDialog<HTMLElement>(open, () => setOpen(false), closeButton);
@@ -23,6 +45,19 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
   useEffect(() => {
     void inspectPushState(apiAuth).then(setState).catch((reason: unknown) => {
       setError(reason instanceof Error ? reason.message : t('notifications.error.unavailable'));
+    });
+  }, [apiAuth, t]);
+
+  useEffect(() => {
+    if (!apiAuth) return;
+    void getNotificationPreferences(apiAuth).then((next) => {
+      setPreferences(next);
+      setPreset(presetFor(next.enabledStages));
+      setQuietHours(Boolean(next.quietHoursStart && next.quietHoursEnd));
+      setQuietStart(next.quietHoursStart ?? '22:00');
+      setQuietEnd(next.quietHoursEnd ?? '08:00');
+    }).catch((reason: unknown) => {
+      setError(reason instanceof Error ? reason.message : t('notifications.error.preferences'));
     });
   }, [apiAuth, t]);
 
@@ -53,6 +88,30 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
       setError(reason instanceof Error ? reason.message : t('notifications.error.disable'));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function savePreferences() {
+    if (!apiAuth || preferencesBusy) return;
+    setPreferencesBusy(true);
+    setPreferencesNotice(null);
+    setError(null);
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+        || preferences?.timezone
+        || 'Europe/Zurich';
+      const saved = await saveNotificationPreferences({
+        enabledStages: PRESET_STAGES[preset],
+        quietHoursStart: quietHours ? quietStart : null,
+        quietHoursEnd: quietHours ? quietEnd : null,
+        timezone,
+      }, apiAuth);
+      setPreferences(saved);
+      setPreferencesNotice(t('notifications.saved'));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t('notifications.error.save'));
+    } finally {
+      setPreferencesBusy(false);
     }
   }
 
@@ -102,6 +161,82 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
             </p>
             {error && <p className="sheet__error" role="alert">{error}</p>}
 
+            {apiAuth && preferences && (
+              <div className="notification-preferences">
+                <fieldset>
+                  <legend>{t('notifications.preferencesTitle')}</legend>
+                  <PreferenceOption
+                    value="all"
+                    selected={preset}
+                    onChange={setPreset}
+                    title={t('notifications.preset.all')}
+                    description={t('notifications.preset.allDescription')}
+                  />
+                  <PreferenceOption
+                    value="important"
+                    selected={preset}
+                    onChange={setPreset}
+                    title={t('notifications.preset.important')}
+                    description={t('notifications.preset.importantDescription')}
+                  />
+                  <PreferenceOption
+                    value="delivery-day"
+                    selected={preset}
+                    onChange={setPreset}
+                    title={t('notifications.preset.deliveryDay')}
+                    description={t('notifications.preset.deliveryDayDescription')}
+                  />
+                </fieldset>
+
+                <label className="notification-preferences__quiet">
+                  <input
+                    type="checkbox"
+                    checked={quietHours}
+                    onChange={(event) => setQuietHours(event.target.checked)}
+                  />
+                  <span>
+                    <strong>{t('notifications.quietHours')}</strong>
+                    <small>{t('notifications.quietDescription')}</small>
+                  </span>
+                </label>
+                {quietHours && (
+                  <div className="notification-preferences__times">
+                    <label>
+                      <span>{t('notifications.from')}</span>
+                      <input
+                        type="time"
+                        value={quietStart}
+                        onChange={(event) => setQuietStart(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      <span>{t('notifications.until')}</span>
+                      <input
+                        type="time"
+                        value={quietEnd}
+                        onChange={(event) => setQuietEnd(event.target.value)}
+                        required
+                      />
+                    </label>
+                  </div>
+                )}
+                {preferencesNotice && (
+                  <p className="notification-preferences__saved" role="status">
+                    {preferencesNotice}
+                  </p>
+                )}
+                <button
+                  className="button button--primary notification-action"
+                  type="button"
+                  disabled={preferencesBusy || (quietHours && (!quietStart || !quietEnd))}
+                  onClick={() => void savePreferences()}
+                >
+                  {preferencesBusy ? t('notifications.saving') : t('notifications.save')}
+                </button>
+              </div>
+            )}
+
             {state?.kind === 'prompt' && (
               <button className="button button--primary notification-action" type="button" disabled={busy} onClick={() => void enable()}>
                 {busy ? t('notifications.enabling') : t('notifications.enable')}
@@ -117,6 +252,43 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
         document.body,
       )}
     </>
+  );
+}
+
+function sameStages(left: readonly NotificationStage[], right: readonly NotificationStage[]) {
+  return left.length === right.length && left.every((stage) => right.includes(stage));
+}
+
+function presetFor(stages: readonly NotificationStage[]): EventPreset {
+  if (sameStages(stages, DELIVERY_DAY_NOTIFICATION_STAGES)) return 'delivery-day';
+  if (sameStages(stages, IMPORTANT_NOTIFICATION_STAGES)) return 'important';
+  return 'all';
+}
+
+function PreferenceOption({
+  value,
+  selected,
+  onChange,
+  title,
+  description,
+}: {
+  value: EventPreset;
+  selected: EventPreset;
+  onChange: (value: EventPreset) => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <label className="notification-preferences__option">
+      <input
+        type="radio"
+        name="notification-preset"
+        value={value}
+        checked={selected === value}
+        onChange={() => onChange(value)}
+      />
+      <span><strong>{title}</strong><small>{description}</small></span>
+    </label>
   );
 }
 

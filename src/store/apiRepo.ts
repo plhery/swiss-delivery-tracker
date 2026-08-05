@@ -7,6 +7,7 @@ import type {
   ApiPackageRow,
   ApiQueueResponse,
   ApiRenamePackageRequest,
+  ApiPackageNotificationRequest,
   ApiTrackingEventRow,
 } from '../generated/apiContract';
 import type {
@@ -89,6 +90,7 @@ function toParcel(row: ApiPackageRow): ParcelWithEvents {
     trackingUrl: row.tracking_url ?? undefined,
     dpdPostcode: row.dpd_postcode ?? undefined,
     archivedAt: row.archived_at ?? undefined,
+    notificationsMuted: row.notifications_muted,
     events: (row.tracking_events ?? []).map(toEvent),
   };
 }
@@ -160,6 +162,19 @@ export function createApiRepo(
       const body: ApiRenamePackageRequest = { label: label.trim() };
       const row = await request<ApiPackageRow>(
         `/api/packages/${encodeURIComponent(id)}`,
+        auth,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        },
+      );
+      return toParcel(row);
+    },
+
+    async setNotificationsMuted(id: string, muted: boolean): Promise<ParcelWithEvents> {
+      const body: ApiPackageNotificationRequest = { muted };
+      const row = await request<ApiPackageRow>(
+        `/api/packages/${encodeURIComponent(id)}/notifications`,
         auth,
         {
           method: 'PATCH',

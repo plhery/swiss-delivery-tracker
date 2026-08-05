@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .api_contract import CARRIER_IDS
 from .carriers import normalize_carrier_inputs
@@ -43,6 +43,19 @@ AUTO_ARCHIVE_DAYS = 60
 MAX_USER_SYNC_JOBS = 5
 RECENT_AUTH_MAX_AGE = timedelta(minutes=10)
 VALID_CARRIERS = CARRIER_IDS
+NOTIFICATION_STAGES = frozenset(
+    {
+        "registered",
+        "accepted",
+        "in_transit",
+        "customs",
+        "out_for_delivery",
+        "failed_attempt",
+        "ready_for_pickup",
+        "delivered",
+        "returned",
+    }
+)
 PREAUTH_REQUEST_LIMIT = 300
 PREAUTH_REQUEST_WINDOW = 60.0
 MAX_HTTP_WORKERS = max(8, int(os.environ.get("MAX_HTTP_WORKERS", "64")))
@@ -473,6 +486,16 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if path == "/api/push/preferences":
+            if not SERVICE:
+                self._json(503, {"error": "The delivery database is not configured"})
+                return
+            try:
+                row = self._user_database().get_notification_preferences()
+                self._json(200, self._notification_preferences_response(row))
+            except SupabaseError as exc:
+                self._database_failure(exc)
+            return
         self._serve_static(path)
 
     def do_HEAD(self) -> None:  # noqa: N802
@@ -752,6 +775,48 @@ class Handler(BaseHTTPRequestHandler):
         if not SERVICE:
             self._json(503, {"error": "The delivery database is not configured"})
             return
+        if path == "/api/push/preferences":
+            try:
+                stages, quiet_start, quiet_end, timezone_name = (
+                    self._notification_preferences(self._read_json())
+                )
+                row = self._user_database().set_notification_preferences(
+                    stages,
+                    quiet_start,
+                    quiet_end,
+                    timezone_name,
+                )
+                self._json(200, self._notification_preferences_response(row))
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except SupabaseError as exc:
+                self._database_failure(exc)
+            return
+
+        package_notifications = re.fullmatch(
+            r"/api/packages/([^/]+)/notifications", path
+        )
+        if package_notifications:
+            try:
+                package_id = str(UUID(package_notifications.group(1)))
+                muted = self._read_json().get("muted")
+                if not isinstance(muted, bool):
+                    raise ValueError("Muted must be true or false")
+                client = self._user_database()
+                client.update_package(package_id, {"notifications_muted": muted})
+                package = client.get_package(package_id)
+                if not package:
+                    self._json(404, {"error": "Package not found"})
+                    return
+                self._json(200, package)
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except SupabaseError as exc:
+                if exc.status == HTTPStatus.NOT_FOUND:
+                    self._json(404, {"error": "Package not found"})
+                else:
+                    self._database_failure(exc)
+            return
         if not path.startswith("/api/packages/"):
             self._json(404, {"error": "Not found"})
             return
@@ -814,6 +879,54 @@ class Handler(BaseHTTPRequestHandler):
         if len(public_key) != 65 or public_key[0] != 4 or len(auth_secret) != 16:
             raise ValueError("Send valid push encryption keys")
         return endpoint, p256dh, auth
+
+    @staticmethod
+    def _notification_preferences(
+        payload: dict[str, object],
+    ) -> tuple[list[str], str | None, str | None, str]:
+        raw_stages = payload.get("enabledStages")
+        quiet_start = payload.get("quietHoursStart")
+        quiet_end = payload.get("quietHoursEnd")
+        timezone_name = payload.get("timezone")
+        if (
+            not isinstance(raw_stages, list)
+            or not raw_stages
+            or len(raw_stages) > len(NOTIFICATION_STAGES)
+            or any(not isinstance(stage, str) for stage in raw_stages)
+        ):
+            raise ValueError("Choose at least one notification event")
+        stages = cast(list[str], raw_stages)
+        if len(set(stages)) != len(stages) or not set(stages) <= NOTIFICATION_STAGES:
+            raise ValueError("Choose valid notification events")
+        if (quiet_start is None) != (quiet_end is None):
+            raise ValueError("Set both quiet-hour times or turn quiet hours off")
+        for value in (quiet_start, quiet_end):
+            if value is not None and (
+                not isinstance(value, str)
+                or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value)
+            ):
+                raise ValueError("Use valid quiet-hour times")
+        if quiet_start is not None and quiet_start == quiet_end:
+            raise ValueError("Quiet hours must have different start and end times")
+        if not isinstance(timezone_name, str) or not 1 <= len(timezone_name) <= 64:
+            raise ValueError("Use a valid timezone")
+        try:
+            ZoneInfo(timezone_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("Use a valid timezone") from None
+        return stages, cast(str | None, quiet_start), cast(str | None, quiet_end), timezone_name
+
+    @staticmethod
+    def _notification_preferences_response(row: dict[str, Any]) -> dict[str, Any]:
+        def short_time(value: object) -> str | None:
+            return value[:5] if isinstance(value, str) else None
+
+        return {
+            "enabledStages": row.get("enabled_stages", []),
+            "quietHoursStart": short_time(row.get("quiet_hours_start")),
+            "quietHoursEnd": short_time(row.get("quiet_hours_end")),
+            "timezone": row.get("timezone", "Europe/Zurich"),
+        }
 
     @staticmethod
     def _decode_base64url(value: str) -> bytes:

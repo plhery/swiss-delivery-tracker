@@ -88,6 +88,17 @@ begin
   ) then
     raise exception 'authenticated cannot execute the validated package RPC';
   end if;
+  if not has_function_privilege(
+    'authenticated',
+    'public.set_owned_notification_preferences(text[],time,time,text)',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'authenticated',
+    'public.set_owned_package_notifications_muted(uuid,boolean)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated cannot execute notification preference RPCs';
+  end if;
 end;
 $$;
 
@@ -286,6 +297,41 @@ begin
     raise exception 'owner could not archive and restore a package through the RPC';
   end if;
 
+  perform public.set_owned_notification_preferences(
+    array['customs', 'out_for_delivery', 'delivered'],
+    '22:00',
+    '08:00',
+    'Europe/Zurich'
+  );
+  if not exists (
+    select 1 from public.notification_preferences
+    where user_id = '10000000-0000-0000-0000-000000000001'
+      and enabled_stages = array['customs', 'out_for_delivery', 'delivered']
+      and quiet_hours_start = '22:00'
+      and quiet_hours_end = '08:00'
+  ) then
+    raise exception 'owner notification preferences were not stored';
+  end if;
+
+  if not public.set_owned_package_notifications_muted(
+    (select id from public.packages where tracking_number = 'CROSSTENANT9'),
+    true
+  ) or not exists (
+    select 1 from public.packages
+    where tracking_number = 'CROSSTENANT9'
+      and notifications_muted
+  ) then
+    raise exception 'owner could not mute package notifications';
+  end if;
+
+  begin
+    update public.notification_preferences
+    set timezone = 'UTC';
+    raise exception 'authenticated user retained direct preference update access';
+  exception when insufficient_privilege then
+    null;
+  end;
+
   begin
     update public.packages
     set dpd_postcode = '3000'
@@ -345,6 +391,12 @@ begin
     true
   ) then
     raise exception 'second user archived a first-user package through the RPC';
+  end if;
+  if public.set_owned_package_notifications_muted(
+    '40000000-0000-0000-0000-000000000004',
+    true
+  ) then
+    raise exception 'second user muted a first-user package through the RPC';
   end if;
 end;
 $$;
@@ -490,6 +542,51 @@ begin
   end if;
 end;
 $$;
+
+-- Account event filters and parcel mutes remove notifications from every
+-- device queue without acknowledging or deleting the carrier event.
+insert into public.notification_preferences (user_id, enabled_stages)
+values (
+  '20000000-0000-0000-0000-000000000002',
+  array['delivered']
+);
+
+do $$
+begin
+  if exists (
+    select 1 from public.pending_push_notifications
+    where subscription_id = '60000000-0000-0000-0000-000000000006'
+  ) then
+    raise exception 'disabled notification stage remained pending';
+  end if;
+end;
+$$;
+
+update public.notification_preferences
+set enabled_stages = array[
+  'registered', 'accepted', 'in_transit', 'customs', 'out_for_delivery',
+  'failed_attempt', 'ready_for_pickup', 'delivered', 'returned'
+]
+where user_id = '20000000-0000-0000-0000-000000000002';
+
+update public.packages
+set notifications_muted = true
+where id = '70000000-0000-0000-0000-000000000007';
+
+do $$
+begin
+  if exists (
+    select 1 from public.pending_push_notifications
+    where subscription_id = '60000000-0000-0000-0000-000000000006'
+  ) then
+    raise exception 'muted parcel event remained pending';
+  end if;
+end;
+$$;
+
+update public.packages
+set notifications_muted = false
+where id = '70000000-0000-0000-0000-000000000007';
 
 insert into public.push_deliveries (subscription_id, event_id)
 select

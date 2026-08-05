@@ -116,6 +116,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertIn("tracking_url", query["select"][0])
         self.assertIn("dpd_postcode", query["select"][0])
         self.assertIn("archived_at", query["select"][0])
+        self.assertIn("notifications_muted", query["select"][0])
 
         self.client._request.reset_mock()
         self.client.list_packages(include_archived=True)
@@ -335,7 +336,7 @@ class SupabaseUserClientMutationTests(unittest.TestCase):
             "pkg-1",
         )
 
-    def test_user_updates_can_only_call_the_rename_and_archive_rpcs(self):
+    def test_user_updates_can_only_call_approved_package_rpcs(self):
         self.client._request = Mock(return_value=True)
 
         self.client.update_package("pkg-1", {"label": "Coffee"})
@@ -354,8 +355,61 @@ class SupabaseUserClientMutationTests(unittest.TestCase):
         self.client.restore_package("pkg-1")
         self.assertFalse(self.client._request.call_args.kwargs["body"]["p_archived"])
 
+        self.client.update_package("pkg-1", {"notifications_muted": True})
+        notifications = self.client._request.call_args
+        self.assertEqual(
+            notifications.args[0],
+            "/rest/v1/rpc/set_owned_package_notifications_muted",
+        )
+        self.assertEqual(
+            notifications.kwargs["body"],
+            {"p_package_id": "pkg-1", "p_muted": True},
+        )
+
         with self.assertRaisesRegex(ValueError, "approved mutation"):
             self.client.update_package("pkg-1", {"sync_status": "ok"})
+
+    def test_notification_preferences_use_owner_scoped_reads_and_rpc_writes(self):
+        stored = {
+            "enabled_stages": ["out_for_delivery", "delivered"],
+            "quiet_hours_start": "22:00:00",
+            "quiet_hours_end": "08:00:00",
+            "timezone": "Europe/Zurich",
+        }
+        self.client._request = Mock(return_value=[stored])
+
+        self.assertEqual(self.client.get_notification_preferences(), stored)
+        read = self.client._request.call_args
+        self.assertIn("/rest/v1/notification_preferences?", read.args[0])
+        self.assertNotIn("user_id", read.args[0])
+
+        self.client._request = Mock(return_value=stored)
+        self.assertEqual(
+            self.client.set_notification_preferences(
+                ["out_for_delivery", "delivered"],
+                "22:00",
+                "08:00",
+                "Europe/Zurich",
+            ),
+            stored,
+        )
+        write = self.client._request.call_args
+        self.assertEqual(
+            write.args[0], "/rest/v1/rpc/set_owned_notification_preferences"
+        )
+        self.assertEqual(write.kwargs["method"], "POST")
+        self.assertEqual(write.kwargs["body"]["p_quiet_hours_start"], "22:00")
+
+        self.client._request = Mock(return_value=[])
+        defaults = self.client.get_notification_preferences()
+        self.assertIn("in_transit", defaults["enabled_stages"])
+        self.assertIsNone(defaults["quiet_hours_start"])
+
+        self.client._request = Mock(return_value=[])
+        with self.assertRaisesRegex(SupabaseError, "did not return"):
+            self.client.set_notification_preferences(
+                ["delivered"], None, None, "Europe/Zurich"
+            )
 
     def test_false_mutation_results_are_reported_as_not_found(self):
         self.client._request = Mock(return_value=False)

@@ -21,6 +21,7 @@ interface ParcelsState {
   mode: ParcelRepo['mode'];
   addParcel: (input: NewParcelInput) => Promise<ParcelWithEvents>;
   renameParcel: (id: string, label: string) => Promise<ParcelWithEvents>;
+  setParcelNotificationsMuted: (id: string, muted: boolean) => Promise<void>;
   removeParcel: (id: string) => Promise<void>;
   restoreParcel: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -162,6 +163,25 @@ export function ParcelsProvider({
     }
   }, [repo, rememberError]);
 
+  const setParcelNotificationsMuted = useCallback(async (id: string, muted: boolean) => {
+    try {
+      if (!repo.setNotificationsMuted) {
+        throw new Error('Parcel notification settings are unavailable');
+      }
+      const updated = await repo.setNotificationsMuted(id, muted);
+      if (mounted.current) {
+        setParcels((current) =>
+          current.map((parcel) => parcel.id === updated.id ? updated : parcel),
+        );
+        setError(null);
+        setAuthenticationRequired(false);
+      }
+    } catch (error) {
+      rememberError(error);
+      throw error;
+    }
+  }, [repo, rememberError]);
+
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -209,6 +229,7 @@ export function ParcelsProvider({
       mode: repo.mode,
       addParcel,
       renameParcel,
+      setParcelNotificationsMuted,
       removeParcel,
       restoreParcel,
       refresh,
@@ -225,6 +246,7 @@ export function ParcelsProvider({
       repo.mode,
       addParcel,
       renameParcel,
+      setParcelNotificationsMuted,
       removeParcel,
       restoreParcel,
       refresh,

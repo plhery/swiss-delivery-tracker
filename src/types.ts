@@ -28,6 +28,7 @@ export interface Parcel {
   trackingUrl?: string;
   dpdPostcode?: string;
   archivedAt?: string;
+  notificationsMuted?: boolean;
 }
 
 export interface TrackingEvent {
@@ -57,6 +58,7 @@ export interface ParcelRepo {
   list(): Promise<ParcelWithEvents[]>;
   add(input: NewParcelInput): Promise<ParcelWithEvents>;
   rename(id: string, label: string): Promise<ParcelWithEvents>;
+  setNotificationsMuted?(id: string, muted: boolean): Promise<ParcelWithEvents>;
   remove(id: string): Promise<void>;
   restore?(id: string): Promise<ParcelWithEvents>;
   /** Re-sync tracking; in demo mode this advances the simulation. */

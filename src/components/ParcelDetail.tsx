@@ -14,6 +14,7 @@ export function ParcelDetail({
   parcel,
   onBack,
   onRename,
+  onSetNotificationsMuted,
   onRefresh,
   onRestore,
   onDelete,
@@ -21,6 +22,10 @@ export function ParcelDetail({
   parcel: ParcelWithEvents;
   onBack: () => void;
   onRename: (parcel: ParcelWithEvents, label: string) => Promise<unknown>;
+  onSetNotificationsMuted: (
+    parcel: ParcelWithEvents,
+    muted: boolean,
+  ) => Promise<unknown>;
   onRefresh: (parcel: ParcelWithEvents) => Promise<unknown>;
   onRestore: (parcel: ParcelWithEvents) => Promise<unknown>;
   onDelete: (parcel: ParcelWithEvents) => Promise<unknown>;
@@ -42,6 +47,8 @@ export function ParcelDetail({
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
   const backButton = useRef<HTMLButtonElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, onBack, backButton);
 
@@ -122,6 +129,21 @@ export function ParcelDetail({
       setCopyStatus('copied');
     } catch {
       setCopyStatus('error');
+    }
+  }
+
+  async function toggleNotifications() {
+    if (savingNotifications) return;
+    setSavingNotifications(true);
+    setNotificationError(null);
+    try {
+      await onSetNotificationsMuted(parcel, !parcel.notificationsMuted);
+    } catch (error) {
+      setNotificationError(
+        error instanceof Error ? error.message : t('detail.notificationFailed'),
+      );
+    } finally {
+      setSavingNotifications(false);
     }
   }
 
@@ -275,6 +297,28 @@ export function ParcelDetail({
           >
             {t('detail.openCarrier', { carrier: carrier.name })}
           </a>
+        )}
+        <div className="detail__notification-setting">
+          <div>
+            <strong>{t('detail.mute')}</strong>
+            <span>{t('detail.muteDescription')}</span>
+          </div>
+          <button
+            type="button"
+            className={`detail__notification-toggle${parcel.notificationsMuted
+              ? ' detail__notification-toggle--muted'
+              : ''}`}
+            role="switch"
+            aria-checked={Boolean(parcel.notificationsMuted)}
+            aria-label={t('detail.notifications')}
+            disabled={savingNotifications}
+            onClick={() => void toggleNotifications()}
+          >
+            {parcel.notificationsMuted ? t('detail.muted') : t('detail.alertsOn')}
+          </button>
+        </div>
+        {notificationError && (
+          <p className="detail__check-error" role="alert">{notificationError}</p>
         )}
       </div>
 

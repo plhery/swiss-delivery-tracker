@@ -500,6 +500,7 @@ export interface ApiPackageRow {
   "tracking_url": string | null;
   "dpd_postcode": string | null;
   "archived_at": string | null;
+  "notifications_muted": boolean;
   "tracking_events": Array<ApiTrackingEventRow> | null;
 }
 
@@ -519,6 +520,10 @@ export interface ApiRenamePackageRequest {
   "label": string;
 }
 
+export interface ApiPackageNotificationRequest {
+  "muted": boolean;
+}
+
 export interface ApiQueueResponse {
   "queued": boolean;
   "pending": number;
@@ -535,6 +540,15 @@ export interface ApiErrorResponse {
 export interface ApiPushConfigResponse {
   "available": boolean;
   "publicKey": string | null;
+}
+
+export type ApiNotificationStage = "registered" | "accepted" | "in_transit" | "customs" | "out_for_delivery" | "failed_attempt" | "ready_for_pickup" | "delivered" | "returned";
+
+export interface ApiNotificationPreferences {
+  "enabledStages": Array<ApiNotificationStage>;
+  "quietHoursStart": string | null;
+  "quietHoursEnd": string | null;
+  "timezone": string;
 }
 
 export interface ApiPushSubscriptionKeys {

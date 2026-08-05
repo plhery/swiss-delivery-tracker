@@ -1,9 +1,40 @@
 import { authenticatedFetch, type ApiAuth } from './apiClient';
 import type {
   ApiOkResponse,
+  ApiNotificationPreferences,
+  ApiNotificationStage,
   ApiPushConfigResponse,
   ApiPushSubscriptionResponse,
 } from '../generated/apiContract';
+
+export type NotificationPreferences = ApiNotificationPreferences;
+export type NotificationStage = ApiNotificationStage;
+
+export const ALL_NOTIFICATION_STAGES: NotificationStage[] = [
+  'registered',
+  'accepted',
+  'in_transit',
+  'customs',
+  'out_for_delivery',
+  'failed_attempt',
+  'ready_for_pickup',
+  'delivered',
+  'returned',
+];
+
+export const IMPORTANT_NOTIFICATION_STAGES: NotificationStage[] = [
+  'customs',
+  'out_for_delivery',
+  'failed_attempt',
+  'ready_for_pickup',
+  'delivered',
+  'returned',
+];
+
+export const DELIVERY_DAY_NOTIFICATION_STAGES: NotificationStage[] = [
+  'out_for_delivery',
+  'delivered',
+];
 
 export type PushState =
   | { kind: 'unsupported' }
@@ -60,6 +91,22 @@ export async function inspectPushState(auth?: ApiAuth): Promise<PushState> {
   return subscription
     ? { kind: 'enabled', publicKey: config.publicKey }
     : { kind: 'prompt', publicKey: config.publicKey };
+}
+
+export async function getNotificationPreferences(
+  auth: ApiAuth,
+): Promise<NotificationPreferences> {
+  return request<ApiNotificationPreferences>('/api/push/preferences', auth);
+}
+
+export async function saveNotificationPreferences(
+  preferences: NotificationPreferences,
+  auth: ApiAuth,
+): Promise<NotificationPreferences> {
+  return request<ApiNotificationPreferences>('/api/push/preferences', auth, {
+    method: 'PATCH',
+    body: JSON.stringify(preferences),
+  });
 }
 
 export async function enablePushNotifications(
