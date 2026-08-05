@@ -1,0 +1,3 @@
+# Public, Android-app-restricted Firebase identifier shipped by the myDPD app.
+# The rotating carrier credential is fetched at runtime and is never committed.
+5b5752786c9e9e6baca285791ae4a96991caf619:server/dpd.py:gcp-api-key:33

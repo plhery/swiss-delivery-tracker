@@ -3,7 +3,16 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "A friendly iPhone-first PWA to follow your Swiss package deliveries, powered by Supabase.",
+  "description": "An open-source, iPhone-first PWA for following parcel deliveries.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plhery/delivery-tracker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/plhery/delivery-tracker/issues"
+  },
+  "homepage": "https://github.com/plhery/delivery-tracker#readme",
   "engines": {
     "node": ">=22.12 <25",
     "npm": ">=10"

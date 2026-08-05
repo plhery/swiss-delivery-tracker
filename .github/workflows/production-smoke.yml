@@ -2,6 +2,11 @@ name: Production origin smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      target_url:
+        description: Public application URL to verify
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,4 +20,5 @@ jobs:
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.DELIVERY_CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.DELIVERY_CF_ACCESS_CLIENT_SECRET }}
-        run: scripts/smoke-url.sh https://delivery.plhery.com
+          TARGET_URL: ${{ inputs.target_url }}
+        run: scripts/smoke-url.sh "$TARGET_URL"
