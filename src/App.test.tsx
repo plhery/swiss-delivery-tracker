@@ -43,6 +43,42 @@ describe('App', () => {
     expect(screen.getByText('At customs')).toBeInTheDocument();
   });
 
+  it('treats returned parcels as final without calling them delivered', async () => {
+    const returned: ParcelWithEvents = {
+      id: 'parcel-returned',
+      trackingNumber: 'LX123456789DE',
+      label: 'Returned shoes',
+      carrier: 'intl-post',
+      createdAt: '2026-07-10T10:00:00Z',
+      syncStatus: 'ok',
+      events: [{
+        id: 'event-returned',
+        parcelId: 'parcel-returned',
+        stage: 'returned',
+        description: 'Returned to sender',
+        occurredAt: '2026-07-20T10:00:00Z',
+      }],
+    };
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([returned]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([returned]),
+    };
+
+    renderApp(repo);
+
+    expect(await screen.findByText('Returned shoes')).toBeInTheDocument();
+    expect(screen.getByText(/nothing on the way right now/i)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'On the way' })).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Returned' })).getByText('Returned shoes'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Past deliveries' })).not.toBeInTheDocument();
+  });
+
   it('shows a tomorrow ETA on the main parcel card', async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);

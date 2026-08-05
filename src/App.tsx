@@ -4,7 +4,7 @@ import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
 import { REAUTH_PATH } from './lib/cloudflareAccess';
-import { isDelivered } from './lib/stages';
+import { currentStage, isDelivered, isFinal } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { ParcelWithEvents } from './types';
 
@@ -49,16 +49,20 @@ export default function App() {
     [parcels, openParcelId],
   );
 
-  const activeCount = useMemo(
-    () => parcels.filter((p) => !isDelivered(p.events)).length,
-    [parcels],
-  );
   const activeParcels = useMemo(
-    () => parcels.filter((p) => !isDelivered(p.events)),
+    () => parcels.filter((parcel) => {
+      const stage = currentStage(parcel.events);
+      return stage === null || !isFinal(stage);
+    }),
     [parcels],
   );
+  const activeCount = activeParcels.length;
   const deliveredParcels = useMemo(
     () => parcels.filter((p) => isDelivered(p.events)),
+    [parcels],
+  );
+  const returnedParcels = useMemo(
+    () => parcels.filter((parcel) => currentStage(parcel.events) === 'returned'),
     [parcels],
   );
 
@@ -190,6 +194,27 @@ export default function App() {
             </div>
             <div className="parcel-grid">
               {deliveredParcels.map((parcel) => (
+                <ParcelCard
+                  key={parcel.id}
+                  parcel={parcel}
+                  onOpen={(p) => showParcel(p.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!loading && returnedParcels.length > 0 && (
+          <section
+            className="parcel-section parcel-section--past"
+            aria-labelledby="returned-parcels-title"
+          >
+            <div className="parcel-section__heading">
+              <h2 id="returned-parcels-title">Returned</h2>
+              <span>{returnedParcels.length}</span>
+            </div>
+            <div className="parcel-grid">
+              {returnedParcels.map((parcel) => (
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
