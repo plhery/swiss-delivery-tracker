@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AddParcelSheet } from './components/AddParcelSheet';
+import { AccountMenu } from './components/AccountMenu';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
@@ -10,7 +11,13 @@ import type { ParcelWithEvents } from './types';
 
 const DETAIL_HISTORY_KEY = 'parcelPostDetail';
 
-export default function App() {
+export default function App({
+  accountEmail,
+  onSignOut,
+}: {
+  accountEmail?: string;
+  onSignOut?: () => Promise<void>;
+} = {}) {
   const {
     parcels,
     loading,
@@ -192,6 +199,9 @@ export default function App() {
                 <path d="M19 8a7.5 7.5 0 1 0 .2 7.6M19 4v4h-4" />
               </svg>
             </button>
+            {accountEmail && onSignOut && (
+              <AccountMenu email={accountEmail} onSignOut={onSignOut} />
+            )}
           </div>
         </div>
         <div className="app__summary" aria-live="polite">

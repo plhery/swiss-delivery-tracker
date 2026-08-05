@@ -194,13 +194,21 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(json.loads(body), {"error": "Authentication is required"})
 
     def test_static_shell_assets_spa_fallback_and_path_safety(self):
-        status, headers, body = self.request("GET", "/")
+        with patch.dict(
+            os.environ,
+            {"SUPABASE_PUBLIC_URL": "https://auth.example.test/project"},
+        ):
+            status, headers, body = self.request("GET", "/")
         self.assertEqual(status, 200)
         self.assertEqual(body, b"<html>current shell</html>")
         self.assertEqual(headers["Cache-Control"], "no-store, max-age=0, must-revalidate")
         self.assertEqual(headers["Pragma"], "no-cache")
         self.assertEqual(headers["X-Frame-Options"], "DENY")
         self.assertIn("default-src 'self'", headers["Content-Security-Policy"])
+        self.assertIn(
+            "connect-src 'self' https://auth.example.test",
+            headers["Content-Security-Policy"],
+        )
         self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
         self.assertIn("camera=()", headers["Permissions-Policy"])
 
@@ -616,6 +624,22 @@ class AppLifecycleTests(unittest.TestCase):
         ):
             self.assertIs(app.build_access_validator(), validator_class.return_value)
             validator_class.assert_called_once_with("team.example", "audience")
+
+    def test_public_supabase_origin_rejects_unsafe_configuration(self):
+        cases = {
+            "": None,
+            "javascript:alert(1)": None,
+            "https://user:password@example.test": None,
+            "https://auth.example.test/path": "https://auth.example.test",
+            "http://supabase.internal:8000/rest": "http://supabase.internal:8000",
+        }
+        for raw_url, expected in cases.items():
+            with self.subTest(raw_url=raw_url):
+                with patch.dict(
+                    os.environ,
+                    {"SUPABASE_PUBLIC_URL": raw_url, "SUPABASE_URL": ""},
+                ):
+                    self.assertEqual(app.public_supabase_origin(), expected)
 
     def test_schedule_uses_ten_minutes_by_day_and_hourly_by_night(self):
         cases = [

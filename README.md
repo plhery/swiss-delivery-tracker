@@ -76,8 +76,8 @@ docker run --rm -p 3000:3000 \
 ```
 
 Apply every file in `supabase/migrations/` in filename order before running the
-container. `SUPABASE_SERVICE_ROLE_KEY` must remain server-only; there are no
-`VITE_SUPABASE_*` build variables.
+container. `SUPABASE_SERVICE_ROLE_KEY` must remain server-only. The browser uses
+only the public Supabase URL and publishable key for authentication.
 
 ### Environment variables
 
@@ -88,6 +88,9 @@ environment, never in a `VITE_` variable.
 | --- | --- | --- |
 | `SUPABASE_URL` | Production | Supabase project URL used only by the Python service. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Production | Server-only database key. |
+| `SUPABASE_PUBLIC_URL` | Production auth | Browser-reachable Supabase origin added to the Content Security Policy; defaults to `SUPABASE_URL`. |
+| `VITE_SUPABASE_URL` | Production build | Browser-reachable Supabase Auth URL. This value is public. |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Production build | Supabase publishable key used only for Auth. This value is public and must never be the service-role key. |
 | `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | Recommended in production | Enables origin-side signature, issuer and application-audience validation for the Cloudflare Access JWT on every `/api/*` request. Configure both or neither. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | For push | Stable Web Push key pair. |
 | `VAPID_SUBJECT` | For push | HTTPS URL or `mailto:` contact; defaults to the production Parcel Post URL. |

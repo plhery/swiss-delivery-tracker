@@ -43,6 +43,21 @@ AUTO_ARCHIVE_DAYS = 60
 VALID_CARRIERS = CARRIER_IDS
 
 
+def public_supabase_origin() -> str | None:
+    raw_url = os.environ.get("SUPABASE_PUBLIC_URL", "").strip()
+    if not raw_url:
+        raw_url = os.environ.get("SUPABASE_URL", "").strip()
+    parsed = urlparse(raw_url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+    ):
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def build_access_validator() -> CloudflareAccessValidator | None:
     team_domain = os.environ.get("CF_ACCESS_TEAM_DOMAIN", "").strip()
     audience = os.environ.get("CF_ACCESS_AUD", "").strip()
@@ -226,9 +241,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         self.send_header("X-Frame-Options", "DENY")
+        connect_sources = "'self'"
+        if supabase_origin := public_supabase_origin():
+            connect_sources = f"{connect_sources} {supabase_origin}"
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; base-uri 'none'; connect-src 'self'; "
+            f"default-src 'self'; base-uri 'none'; connect-src {connect_sources}; "
             "font-src 'self'; form-action 'self'; frame-ancestors 'none'; "
             "img-src 'self'; manifest-src 'self'; object-src 'none'; "
             "script-src 'self'; style-src 'self'; worker-src 'self'",

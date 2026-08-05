@@ -1473,6 +1473,214 @@ button:disabled {
   text-align: center;
 }
 
+.auth-screen {
+  display: grid;
+  min-height: 100dvh;
+  padding: calc(28px + env(safe-area-inset-top)) 18px
+    calc(28px + env(safe-area-inset-bottom));
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 0, #fff1a7 0, transparent 42%),
+    var(--canvas);
+}
+
+.auth-card {
+  width: min(100%, 430px);
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: 0 24px 70px rgba(34, 31, 20, 0.13);
+}
+
+.auth-card__mark {
+  position: relative;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 22px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 15px;
+  background: var(--ink);
+}
+
+.auth-card__mark::before {
+  content: "";
+  width: 27px;
+  height: 19px;
+  border: 2px solid var(--yellow);
+  border-radius: 3px;
+}
+
+.auth-card__mark span {
+  position: absolute;
+  top: 20px;
+  width: 21px;
+  height: 10px;
+  border-bottom: 2px solid var(--yellow);
+  transform: rotate(-31deg);
+}
+
+.auth-card__eyebrow {
+  margin: 0 0 7px;
+  color: var(--orange-text);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: clamp(30px, 8vw, 42px);
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.auth-card form {
+  display: grid;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.auth-card__intro,
+.auth-card__privacy,
+.auth-card__configuration {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.auth-card__intro {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.auth-card label {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.auth-card input {
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 14px;
+  border: 1px solid #bbb5a8;
+  border-radius: 12px;
+  background: white;
+  font-size: 16px;
+}
+
+.auth-card input:focus {
+  border-color: var(--orange-text);
+}
+
+.auth-card .button {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 4px;
+}
+
+.auth-card__error {
+  margin: 0;
+  color: #8a2f16;
+  font-size: 13px;
+}
+
+.auth-card__text-button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--orange-text);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.auth-card__privacy {
+  margin: 24px 0 0;
+  font-size: 11px;
+}
+
+.auth-card__configuration {
+  display: grid;
+  gap: 5px;
+  margin-top: 26px;
+  padding: 14px;
+  border: 1px solid #e2bdaa;
+  border-radius: 12px;
+  background: #fff7f1;
+  font-size: 13px;
+}
+
+.auth-loading {
+  display: grid;
+  min-height: 100dvh;
+  padding: 24px;
+  place-items: center;
+  color: var(--ink-soft);
+  font-weight: 750;
+}
+
+.account-menu {
+  position: relative;
+}
+
+.account-menu summary {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(25, 25, 22, 0.16);
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--yellow);
+  font-weight: 850;
+  list-style: none;
+  cursor: pointer;
+}
+
+.account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-menu__popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 9px);
+  right: 0;
+  display: grid;
+  width: min(280px, calc(100vw - 32px));
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+}
+
+.account-menu__popover span {
+  color: var(--ink-soft);
+}
+
+.account-menu__popover strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-menu__popover button {
+  min-height: 44px;
+  margin-top: 7px;
+  border: 1px solid #d8aa93;
+  border-radius: 10px;
+  background: #fff7f1;
+  color: #8a2f16;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 @media (min-width: 700px) {
   .app {
     padding-top: 22px;
@@ -1538,6 +1746,25 @@ button:disabled {
   .parcel-card__stamp {
     width: 40px;
     height: 40px;
+  }
+}
+
+@media (max-width: 360px) {
+  .app__header {
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+
+  .app__brand-mark {
+    display: none;
+  }
+
+  .app__header-actions {
+    gap: 4px;
+  }
+
+  .auth-card {
+    padding: 24px 20px;
   }
 }
 

@@ -1,5 +1,9 @@
 FROM node:22-alpine AS web-build
 WORKDIR /app
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
+    VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY index.html tsconfig.json vite.config.ts ./
