@@ -3,6 +3,7 @@
   --yellow: #ffcf00;
   --yellow-soft: #fff3b8;
   --orange: #ef6c24;
+  --orange-text: #9a4718;
   --orange-soft: #fff0e6;
   --ink: #191916;
   --ink-soft: #69675f;
@@ -56,7 +57,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--orange) 72%, transparent);
+  outline: 3px solid var(--orange-text);
 }
 
 button:disabled {
@@ -160,7 +161,7 @@ button:disabled {
 }
 
 .icon-button {
-  height: 40px;
+  height: 44px;
   border: 1px solid rgba(25, 25, 22, 0.16);
   background: rgba(255, 255, 255, 0.34);
   color: var(--ink);
@@ -169,7 +170,7 @@ button:disabled {
 
 .icon-button {
   display: grid;
-  width: 40px;
+  width: 44px;
   padding: 0;
   place-items: center;
   border-radius: 12px;
@@ -268,7 +269,7 @@ button:disabled {
   padding: 3px 7px;
   border: 1px solid var(--orange);
   border-radius: 5px;
-  color: var(--orange);
+  color: var(--orange-text);
   font-size: 9px;
   font-weight: 850;
   letter-spacing: 0.1em;
@@ -291,7 +292,7 @@ button:disabled {
 
 .error-banner__action {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   margin-top: 8px;
@@ -319,6 +320,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   margin: 0 2px 11px;
+  min-height: 44px;
   color: var(--ink-soft);
   font-size: 14px;
   font-weight: 780;
@@ -790,7 +792,7 @@ button:disabled {
 }
 
 .sheet__eyebrow {
-  color: var(--orange);
+  color: var(--orange-text);
 }
 
 .sheet__title {
@@ -801,8 +803,8 @@ button:disabled {
 
 .sheet__close {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   padding: 0 0 2px;
   place-items: center;
   border: 1px solid var(--line);
@@ -863,7 +865,7 @@ button:disabled {
 }
 
 .field__input::placeholder {
-  color: #969187;
+  color: #746f66;
 }
 
 .field__input--tracking {
@@ -1028,6 +1030,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 3px;
+  min-height: 44px;
   padding: 8px 7px;
   border: 0;
   background: transparent;
@@ -1075,7 +1078,7 @@ button:disabled {
 }
 
 .detail__eyebrow {
-  color: var(--orange);
+  color: var(--orange-text);
 }
 
 .detail__title {
@@ -1094,8 +1097,8 @@ button:disabled {
 
 .detail__title-edit {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   padding: 0;
   place-items: center;
@@ -1138,7 +1141,7 @@ button:disabled {
 }
 
 .detail__title-actions .button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 12px;
   font-size: 12px;
 }
@@ -1213,7 +1216,9 @@ button:disabled {
 }
 
 .detail__carrier-link {
-  display: inline-block;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   margin-top: 12px;
   color: #9a4718;
   font-size: 12px;
@@ -1313,7 +1318,7 @@ button:disabled {
 }
 
 .undo-toast button {
-  min-height: 34px;
+  min-height: 44px;
   padding: 6px 11px;
   border: 0;
   border-radius: 9px;
