@@ -438,6 +438,18 @@ describe('App', () => {
     expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
   });
 
+  it('copies a parcel tracking number from its detail ticket', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(window.navigator.clipboard, 'writeText');
+    renderApp();
+
+    await user.click(await screen.findByText('Coffee beans ☕'));
+    await user.click(screen.getByRole('button', { name: /copy tracking number/i }));
+
+    expect(writeText).toHaveBeenCalledWith('993412345678901234');
+    expect(screen.getByRole('button', { name: /copy tracking number/i })).toHaveTextContent('Copied');
+  });
+
   it('opens notification deep links and clears the parcel query on back', async () => {
     const parcel: ParcelWithEvents = {
       id: 'parcel-from-push',

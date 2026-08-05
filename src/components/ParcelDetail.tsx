@@ -40,6 +40,7 @@ export function ParcelDetail({
   const [restoring, setRestoring] = useState(false);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const backButton = useRef<HTMLButtonElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, onBack, backButton);
 
@@ -110,6 +111,16 @@ export function ParcelDetail({
     } catch (error) {
       setCheckError(error instanceof Error ? error.message : 'Could not archive the parcel');
       setArchiving(false);
+    }
+  }
+
+  async function copyTrackingNumber() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(parcel.trackingNumber);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('error');
     }
   }
 
@@ -241,8 +252,21 @@ export function ParcelDetail({
         <div className="detail__tracking-ticket">
           <span className="detail__tracking-label">Tracking number</span>
           <strong>{formatTrackingNumber(parcel.trackingNumber)}</strong>
+          <button
+            type="button"
+            className="detail__tracking-copy"
+            onClick={() => void copyTrackingNumber()}
+            aria-label="Copy tracking number"
+          >
+            {copyStatus === 'copied' ? 'Copied' : 'Copy'}
+          </button>
           <span className="detail__barcode" aria-hidden="true" />
         </div>
+        {copyStatus === 'error' && (
+          <p className="detail__copy-error" role="alert">
+            Copying is unavailable. Press and hold the tracking number instead.
+          </p>
+        )}
         {parcel.expectedDelivery && (
           <p className="detail__meta">
             Expected: {formatExpectedDelivery(parcel.expectedDelivery)}
