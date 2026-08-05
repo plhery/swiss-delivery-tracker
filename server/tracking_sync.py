@@ -6,8 +6,9 @@ import hashlib
 import json
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .dpd import DPDTracker
 from .planzer_shared import PlanzerSharedTracker
@@ -26,6 +27,16 @@ CARRIER_NAMES = {
     "postlogistics": "PostLogistics",
     "dpd": "DPD",
     "ups": "UPS",
+}
+
+ZURICH = ZoneInfo("Europe/Zurich")
+CARRIER_TIMEZONES: dict[str, tzinfo] = {
+    "swiss-post": ZURICH,
+    "quickpac": ZURICH,
+    "planzer": ZURICH,
+    "hermes": ZURICH,
+    "postlogistics": ZURICH,
+    "dpd": ZURICH,
 }
 
 
@@ -152,19 +163,33 @@ def result_stage(result: dict[str, Any]) -> str | None:
     return mapping.get(status)
 
 
-def event_timestamp(raw: Any, fallback: datetime) -> str:
+def result_timezone(carrier_id: str, result: dict[str, Any]) -> tzinfo:
+    declared = result.get("timezone")
+    if isinstance(declared, str) and 1 <= len(declared) <= 64:
+        try:
+            return ZoneInfo(declared)
+        except (ValueError, ZoneInfoNotFoundError):
+            pass
+    return CARRIER_TIMEZONES.get(carrier_id, timezone.utc)
+
+
+def event_timestamp(
+    raw: Any,
+    fallback: datetime,
+    assumed_timezone: tzinfo = timezone.utc,
+) -> str:
     if isinstance(raw, str) and raw.strip():
         value = raw.strip()
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                parsed = parsed.replace(tzinfo=assumed_timezone)
             return parsed.astimezone(timezone.utc).isoformat()
         except ValueError:
             for fmt in ("%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%Y-%m-%d"):
                 try:
-                    parsed = datetime.strptime(value, fmt).replace(tzinfo=timezone.utc)
-                    return parsed.isoformat()
+                    parsed = datetime.strptime(value, fmt).replace(tzinfo=assumed_timezone)
+                    return parsed.astimezone(timezone.utc).isoformat()
                 except ValueError:
                     continue
     return fallback.isoformat()
@@ -181,6 +206,7 @@ def provider_event_id(carrier_id: str, raw_time: Any, location: str, description
 
 def build_events(package: dict[str, Any], result: dict[str, Any], now: datetime) -> list[dict[str, Any]]:
     current = result_stage(result) or "in_transit"
+    assumed_timezone = result_timezone(str(package.get("carrier") or ""), result)
     rows: list[dict[str, Any]] = []
     for raw in result.get("events") or []:
         description = str(raw.get("description") or "Tracking update").strip()
@@ -192,7 +218,7 @@ def build_events(package: dict[str, Any], result: dict[str, Any], now: datetime)
                 "stage": infer_stage(description, current),
                 "description": description,
                 "location": location or None,
-                "occurred_at": event_timestamp(raw_time, now),
+                "occurred_at": event_timestamp(raw_time, now, assumed_timezone),
                 "provider_event_id": provider_event_id(
                     package["carrier"], raw_time, location, description
                 ),
@@ -209,7 +235,7 @@ def build_events(package: dict[str, Any], result: dict[str, Any], now: datetime)
                 "stage": current,
                 "description": description,
                 "location": None,
-                "occurred_at": event_timestamp(raw_time, now),
+                "occurred_at": event_timestamp(raw_time, now, assumed_timezone),
                 "provider_event_id": provider_event_id(
                     package["carrier"], raw_time, "", description
                 ),

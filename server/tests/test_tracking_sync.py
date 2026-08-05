@@ -4,6 +4,7 @@ import sys
 from types import ModuleType
 import unittest
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from server.tracking_sync import (
     CARRIER_NAMES,
@@ -14,6 +15,7 @@ from server.tracking_sync import (
     event_timestamp,
     infer_stage,
     provider_event_id,
+    result_timezone,
     result_stage,
 )
 
@@ -181,8 +183,44 @@ class TrackingSyncTests(unittest.TestCase):
             event_timestamp("2026-07-14", fallback),
             "2026-07-14T00:00:00+00:00",
         )
+        zurich = ZoneInfo("Europe/Zurich")
+        self.assertEqual(
+            event_timestamp("2026-07-14 10:00", fallback, zurich),
+            "2026-07-14T08:00:00+00:00",
+        )
+        self.assertEqual(
+            event_timestamp("14.07.2026 10:00", fallback, zurich),
+            "2026-07-14T08:00:00+00:00",
+        )
         self.assertEqual(event_timestamp("not-a-date", fallback), fallback.isoformat())
         self.assertEqual(event_timestamp(None, fallback), fallback.isoformat())
+
+    def test_carrier_or_declared_timezone_is_used_for_naive_events(self):
+        zurich = ZoneInfo("Europe/Zurich")
+        self.assertEqual(result_timezone("swiss-post", {}), zurich)
+        self.assertEqual(result_timezone("aliexpress", {}), timezone.utc)
+        self.assertEqual(
+            result_timezone("aliexpress", {"timezone": "Asia/Shanghai"}),
+            ZoneInfo("Asia/Shanghai"),
+        )
+        self.assertEqual(
+            result_timezone("swiss-post", {"timezone": "not/a-zone"}),
+            zurich,
+        )
+
+        rows = build_events(
+            self.package(),
+            {
+                "status": "in_transit",
+                "events": [{
+                    "time": "2026-07-14 10:00",
+                    "location": "Zürich",
+                    "description": "Sorted",
+                }],
+            },
+            datetime(2026, 7, 14, 9, tzinfo=timezone.utc),
+        )
+        self.assertEqual(rows[0]["occurred_at"], "2026-07-14T08:00:00+00:00")
 
     def test_provider_ids_are_stable_and_content_addressed(self):
         first = provider_event_id("swiss-post", "time", "Zürich", "Sorted")
