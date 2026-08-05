@@ -463,27 +463,30 @@ class TrackingSyncTests(unittest.TestCase):
                 planzer_shared_tracker=planzer_shared_tracker,
                 ups_tracker=ups_tracker,
             )
-        self.assertEqual(adapter.fetch("swiss-post", "123", None), {"number": "123"})
+        self.assertEqual(
+            adapter.fetch("swiss-post", "123", None),
+            {"number": "123", "status": "unknown", "events": []},
+        )
         self.assertEqual(
             adapter.fetch("dpd", "06086514587082", None),
-            {"status": "in_transit"},
+            {"status": "in_transit", "events": []},
         )
         dpd_tracker.fetch.assert_called_once_with("06086514587082", None)
         self.assertEqual(
             adapter.fetch("ups", "1Z999AA10123456784", None),
-            {"status": "delivered"},
+            {"status": "delivered", "events": []},
         )
         ups_tracker.fetch.assert_called_once_with("1Z999AA10123456784")
         self.assertEqual(
             adapter.fetch("planzer", "9999003316119", "https://planzer.example/shared"),
-            {"status": "out_for_delivery"},
+            {"status": "out_for_delivery", "events": []},
         )
         planzer_shared_tracker.fetch.assert_called_once_with(
             "9999003316119", "https://planzer.example/shared"
         )
         self.assertEqual(
             adapter.fetch("dachser", "456", "https://dachser.example/shared"),
-            {"status": "delivered"},
+            {"status": "delivered", "events": []},
         )
         dachser_tracker.fetch.assert_called_once_with("456", "https://dachser.example/shared")
         with self.assertRaisesRegex(ValueError, "complete tracking URL"):
@@ -492,7 +495,7 @@ class TrackingSyncTests(unittest.TestCase):
             adapter.fetch("unknown", "123", None)
         self.assertEqual(
             adapter.fetch("hermes", "HES123", None),
-            {"status": "exception"},
+            {"status": "exception", "events": []},
         )
         hermes_tracker.fetch.assert_called_once_with("HES123")
 

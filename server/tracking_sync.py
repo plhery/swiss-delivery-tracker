@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .api_contract import STAGES
 from .bounded_http import install_bounded_http
+from .carrier_result import CarrierResult, normalize_carrier_result
 from .carriers import (
     AUTOMATIC_CARRIER_IDS,
     CARRIER_NAMES,
@@ -37,7 +38,7 @@ class CarrierAdapter(Protocol):
         tracking_number: str,
         tracking_url: str | None,
         dpd_postcode: str | None = None,
-    ) -> dict[str, Any]: ...
+    ) -> CarrierResult: ...
 
 
 class NotificationDispatcher(Protocol):
@@ -74,30 +75,29 @@ class UpstreamTrackerAdapter:
         tracking_number: str,
         tracking_url: str | None,
         dpd_postcode: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> CarrierResult:
         adapter = carrier_adapter(carrier_id)
         if adapter == "dpd":
-            return self.dpd_tracker.fetch(tracking_number, dpd_postcode)
-        if adapter == "dachser":
+            result = self.dpd_tracker.fetch(tracking_number, dpd_postcode)
+        elif adapter == "dachser":
             if not tracking_url:
                 raise ValueError("Dachser tracking requires its complete tracking URL")
-            return self.dachser_tracker.fetch(tracking_number, tracking_url)
-        if adapter == "hermes":
-            return self.hermes_tracker.fetch(tracking_number)
-        if adapter == "ups":
-            return self.ups_tracker.fetch(tracking_number)
-        if adapter == "planzer" and tracking_url:
-            return self.planzer_shared_tracker.fetch(tracking_number, tracking_url)
-        carrier_name = CARRIER_NAMES.get(carrier_id)
-        if not carrier_name:
-            raise LookupError(f"Automatic tracking is not available for {carrier_id}")
-        module = self.modules.get(carrier_name)
-        if not module:
-            raise LookupError(f"The upstream tracker has no {carrier_name} adapter")
-        result = module.fetch(tracking_number)
-        if not isinstance(result, dict):
-            raise ValueError(f"The {carrier_name} adapter returned an invalid response")
-        return result
+            result = self.dachser_tracker.fetch(tracking_number, tracking_url)
+        elif adapter == "hermes":
+            result = self.hermes_tracker.fetch(tracking_number)
+        elif adapter == "ups":
+            result = self.ups_tracker.fetch(tracking_number)
+        elif adapter == "planzer" and tracking_url:
+            result = self.planzer_shared_tracker.fetch(tracking_number, tracking_url)
+        else:
+            carrier_name = CARRIER_NAMES.get(carrier_id)
+            if not carrier_name:
+                raise LookupError(f"Automatic tracking is not available for {carrier_id}")
+            module = self.modules.get(carrier_name)
+            if not module:
+                raise LookupError(f"The upstream tracker has no {carrier_name} adapter")
+            result = module.fetch(tracking_number)
+        return normalize_carrier_result(result)
 
 
 @dataclass
@@ -188,7 +188,7 @@ def infer_stage(text: str, fallback: str = "in_transit") -> str:
     return fallback
 
 
-def result_stage(result: dict[str, Any]) -> str | None:
+def result_stage(result: CarrierResult) -> str | None:
     status = str(result.get("status") or "unknown")
     text = str(result.get("last_status_text") or "")
     mapping = {
@@ -201,7 +201,7 @@ def result_stage(result: dict[str, Any]) -> str | None:
     return mapping.get(status)
 
 
-def result_timezone(carrier_id: str, result: dict[str, Any]) -> tzinfo:
+def result_timezone(carrier_id: str, result: CarrierResult) -> tzinfo:
     declared = result.get("timezone")
     if isinstance(declared, str) and 1 <= len(declared) <= 64:
         try:
@@ -256,14 +256,12 @@ def provider_event_id(carrier_id: str, raw_time: Any, location: str, description
 
 
 def build_events(
-    package: dict[str, Any], result: dict[str, Any], _now: datetime
+    package: dict[str, Any], result: CarrierResult, _now: datetime
 ) -> list[dict[str, Any]]:
     current = result_stage(result) or "in_transit"
     assumed_timezone = result_timezone(str(package.get("carrier") or ""), result)
     rows: list[dict[str, Any]] = []
     for raw in result.get("events") or []:
-        if not isinstance(raw, dict):
-            continue
         description = str(raw.get("description") or "Tracking update").strip()
         location = str(raw.get("location") or "").strip()
         raw_time = raw.get("time")
@@ -372,12 +370,13 @@ class TrackingSyncService:
 
         self.client.update_package(package["id"], {"sync_status": "syncing", "sync_error": None})
         try:
-            result = self.adapter.fetch(
-                package["carrier"],
+            carrier_id = str(package["carrier"])
+            result = normalize_carrier_result(self.adapter.fetch(
+                carrier_id,
                 package["tracking_number"],
                 package.get("tracking_url"),
                 package.get("dpd_postcode"),
-            )
+            ))
             events = build_events(package, result, now)
             self.client.insert_events(events)
             reported_stage = result_stage(result)
