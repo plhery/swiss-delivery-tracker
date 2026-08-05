@@ -232,13 +232,13 @@ describe('createApiRepo', () => {
     await expect(repo.list()).rejects.toThrow('Sign in again');
   });
 
-  it('polls while visible, refreshes on visibility changes, and unsubscribes', () => {
+  it('polls while visible, refreshes on visibility changes, and unsubscribes', async () => {
     let visibility: DocumentVisibilityState = 'visible';
     vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
     const onChange = vi.fn();
     const unsubscribe = createApiRepo(1_000).subscribe?.(onChange);
 
-    vi.advanceTimersByTime(1_000);
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(onChange).toHaveBeenCalledOnce();
 
     visibility = 'hidden';
@@ -247,10 +247,11 @@ describe('createApiRepo', () => {
 
     visibility = 'visible';
     document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
     expect(onChange).toHaveBeenCalledTimes(2);
 
     unsubscribe?.();
-    vi.advanceTimersByTime(1_000);
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 

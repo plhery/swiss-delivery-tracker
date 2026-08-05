@@ -66,15 +66,22 @@ export function createApiRepo(
   activePollIntervalMs = 1_000,
 ): ParcelRepo {
   let hasActiveSync = false;
+  let pollingModeChanged: (() => void) | null = null;
+
+  function setHasActiveSync(next: boolean) {
+    if (hasActiveSync === next) return;
+    hasActiveSync = next;
+    pollingModeChanged?.();
+  }
 
   async function list(): Promise<ParcelWithEvents[]> {
     const payload = await request<ApiPackageListResponse>(
       '/api/packages?includeArchived=true',
     );
     const parcels = payload.packages.map(toParcel);
-    hasActiveSync = parcels.some(
+    setHasActiveSync(parcels.some(
       (parcel) => parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing',
-    );
+    ));
     return parcels;
   }
 
@@ -96,7 +103,7 @@ export function createApiRepo(
         body: JSON.stringify(body),
       });
       const parcel = toParcel(row);
-      hasActiveSync = parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing';
+      setHasActiveSync(parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing');
       return parcel;
     },
 
@@ -128,9 +135,9 @@ export function createApiRepo(
 
     async refresh(): Promise<ParcelWithEvents[]> {
       await request<ApiQueueResponse>('/api/sync', { method: 'POST' });
-      hasActiveSync = true;
+      setHasActiveSync(true);
       return list().then((parcels) => {
-        hasActiveSync = true;
+        setHasActiveSync(true);
         return parcels;
       });
     },
@@ -140,41 +147,57 @@ export function createApiRepo(
         method: 'POST',
       });
       const parcels = await list();
-      hasActiveSync = true;
+      setHasActiveSync(true);
       const parcel = parcels.find((candidate) => candidate.id === id);
       if (!parcel) throw new Error('Package not found after queueing its tracking check');
       return parcel;
     },
 
     subscribe(onChange: () => void | Promise<void>): () => void {
-      let lastPollAt = Date.now();
       let pollInFlight = false;
-      const timerResolution = Math.min(pollIntervalMs, activePollIntervalMs);
+      let stopped = false;
+      let timer: number | null = null;
 
-      const trigger = () => {
-        if (pollInFlight) return;
-        lastPollAt = Date.now();
+      const schedule = () => {
+        if (timer !== null) window.clearTimeout(timer);
+        if (stopped) return;
+        const delay = hasActiveSync ? activePollIntervalMs : pollIntervalMs;
+        timer = window.setTimeout(() => {
+          timer = null;
+          if (document.visibilityState !== 'visible') {
+            schedule();
+            return;
+          }
+          void trigger();
+        }, delay);
+      };
+
+      const trigger = async () => {
+        if (pollInFlight || stopped) return;
         pollInFlight = true;
-        const result = onChange();
-        if (result) {
-          void result.finally(() => {
-            pollInFlight = false;
-          });
-        } else {
+        try {
+          await onChange();
+        } finally {
           pollInFlight = false;
+          schedule();
         }
       };
-      const interval = window.setInterval(() => {
-        if (document.visibilityState !== 'visible') return;
-        const desiredInterval = hasActiveSync ? activePollIntervalMs : pollIntervalMs;
-        if (Date.now() - lastPollAt >= desiredInterval) trigger();
-      }, timerResolution);
+
       const onVisible = () => {
-        if (document.visibilityState === 'visible') trigger();
+        if (document.visibilityState !== 'visible') return;
+        if (timer !== null) window.clearTimeout(timer);
+        timer = null;
+        void trigger();
+      };
+      pollingModeChanged = () => {
+        if (!pollInFlight) schedule();
       };
       document.addEventListener('visibilitychange', onVisible);
+      schedule();
       return () => {
-        window.clearInterval(interval);
+        stopped = true;
+        if (timer !== null) window.clearTimeout(timer);
+        if (pollingModeChanged) pollingModeChanged = null;
         document.removeEventListener('visibilitychange', onVisible);
       };
     },
