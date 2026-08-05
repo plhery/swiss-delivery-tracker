@@ -1,0 +1,603 @@
+/* eslint-disable react-refresh/only-export-components -- context hooks and translation helpers share one typed catalog */
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import type { Stage } from './types';
+
+export const SUPPORTED_LOCALES = ['en', 'de', 'fr', 'it'] as const;
+export type Locale = (typeof SUPPORTED_LOCALES)[number];
+
+const STORAGE_KEY = 'deliveryTrackerLocale';
+
+const en = {
+  'language.label': 'Language',
+  'language.en': 'English',
+  'language.de': 'Deutsch',
+  'language.fr': 'Français',
+  'language.it': 'Italiano',
+  'common.parcel': 'Parcel',
+  'common.close': 'Close',
+  'common.cancel': 'Cancel',
+  'common.retry': 'Retry',
+  'common.restoring': 'Restoring…',
+  'app.eyebrow': 'All your parcels',
+  'app.title': 'Swiss Delivery Tracker',
+  'app.refresh': 'Refresh tracking',
+  'app.refreshing': 'Queueing tracking checks',
+  'app.parcel.one': 'parcel',
+  'app.parcel.many': 'parcels',
+  'app.onTheWay': 'on the way',
+  'app.onTheWaySection': 'On the way',
+  'app.opening': 'Opening your delivery box…',
+  'app.loadFailed': 'Your delivery box could not be loaded',
+  'app.noneOnWay': 'Nothing on the way right now',
+  'app.subtitle': 'Every shipment, from first lookup to arrival.',
+  'app.demo': 'Demo mode',
+  'app.demoDescription': 'These sample parcels stay on this device.',
+  'app.signInNeeded': 'Sign-in needed.',
+  'app.trackingBreak': 'Tracking is taking a break.',
+  'app.cachedData': 'Showing the last parcel data saved on this device.',
+  'app.signInAgain': 'Sign in again',
+  'app.tryAgain': 'Try again',
+  'app.loadingParcels': 'Loading parcels',
+  'app.emptyEyebrow': 'Delivery box empty',
+  'app.emptyTitle': 'No parcels yet',
+  'app.emptyDescription': 'Add a tracking number and follow every step of the journey.',
+  'app.needsAttention': 'Needs attention',
+  'app.arrivingToday': 'Arriving today',
+  'app.pastDeliveries': 'Past deliveries',
+  'app.returned': 'Returned',
+  'app.archived': 'Archived',
+  'app.addParcel': 'Add parcel',
+  'app.addParcelAria': 'Add a parcel',
+  'app.archivedToast': '{{name}} archived',
+  'app.undo': 'Undo',
+  'app.refreshQueued': 'Tracking checks queued. Updates will appear automatically.',
+  'attention.sync_error': 'Tracking check failed',
+  'attention.failed_attempt': 'Delivery attempt needs action',
+  'attention.ready_for_pickup': 'Ready for pickup',
+  'attention.customs': 'Held at customs',
+  'attention.stalled': 'No tracking update for four days',
+  'attention.not_announced': 'Carrier has not published an update',
+  'parcel.expectedToday': 'Expected today',
+  'parcel.expected': 'Expected {{date}}',
+  'parcel.syncAttention': 'Sync needs attention',
+  'parcel.aria': '{{name}} — {{status}}',
+  'parcel.ariaExpected': '{{name}} — {{status}} — expected {{date}}',
+  'add.eyebrow': 'New shipment',
+  'add.title': 'Add a parcel',
+  'add.intro': 'Paste a tracking number, carrier link, or text from a shipping email.',
+  'add.contents': "What's inside?",
+  'add.optional': 'Optional',
+  'add.contentsPlaceholder': 'Coffee beans, new shoes…',
+  'add.tracking': 'Tracking number or link',
+  'add.trackingPlaceholder': 'Paste a number, link, or shipping message',
+  'add.notFound': "We couldn't find a tracking number. Paste the code itself or a carrier link.",
+  'add.foundLink': 'Found {{number}} in the pasted link.',
+  'add.foundText': 'Found {{number}} in the pasted text.',
+  'add.foundPrefix': 'Found',
+  'add.foundLinkSuffix': 'in the pasted link.',
+  'add.foundTextSuffix': 'in the pasted text.',
+  'add.carrier': 'Carrier',
+  'add.detect': 'Detect automatically',
+  'add.linkOnly': 'link only',
+  'add.requirement.trackingUrl': 'Complete tracking link',
+  'add.requirement.dpdPostcode': 'Delivery postcode',
+  'add.confirmCarrier': 'This number format could belong to {{carriers}}. Choose the carrier to confirm.',
+  'add.unknownCarrier': "We couldn't recognise this format. Choose the carrier to enable syncing.",
+  'add.autoSync': '{{carrier}} will sync automatically.',
+  'add.linkSync': '{{carrier}} is saved with a link; automatic syncing needs a supported adapter.',
+  'add.failed': 'Could not add the parcel',
+  'add.adding': 'Adding…',
+  'detail.label': 'Parcel details',
+  'detail.back': 'Back',
+  'detail.titleAria': 'Parcel title',
+  'detail.editTitle': 'Edit parcel title',
+  'detail.saveTitle': 'Save title',
+  'detail.saving': 'Saving…',
+  'detail.renameFailed': 'Could not rename the parcel',
+  'detail.trackingNumber': 'Tracking number',
+  'detail.copy': 'Copy',
+  'detail.copied': 'Copied',
+  'detail.copyTracking': 'Copy tracking number',
+  'detail.copyUnavailable': 'Copying is unavailable. Press and hold the tracking number instead.',
+  'detail.expected': 'Expected: {{date}}',
+  'detail.lastChecked': 'Last checked: {{date}}',
+  'detail.openCarrier': 'Open on {{carrier}} ↗',
+  'detail.history': 'Tracking history',
+  'detail.journey': 'Journey',
+  'detail.checkQueued': 'Tracking check queued. Updates will appear automatically.',
+  'detail.checkFailed': 'Could not queue a tracking check',
+  'detail.restoreFailed': 'Could not restore the parcel',
+  'detail.archiveFailed': 'Could not archive the parcel',
+  'detail.restore': 'Restore parcel',
+  'detail.archiveQuestionAria': 'Archive {{name}}?',
+  'detail.archiveQuestion': 'Archive this parcel?',
+  'detail.archiveDescription': 'Its tracking history will stay available.',
+  'detail.keep': 'Keep parcel',
+  'detail.confirmArchive': 'Confirm archive',
+  'detail.archiving': 'Archiving…',
+  'detail.checkNow': 'Check now',
+  'detail.queueing': 'Queueing check…',
+  'detail.archive': 'Archive parcel',
+  'timeline.emptySyncing': 'Checking with the carrier now…',
+  'timeline.empty': "The carrier hasn’t announced this shipment yet — check back soon! 🕊️",
+  'timeline.label': 'Tracking history',
+  'timeline.syncing': 'Sync in progress',
+  'progress.step': 'Step {{step}} of {{total}}: {{stage}}',
+  'progress.empty': 'No tracking updates yet',
+  'status.syncing': 'Sync in progress',
+  'status.failed': 'Sync failed',
+  'status.unsupported': 'Automatic sync unavailable',
+  'status.unannounced': 'Not announced yet',
+  'stage.pending': 'Tracked',
+  'stage.registered': 'Announced',
+  'stage.accepted': 'Posted',
+  'stage.in_transit': 'In transit',
+  'stage.customs': 'At customs',
+  'stage.out_for_delivery': 'Out for delivery',
+  'stage.failed_attempt': 'Delivery attempted',
+  'stage.ready_for_pickup': 'Ready for pickup',
+  'stage.delivered': 'Delivered',
+  'stage.returned': 'Returned to sender',
+  'time.today': 'today',
+  'time.tomorrow': 'tomorrow',
+  'time.justNow': 'just now',
+  'time.minutesAgo': '{{count}} min ago',
+  'time.hoursAgo': '{{count}} h ago',
+  'time.daysAgo': '{{count}} d ago',
+  'notifications.button': 'Notification settings',
+  'notifications.enabledButton': 'Notifications enabled',
+  'notifications.eyebrow': 'Parcel alerts',
+  'notifications.title': 'Notifications',
+  'notifications.enabledTitle': 'Updates will find you',
+  'notifications.disabledTitle': 'Get parcel progress on your phone',
+  'notifications.schedule': 'Tracking checks run every 10 minutes from 08:00 to 22:00, then hourly overnight.',
+  'notifications.enable': 'Enable notifications',
+  'notifications.enabling': 'Enabling…',
+  'notifications.disable': 'Turn off on this device',
+  'notifications.disabling': 'Turning off…',
+  'notifications.state.enabled': 'This device is subscribed to new tracking events.',
+  'notifications.state.unsupported': 'On iPhone, add Swiss Delivery Tracker to your Home Screen, then open it there.',
+  'notifications.state.unavailable': 'The notification service is not configured yet.',
+  'notifications.state.blocked': 'Notifications are blocked. Allow them in this app’s system settings.',
+  'notifications.state.prompt': 'Enable alerts once on every device where you want to receive them.',
+  'notifications.state.checking': 'Checking this device…',
+  'notifications.state.retry': 'Open these settings again to retry.',
+  'notifications.error.unavailable': 'Notification settings are unavailable',
+  'notifications.error.enable': 'Could not enable notifications',
+  'notifications.error.disable': 'Could not disable notifications',
+  'notifications.error.welcome': 'Enabled. The welcome alert could not be sent, but updates will retry.',
+  'account.options': 'Account options for {{email}}',
+  'account.signedIn': 'Signed in as',
+  'account.deleteQuestion': 'Delete this account permanently?',
+  'account.deleteDescription': 'All parcels, tracking history, and notification settings will be erased.',
+  'account.typeToConfirm': 'Type {{email}} to confirm',
+  'account.deletePermanent': 'Permanently delete',
+  'account.deleting': 'Deleting…',
+  'account.export': 'Download my data',
+  'account.exporting': 'Preparing export…',
+  'account.signOut': 'Sign out',
+  'account.signingOut': 'Signing out…',
+  'account.privacy': 'Privacy notice',
+  'account.delete': 'Delete account',
+  'account.actionFailed': 'Could not complete the account action',
+  'auth.title': 'Sign in to start tracking your Post.CH, UPS, DHL, ... packages!',
+  'auth.configTitle': 'Authentication needs configuration.',
+  'auth.codeIntro': 'Enter the six-digit code sent to {{email}}.',
+  'auth.code': 'Sign-in code',
+  'auth.signingIn': 'Signing in…',
+  'auth.openBox': 'Open my delivery box',
+  'auth.differentEmail': 'Use a different email',
+  'auth.googleOpening': 'Opening Google…',
+  'auth.google': 'Continue with Google',
+  'auth.or': 'or',
+  'auth.emailIntro': 'No password to remember. We’ll email you a one-time sign-in code.',
+  'auth.email': 'Email address',
+  'auth.sending': 'Sending code…',
+  'auth.send': 'Email me a code',
+  'auth.privacy': 'Tracking numbers and delivery history stay private to your account.',
+  'auth.readPrivacy': 'Read the privacy notice.',
+  'auth.loading': 'Opening your secure delivery box…',
+  'auth.googleFailed': 'Could not start Google sign-in',
+  'auth.sendFailed': 'Could not send a sign-in code',
+  'auth.verifyFailed': 'Could not verify the sign-in code',
+} as const;
+
+export type MessageKey = keyof typeof en;
+type Messages = Record<MessageKey, string>;
+
+const de: Messages = {
+  ...en,
+  'language.label': 'Sprache', 'app.eyebrow': 'Alle deine Pakete',
+  'app.refresh': 'Sendungen aktualisieren', 'app.refreshing': 'Sendungsabfragen werden geplant',
+  'app.parcel.one': 'Paket', 'app.parcel.many': 'Pakete', 'app.onTheWay': 'unterwegs',
+  'app.opening': 'Deine Paketbox wird geöffnet…', 'app.loadFailed': 'Deine Paketbox konnte nicht geladen werden',
+  'app.noneOnWay': 'Gerade ist nichts unterwegs', 'app.subtitle': 'Jede Sendung – von der ersten Abfrage bis zur Ankunft.',
+  'app.demo': 'Demo-Modus', 'app.demoDescription': 'Diese Beispielpakete bleiben auf diesem Gerät.',
+  'app.signInNeeded': 'Anmeldung erforderlich.', 'app.trackingBreak': 'Die Sendungsverfolgung macht gerade Pause.',
+  'app.cachedData': 'Es werden die zuletzt auf diesem Gerät gespeicherten Paketdaten angezeigt.',
+  'app.signInAgain': 'Erneut anmelden', 'app.tryAgain': 'Nochmals versuchen', 'app.loadingParcels': 'Pakete werden geladen',
+  'app.emptyEyebrow': 'Paketbox leer', 'app.emptyTitle': 'Noch keine Pakete',
+  'app.emptyDescription': 'Füge eine Sendungsnummer hinzu und verfolge jeden Schritt.',
+  'app.needsAttention': 'Handlungsbedarf', 'app.arrivingToday': 'Kommt heute', 'app.onTheWaySection': 'Unterwegs',
+  'app.pastDeliveries': 'Frühere Lieferungen', 'app.returned': 'Zurückgesendet', 'app.archived': 'Archiviert',
+  'app.addParcel': 'Paket hinzufügen', 'app.addParcelAria': 'Ein Paket hinzufügen',
+  'app.archivedToast': '{{name}} archiviert', 'app.undo': 'Rückgängig',
+  'app.refreshQueued': 'Sendungsabfragen geplant. Aktualisierungen erscheinen automatisch.',
+  'attention.sync_error': 'Sendungsabfrage fehlgeschlagen', 'attention.failed_attempt': 'Zustellversuch erfordert eine Aktion',
+  'attention.ready_for_pickup': 'Abholbereit', 'attention.customs': 'Beim Zoll zurückgehalten',
+  'attention.stalled': 'Seit vier Tagen keine Aktualisierung', 'attention.not_announced': 'Der Anbieter hat noch keine Aktualisierung veröffentlicht',
+  'parcel.expectedToday': 'Heute erwartet', 'parcel.expected': 'Erwartet {{date}}', 'parcel.syncAttention': 'Synchronisierung prüfen',
+  'add.eyebrow': 'Neue Sendung', 'add.title': 'Paket hinzufügen',
+  'add.intro': 'Füge eine Sendungsnummer, einen Anbieterlink oder Text aus einer Versandmail ein.',
+  'add.contents': 'Was ist drin?', 'add.optional': 'Optional', 'add.contentsPlaceholder': 'Kaffeebohnen, neue Schuhe…',
+  'add.tracking': 'Sendungsnummer oder Link', 'add.trackingPlaceholder': 'Nummer, Link oder Versandnachricht einfügen',
+  'add.notFound': 'Keine Sendungsnummer gefunden. Füge den Code selbst oder einen Anbieterlink ein.',
+  'add.foundLink': '{{number}} im eingefügten Link gefunden.', 'add.foundText': '{{number}} im eingefügten Text gefunden.',
+  'add.foundPrefix': '', 'add.foundLinkSuffix': 'im eingefügten Link gefunden.', 'add.foundTextSuffix': 'im eingefügten Text gefunden.',
+  'add.carrier': 'Anbieter', 'add.detect': 'Automatisch erkennen', 'add.linkOnly': 'nur Link',
+  'add.requirement.trackingUrl': 'Vollständiger Sendungslink', 'add.requirement.dpdPostcode': 'Zustell-Postleitzahl',
+  'add.confirmCarrier': 'Dieses Nummernformat könnte zu {{carriers}} gehören. Wähle den Anbieter zur Bestätigung.',
+  'add.unknownCarrier': 'Dieses Format wurde nicht erkannt. Wähle den Anbieter für die Synchronisierung.',
+  'add.autoSync': '{{carrier}} wird automatisch synchronisiert.',
+  'add.linkSync': '{{carrier}} wird mit einem Link gespeichert; automatische Aktualisierungen benötigen einen unterstützten Adapter.',
+  'add.failed': 'Das Paket konnte nicht hinzugefügt werden', 'add.adding': 'Wird hinzugefügt…',
+  'common.parcel': 'Paket', 'common.close': 'Schliessen', 'common.cancel': 'Abbrechen', 'common.retry': 'Erneut versuchen', 'common.restoring': 'Wird wiederhergestellt…',
+  'detail.label': 'Paketdetails', 'detail.back': 'Zurück', 'detail.titleAria': 'Pakettitel', 'detail.editTitle': 'Pakettitel bearbeiten',
+  'detail.saveTitle': 'Titel speichern', 'detail.saving': 'Wird gespeichert…', 'detail.renameFailed': 'Das Paket konnte nicht umbenannt werden',
+  'detail.trackingNumber': 'Sendungsnummer', 'detail.copy': 'Kopieren', 'detail.copied': 'Kopiert', 'detail.copyTracking': 'Sendungsnummer kopieren',
+  'detail.copyUnavailable': 'Kopieren ist nicht verfügbar. Halte stattdessen die Sendungsnummer gedrückt.',
+  'detail.expected': 'Erwartet: {{date}}', 'detail.lastChecked': 'Zuletzt geprüft: {{date}}', 'detail.openCarrier': 'Bei {{carrier}} öffnen ↗',
+  'detail.history': 'Sendungsverlauf', 'detail.journey': 'Reise', 'detail.checkQueued': 'Sendungsabfrage geplant. Aktualisierungen erscheinen automatisch.',
+  'detail.checkFailed': 'Sendungsabfrage konnte nicht geplant werden', 'detail.restoreFailed': 'Das Paket konnte nicht wiederhergestellt werden',
+  'detail.archiveFailed': 'Das Paket konnte nicht archiviert werden', 'detail.restore': 'Paket wiederherstellen',
+  'detail.archiveQuestionAria': '{{name}} archivieren?', 'detail.archiveQuestion': 'Dieses Paket archivieren?',
+  'detail.archiveDescription': 'Der Sendungsverlauf bleibt verfügbar.', 'detail.keep': 'Paket behalten',
+  'detail.confirmArchive': 'Archivieren bestätigen', 'detail.archiving': 'Wird archiviert…',
+  'detail.checkNow': 'Jetzt prüfen', 'detail.queueing': 'Abfrage wird geplant…', 'detail.archive': 'Paket archivieren',
+  'timeline.emptySyncing': 'Der Anbieter wird jetzt abgefragt…',
+  'timeline.empty': 'Der Anbieter hat diese Sendung noch nicht angekündigt – schau bald wieder vorbei! 🕊️',
+  'timeline.label': 'Sendungsverlauf', 'timeline.syncing': 'Synchronisierung läuft',
+  'progress.step': 'Schritt {{step}} von {{total}}: {{stage}}', 'progress.empty': 'Noch keine Sendungsaktualisierungen',
+  'status.syncing': 'Synchronisierung läuft', 'status.failed': 'Synchronisierung fehlgeschlagen',
+  'status.unsupported': 'Automatische Synchronisierung nicht verfügbar', 'status.unannounced': 'Noch nicht angekündigt',
+  'stage.pending': 'Erfasst', 'stage.registered': 'Angekündigt', 'stage.accepted': 'Aufgegeben', 'stage.in_transit': 'Unterwegs',
+  'stage.customs': 'Beim Zoll', 'stage.out_for_delivery': 'In Zustellung', 'stage.failed_attempt': 'Zustellversuch',
+  'stage.ready_for_pickup': 'Abholbereit', 'stage.delivered': 'Zugestellt', 'stage.returned': 'Zurück an Absender',
+  'time.today': 'heute', 'time.tomorrow': 'morgen', 'time.justNow': 'gerade eben',
+  'time.minutesAgo': 'vor {{count}} Min.', 'time.hoursAgo': 'vor {{count}} Std.', 'time.daysAgo': 'vor {{count}} T.',
+  'notifications.button': 'Benachrichtigungseinstellungen', 'notifications.enabledButton': 'Benachrichtigungen aktiviert',
+  'notifications.eyebrow': 'Paketmeldungen', 'notifications.title': 'Benachrichtigungen',
+  'notifications.enabledTitle': 'Aktualisierungen erreichen dich', 'notifications.disabledTitle': 'Paketfortschritt auf deinem Gerät erhalten',
+  'notifications.schedule': 'Sendungsabfragen laufen von 08:00 bis 22:00 alle 10 Minuten, nachts stündlich.',
+  'notifications.enable': 'Benachrichtigungen aktivieren', 'notifications.enabling': 'Wird aktiviert…',
+  'notifications.disable': 'Auf diesem Gerät ausschalten', 'notifications.disabling': 'Wird ausgeschaltet…',
+  'notifications.state.enabled': 'Dieses Gerät empfängt neue Sendungsereignisse.',
+  'notifications.state.unsupported': 'Füge Swiss Delivery Tracker auf dem iPhone zum Home-Bildschirm hinzu und öffne die App dort.',
+  'notifications.state.unavailable': 'Der Benachrichtigungsdienst ist noch nicht konfiguriert.',
+  'notifications.state.blocked': 'Benachrichtigungen sind blockiert. Erlaube sie in den Systemeinstellungen der App.',
+  'notifications.state.prompt': 'Aktiviere Meldungen einmal auf jedem gewünschten Gerät.',
+  'notifications.state.checking': 'Dieses Gerät wird geprüft…', 'notifications.state.retry': 'Öffne diese Einstellungen erneut, um es nochmals zu versuchen.',
+  'account.options': 'Kontooptionen für {{email}}', 'account.signedIn': 'Angemeldet als',
+  'account.deleteQuestion': 'Dieses Konto dauerhaft löschen?',
+  'account.deleteDescription': 'Alle Pakete, Sendungsverläufe und Benachrichtigungseinstellungen werden gelöscht.',
+  'account.typeToConfirm': 'Zur Bestätigung {{email}} eingeben', 'account.deletePermanent': 'Dauerhaft löschen',
+  'account.deleting': 'Wird gelöscht…', 'account.export': 'Meine Daten herunterladen', 'account.exporting': 'Export wird vorbereitet…',
+  'account.signOut': 'Abmelden', 'account.signingOut': 'Wird abgemeldet…', 'account.privacy': 'Datenschutzhinweis', 'account.delete': 'Konto löschen',
+  'auth.title': 'Melde dich an, um deine Post.CH-, UPS-, DHL- ... Pakete zu verfolgen!',
+  'auth.configTitle': 'Die Authentifizierung muss konfiguriert werden.',
+  'auth.codeIntro': 'Gib den sechsstelligen Code ein, der an {{email}} gesendet wurde.', 'auth.code': 'Anmeldecode',
+  'auth.signingIn': 'Anmeldung läuft…', 'auth.openBox': 'Meine Paketbox öffnen', 'auth.differentEmail': 'Andere E-Mail verwenden',
+  'auth.googleOpening': 'Google wird geöffnet…', 'auth.google': 'Mit Google fortfahren', 'auth.or': 'oder',
+  'auth.emailIntro': 'Kein Passwort nötig. Wir senden dir einen einmaligen Anmeldecode per E-Mail.',
+  'auth.email': 'E-Mail-Adresse', 'auth.sending': 'Code wird gesendet…', 'auth.send': 'Code per E-Mail senden',
+  'auth.privacy': 'Sendungsnummern und Lieferverlauf bleiben in deinem Konto privat.',
+  'auth.readPrivacy': 'Datenschutzhinweis lesen.', 'auth.loading': 'Deine sichere Paketbox wird geöffnet…',
+};
+
+const fr: Messages = {
+  ...en,
+  'language.label': 'Langue', 'app.eyebrow': 'Tous vos colis', 'app.refresh': 'Actualiser le suivi',
+  'app.refreshing': 'Planification des vérifications', 'app.parcel.one': 'colis', 'app.parcel.many': 'colis', 'app.onTheWay': 'en route',
+  'app.opening': 'Ouverture de votre boîte de livraison…', 'app.loadFailed': 'Votre boîte de livraison n’a pas pu être chargée',
+  'app.noneOnWay': 'Aucun colis en route pour le moment', 'app.subtitle': 'Chaque envoi, de la première recherche à l’arrivée.',
+  'app.demo': 'Mode démo', 'app.demoDescription': 'Ces colis d’exemple restent sur cet appareil.',
+  'app.signInNeeded': 'Connexion requise.', 'app.trackingBreak': 'Le suivi fait une pause.',
+  'app.cachedData': 'Affichage des dernières données enregistrées sur cet appareil.', 'app.signInAgain': 'Se reconnecter',
+  'app.tryAgain': 'Réessayer', 'app.loadingParcels': 'Chargement des colis', 'app.emptyEyebrow': 'Boîte de livraison vide',
+  'app.emptyTitle': 'Aucun colis', 'app.emptyDescription': 'Ajoutez un numéro de suivi pour suivre chaque étape du voyage.',
+  'app.needsAttention': 'À vérifier', 'app.arrivingToday': 'Arrive aujourd’hui', 'app.onTheWaySection': 'En route',
+  'app.pastDeliveries': 'Livraisons passées', 'app.returned': 'Retournés', 'app.archived': 'Archivés',
+  'app.addParcel': 'Ajouter un colis', 'app.addParcelAria': 'Ajouter un colis', 'app.archivedToast': '{{name}} archivé',
+  'app.undo': 'Annuler', 'app.refreshQueued': 'Vérifications planifiées. Les mises à jour apparaîtront automatiquement.',
+  'attention.sync_error': 'Échec de la vérification', 'attention.failed_attempt': 'La tentative de livraison nécessite une action',
+  'attention.ready_for_pickup': 'Prêt au retrait', 'attention.customs': 'Retenu à la douane',
+  'attention.stalled': 'Aucune mise à jour depuis quatre jours', 'attention.not_announced': 'Le transporteur n’a publié aucune mise à jour',
+  'parcel.expectedToday': 'Prévu aujourd’hui', 'parcel.expected': 'Prévu {{date}}', 'parcel.syncAttention': 'Synchronisation à vérifier',
+  'common.parcel': 'Colis', 'common.close': 'Fermer', 'common.cancel': 'Annuler', 'common.retry': 'Réessayer', 'common.restoring': 'Restauration…',
+  'add.eyebrow': 'Nouvel envoi', 'add.title': 'Ajouter un colis',
+  'add.intro': 'Collez un numéro de suivi, un lien transporteur ou le texte d’un e-mail d’expédition.',
+  'add.contents': 'Que contient-il ?', 'add.optional': 'Facultatif', 'add.contentsPlaceholder': 'Café, nouvelles chaussures…',
+  'add.tracking': 'Numéro ou lien de suivi', 'add.trackingPlaceholder': 'Collez un numéro, un lien ou un message d’expédition',
+  'add.notFound': 'Aucun numéro de suivi trouvé. Collez le code ou un lien transporteur.',
+  'add.foundLink': '{{number}} trouvé dans le lien.', 'add.foundText': '{{number}} trouvé dans le texte.',
+  'add.foundPrefix': '', 'add.foundLinkSuffix': 'trouvé dans le lien.', 'add.foundTextSuffix': 'trouvé dans le texte.',
+  'add.carrier': 'Transporteur', 'add.detect': 'Détecter automatiquement', 'add.linkOnly': 'lien uniquement',
+  'add.requirement.trackingUrl': 'Lien de suivi complet', 'add.requirement.dpdPostcode': 'Code postal de livraison',
+  'add.confirmCarrier': 'Ce format pourrait appartenir à {{carriers}}. Choisissez le transporteur pour confirmer.',
+  'add.unknownCarrier': 'Format non reconnu. Choisissez le transporteur pour activer la synchronisation.',
+  'add.autoSync': '{{carrier}} sera synchronisé automatiquement.',
+  'add.linkSync': '{{carrier}} est enregistré avec un lien ; un adaptateur pris en charge est requis pour la synchronisation.',
+  'add.failed': 'Impossible d’ajouter le colis', 'add.adding': 'Ajout…',
+  'detail.label': 'Détails du colis', 'detail.back': 'Retour', 'detail.titleAria': 'Titre du colis', 'detail.editTitle': 'Modifier le titre du colis',
+  'detail.saveTitle': 'Enregistrer le titre', 'detail.saving': 'Enregistrement…', 'detail.renameFailed': 'Impossible de renommer le colis',
+  'detail.trackingNumber': 'Numéro de suivi', 'detail.copy': 'Copier', 'detail.copied': 'Copié', 'detail.copyTracking': 'Copier le numéro de suivi',
+  'detail.copyUnavailable': 'La copie est indisponible. Maintenez plutôt le numéro de suivi appuyé.',
+  'detail.expected': 'Prévu : {{date}}', 'detail.lastChecked': 'Dernière vérification : {{date}}', 'detail.openCarrier': 'Ouvrir chez {{carrier}} ↗',
+  'detail.history': 'Historique du suivi', 'detail.journey': 'Parcours',
+  'detail.checkQueued': 'Vérification planifiée. Les mises à jour apparaîtront automatiquement.',
+  'detail.checkFailed': 'Impossible de planifier la vérification', 'detail.restoreFailed': 'Impossible de restaurer le colis',
+  'detail.archiveFailed': 'Impossible d’archiver le colis', 'detail.restore': 'Restaurer le colis',
+  'detail.archiveQuestionAria': 'Archiver {{name}} ?', 'detail.archiveQuestion': 'Archiver ce colis ?',
+  'detail.archiveDescription': 'Son historique restera disponible.', 'detail.keep': 'Garder le colis',
+  'detail.confirmArchive': 'Confirmer l’archivage', 'detail.archiving': 'Archivage…',
+  'detail.checkNow': 'Vérifier maintenant', 'detail.queueing': 'Planification…', 'detail.archive': 'Archiver le colis',
+  'timeline.emptySyncing': 'Vérification auprès du transporteur…',
+  'timeline.empty': 'Le transporteur n’a pas encore annoncé cet envoi — revenez bientôt ! 🕊️',
+  'timeline.label': 'Historique du suivi', 'timeline.syncing': 'Synchronisation en cours',
+  'progress.step': 'Étape {{step}} sur {{total}} : {{stage}}', 'progress.empty': 'Aucune mise à jour de suivi',
+  'status.syncing': 'Synchronisation en cours', 'status.failed': 'Échec de la synchronisation',
+  'status.unsupported': 'Synchronisation automatique indisponible', 'status.unannounced': 'Pas encore annoncé',
+  'stage.pending': 'Suivi ajouté', 'stage.registered': 'Annoncé', 'stage.accepted': 'Déposé', 'stage.in_transit': 'En transit',
+  'stage.customs': 'À la douane', 'stage.out_for_delivery': 'En livraison', 'stage.failed_attempt': 'Tentative de livraison',
+  'stage.ready_for_pickup': 'Prêt au retrait', 'stage.delivered': 'Livré', 'stage.returned': 'Retourné à l’expéditeur',
+  'time.today': 'aujourd’hui', 'time.tomorrow': 'demain', 'time.justNow': 'à l’instant',
+  'time.minutesAgo': 'il y a {{count}} min', 'time.hoursAgo': 'il y a {{count}} h', 'time.daysAgo': 'il y a {{count}} j',
+  'notifications.button': 'Paramètres des notifications', 'notifications.enabledButton': 'Notifications activées',
+  'notifications.eyebrow': 'Alertes colis', 'notifications.title': 'Notifications', 'notifications.enabledTitle': 'Les mises à jour vous trouveront',
+  'notifications.disabledTitle': 'Recevez la progression sur votre téléphone',
+  'notifications.schedule': 'Les vérifications ont lieu toutes les 10 minutes de 08:00 à 22:00, puis chaque heure la nuit.',
+  'notifications.enable': 'Activer les notifications', 'notifications.enabling': 'Activation…',
+  'notifications.disable': 'Désactiver sur cet appareil', 'notifications.disabling': 'Désactivation…',
+  'notifications.state.enabled': 'Cet appareil est abonné aux nouveaux événements de suivi.',
+  'notifications.state.unsupported': 'Sur iPhone, ajoutez Swiss Delivery Tracker à l’écran d’accueil puis ouvrez-le depuis celui-ci.',
+  'notifications.state.unavailable': 'Le service de notification n’est pas encore configuré.',
+  'notifications.state.blocked': 'Les notifications sont bloquées. Autorisez-les dans les réglages système de l’app.',
+  'notifications.state.prompt': 'Activez les alertes sur chaque appareil où vous souhaitez les recevoir.',
+  'notifications.state.checking': 'Vérification de cet appareil…', 'notifications.state.retry': 'Rouvrez ces paramètres pour réessayer.',
+  'account.options': 'Options du compte de {{email}}', 'account.signedIn': 'Connecté en tant que',
+  'account.deleteQuestion': 'Supprimer définitivement ce compte ?',
+  'account.deleteDescription': 'Tous les colis, historiques et paramètres de notification seront effacés.',
+  'account.typeToConfirm': 'Saisissez {{email}} pour confirmer', 'account.deletePermanent': 'Supprimer définitivement',
+  'account.deleting': 'Suppression…', 'account.export': 'Télécharger mes données', 'account.exporting': 'Préparation de l’export…',
+  'account.signOut': 'Se déconnecter', 'account.signingOut': 'Déconnexion…', 'account.privacy': 'Avis de confidentialité', 'account.delete': 'Supprimer le compte',
+  'auth.title': 'Connectez-vous pour suivre vos colis Post.CH, UPS, DHL, ... !',
+  'auth.configTitle': 'L’authentification doit être configurée.', 'auth.codeIntro': 'Saisissez le code à six chiffres envoyé à {{email}}.',
+  'auth.code': 'Code de connexion', 'auth.signingIn': 'Connexion…', 'auth.openBox': 'Ouvrir ma boîte de livraison',
+  'auth.differentEmail': 'Utiliser une autre adresse', 'auth.googleOpening': 'Ouverture de Google…', 'auth.google': 'Continuer avec Google',
+  'auth.or': 'ou', 'auth.emailIntro': 'Aucun mot de passe à retenir. Nous vous envoyons un code de connexion unique.',
+  'auth.email': 'Adresse e-mail', 'auth.sending': 'Envoi du code…', 'auth.send': 'M’envoyer un code',
+  'auth.privacy': 'Les numéros de suivi et l’historique restent privés dans votre compte.',
+  'auth.readPrivacy': 'Lire l’avis de confidentialité.', 'auth.loading': 'Ouverture de votre boîte de livraison sécurisée…',
+};
+
+const it: Messages = {
+  ...en,
+  'language.label': 'Lingua', 'app.eyebrow': 'Tutti i tuoi pacchi', 'app.refresh': 'Aggiorna il tracciamento',
+  'app.refreshing': 'Pianificazione dei controlli', 'app.parcel.one': 'pacco', 'app.parcel.many': 'pacchi', 'app.onTheWay': 'in arrivo',
+  'app.opening': 'Apertura della tua casella consegne…', 'app.loadFailed': 'Impossibile caricare la tua casella consegne',
+  'app.noneOnWay': 'Nessun pacco in arrivo al momento', 'app.subtitle': 'Ogni spedizione, dalla prima ricerca all’arrivo.',
+  'app.demo': 'Modalità demo', 'app.demoDescription': 'Questi pacchi di esempio restano su questo dispositivo.',
+  'app.signInNeeded': 'Accesso necessario.', 'app.trackingBreak': 'Il tracciamento si prende una pausa.',
+  'app.cachedData': 'Visualizzazione degli ultimi dati salvati su questo dispositivo.', 'app.signInAgain': 'Accedi di nuovo',
+  'app.tryAgain': 'Riprova', 'app.loadingParcels': 'Caricamento pacchi', 'app.emptyEyebrow': 'Casella consegne vuota',
+  'app.emptyTitle': 'Ancora nessun pacco', 'app.emptyDescription': 'Aggiungi un numero di tracciamento e segui ogni fase del viaggio.',
+  'app.needsAttention': 'Da controllare', 'app.arrivingToday': 'Arriva oggi', 'app.onTheWaySection': 'In arrivo',
+  'app.pastDeliveries': 'Consegne passate', 'app.returned': 'Restituiti', 'app.archived': 'Archiviati',
+  'app.addParcel': 'Aggiungi pacco', 'app.addParcelAria': 'Aggiungi un pacco', 'app.archivedToast': '{{name}} archiviato',
+  'app.undo': 'Annulla', 'app.refreshQueued': 'Controlli pianificati. Gli aggiornamenti appariranno automaticamente.',
+  'attention.sync_error': 'Controllo del tracciamento non riuscito', 'attention.failed_attempt': 'Il tentativo di consegna richiede un’azione',
+  'attention.ready_for_pickup': 'Pronto per il ritiro', 'attention.customs': 'Fermo in dogana',
+  'attention.stalled': 'Nessun aggiornamento da quattro giorni', 'attention.not_announced': 'Il corriere non ha pubblicato aggiornamenti',
+  'parcel.expectedToday': 'Previsto oggi', 'parcel.expected': 'Previsto {{date}}', 'parcel.syncAttention': 'Sincronizzazione da controllare',
+  'common.parcel': 'Pacco', 'common.close': 'Chiudi', 'common.cancel': 'Annulla', 'common.retry': 'Riprova', 'common.restoring': 'Ripristino…',
+  'add.eyebrow': 'Nuova spedizione', 'add.title': 'Aggiungi un pacco',
+  'add.intro': 'Incolla un numero, un link del corriere o il testo di un’e-mail di spedizione.',
+  'add.contents': 'Cosa contiene?', 'add.optional': 'Opzionale', 'add.contentsPlaceholder': 'Caffè, scarpe nuove…',
+  'add.tracking': 'Numero o link di tracciamento', 'add.trackingPlaceholder': 'Incolla un numero, un link o un messaggio di spedizione',
+  'add.notFound': 'Nessun numero di tracciamento trovato. Incolla il codice o un link del corriere.',
+  'add.foundLink': '{{number}} trovato nel link.', 'add.foundText': '{{number}} trovato nel testo.',
+  'add.foundPrefix': '', 'add.foundLinkSuffix': 'trovato nel link.', 'add.foundTextSuffix': 'trovato nel testo.',
+  'add.carrier': 'Corriere', 'add.detect': 'Rileva automaticamente', 'add.linkOnly': 'solo link',
+  'add.requirement.trackingUrl': 'Link di tracciamento completo', 'add.requirement.dpdPostcode': 'Codice postale di consegna',
+  'add.confirmCarrier': 'Questo formato potrebbe appartenere a {{carriers}}. Scegli il corriere per confermare.',
+  'add.unknownCarrier': 'Formato non riconosciuto. Scegli il corriere per attivare la sincronizzazione.',
+  'add.autoSync': '{{carrier}} verrà sincronizzato automaticamente.',
+  'add.linkSync': '{{carrier}} viene salvato con un link; la sincronizzazione richiede un adattatore supportato.',
+  'add.failed': 'Impossibile aggiungere il pacco', 'add.adding': 'Aggiunta…',
+  'detail.label': 'Dettagli del pacco', 'detail.back': 'Indietro', 'detail.titleAria': 'Titolo del pacco', 'detail.editTitle': 'Modifica il titolo del pacco',
+  'detail.saveTitle': 'Salva titolo', 'detail.saving': 'Salvataggio…', 'detail.renameFailed': 'Impossibile rinominare il pacco',
+  'detail.trackingNumber': 'Numero di tracciamento', 'detail.copy': 'Copia', 'detail.copied': 'Copiato', 'detail.copyTracking': 'Copia il numero di tracciamento',
+  'detail.copyUnavailable': 'La copia non è disponibile. Tieni premuto il numero di tracciamento.',
+  'detail.expected': 'Previsto: {{date}}', 'detail.lastChecked': 'Ultimo controllo: {{date}}', 'detail.openCarrier': 'Apri su {{carrier}} ↗',
+  'detail.history': 'Cronologia del tracciamento', 'detail.journey': 'Viaggio',
+  'detail.checkQueued': 'Controllo pianificato. Gli aggiornamenti appariranno automaticamente.',
+  'detail.checkFailed': 'Impossibile pianificare il controllo', 'detail.restoreFailed': 'Impossibile ripristinare il pacco',
+  'detail.archiveFailed': 'Impossibile archiviare il pacco', 'detail.restore': 'Ripristina pacco',
+  'detail.archiveQuestionAria': 'Archiviare {{name}}?', 'detail.archiveQuestion': 'Archiviare questo pacco?',
+  'detail.archiveDescription': 'La cronologia resterà disponibile.', 'detail.keep': 'Mantieni pacco',
+  'detail.confirmArchive': 'Conferma archiviazione', 'detail.archiving': 'Archiviazione…',
+  'detail.checkNow': 'Controlla ora', 'detail.queueing': 'Pianificazione…', 'detail.archive': 'Archivia pacco',
+  'timeline.emptySyncing': 'Controllo presso il corriere…',
+  'timeline.empty': 'Il corriere non ha ancora annunciato questa spedizione — torna presto! 🕊️',
+  'timeline.label': 'Cronologia del tracciamento', 'timeline.syncing': 'Sincronizzazione in corso',
+  'progress.step': 'Fase {{step}} di {{total}}: {{stage}}', 'progress.empty': 'Ancora nessun aggiornamento',
+  'status.syncing': 'Sincronizzazione in corso', 'status.failed': 'Sincronizzazione non riuscita',
+  'status.unsupported': 'Sincronizzazione automatica non disponibile', 'status.unannounced': 'Non ancora annunciato',
+  'stage.pending': 'Tracciato', 'stage.registered': 'Annunciato', 'stage.accepted': 'Spedito', 'stage.in_transit': 'In transito',
+  'stage.customs': 'In dogana', 'stage.out_for_delivery': 'In consegna', 'stage.failed_attempt': 'Tentativo di consegna',
+  'stage.ready_for_pickup': 'Pronto per il ritiro', 'stage.delivered': 'Consegnato', 'stage.returned': 'Restituito al mittente',
+  'time.today': 'oggi', 'time.tomorrow': 'domani', 'time.justNow': 'proprio ora',
+  'time.minutesAgo': '{{count}} min fa', 'time.hoursAgo': '{{count}} h fa', 'time.daysAgo': '{{count}} g fa',
+  'notifications.button': 'Impostazioni notifiche', 'notifications.enabledButton': 'Notifiche attive',
+  'notifications.eyebrow': 'Avvisi sui pacchi', 'notifications.title': 'Notifiche', 'notifications.enabledTitle': 'Gli aggiornamenti ti raggiungeranno',
+  'notifications.disabledTitle': 'Ricevi gli aggiornamenti sul telefono',
+  'notifications.schedule': 'I controlli vengono eseguiti ogni 10 minuti dalle 08:00 alle 22:00, poi ogni ora di notte.',
+  'notifications.enable': 'Attiva notifiche', 'notifications.enabling': 'Attivazione…',
+  'notifications.disable': 'Disattiva su questo dispositivo', 'notifications.disabling': 'Disattivazione…',
+  'notifications.state.enabled': 'Questo dispositivo riceve i nuovi eventi di tracciamento.',
+  'notifications.state.unsupported': 'Su iPhone, aggiungi Swiss Delivery Tracker alla schermata Home e aprilo da lì.',
+  'notifications.state.unavailable': 'Il servizio di notifiche non è ancora configurato.',
+  'notifications.state.blocked': 'Le notifiche sono bloccate. Consentile nelle impostazioni di sistema dell’app.',
+  'notifications.state.prompt': 'Attiva gli avvisi su ogni dispositivo su cui vuoi riceverli.',
+  'notifications.state.checking': 'Controllo del dispositivo…', 'notifications.state.retry': 'Riapri queste impostazioni per riprovare.',
+  'account.options': 'Opzioni account per {{email}}', 'account.signedIn': 'Accesso eseguito come',
+  'account.deleteQuestion': 'Eliminare definitivamente questo account?',
+  'account.deleteDescription': 'Tutti i pacchi, la cronologia e le impostazioni delle notifiche verranno eliminati.',
+  'account.typeToConfirm': 'Digita {{email}} per confermare', 'account.deletePermanent': 'Elimina definitivamente',
+  'account.deleting': 'Eliminazione…', 'account.export': 'Scarica i miei dati', 'account.exporting': 'Preparazione esportazione…',
+  'account.signOut': 'Esci', 'account.signingOut': 'Uscita…', 'account.privacy': 'Informativa sulla privacy', 'account.delete': 'Elimina account',
+  'auth.title': 'Accedi per tracciare i tuoi pacchi Post.CH, UPS, DHL, ...!',
+  'auth.configTitle': 'L’autenticazione deve essere configurata.', 'auth.codeIntro': 'Inserisci il codice a sei cifre inviato a {{email}}.',
+  'auth.code': 'Codice di accesso', 'auth.signingIn': 'Accesso…', 'auth.openBox': 'Apri la mia casella consegne',
+  'auth.differentEmail': 'Usa un’altra e-mail', 'auth.googleOpening': 'Apertura di Google…', 'auth.google': 'Continua con Google',
+  'auth.or': 'oppure', 'auth.emailIntro': 'Nessuna password da ricordare. Ti invieremo un codice di accesso monouso.',
+  'auth.email': 'Indirizzo e-mail', 'auth.sending': 'Invio del codice…', 'auth.send': 'Inviami un codice',
+  'auth.privacy': 'I numeri di tracciamento e la cronologia restano privati nel tuo account.',
+  'auth.readPrivacy': 'Leggi l’informativa sulla privacy.', 'auth.loading': 'Apertura della tua casella consegne sicura…',
+};
+
+const dictionaries: Record<Locale, Messages> = { en, de, fr, it };
+
+export type Translate = (
+  key: MessageKey,
+  variables?: Record<string, string | number>,
+) => string;
+
+interface I18nValue {
+  locale: Locale;
+  languageTag: string;
+  setLocale: (locale: Locale) => void;
+  t: Translate;
+}
+
+function translate(locale: Locale, key: MessageKey, variables?: Record<string, string | number>) {
+  let message: string = dictionaries[locale][key];
+  for (const [name, value] of Object.entries(variables ?? {})) {
+    message = message.replaceAll(`{{${name}}}`, String(value));
+  }
+  return message;
+}
+
+const defaultValue: I18nValue = {
+  locale: 'en',
+  languageTag: 'en-CH',
+  setLocale: () => undefined,
+  t: (key, variables) => translate('en', key, variables),
+};
+
+const I18nContext = createContext<I18nValue>(defaultValue);
+
+export function detectLocale(languages: readonly string[] = []): Locale {
+  for (const language of languages) {
+    const base = language.toLowerCase().split('-')[0];
+    if (SUPPORTED_LOCALES.includes(base as Locale)) return base as Locale;
+  }
+  return 'en';
+}
+
+function initialLocale(): Locale {
+  if (typeof window === 'undefined') return 'en';
+  const saved = window.localStorage.getItem(STORAGE_KEY);
+  if (SUPPORTED_LOCALES.includes(saved as Locale)) return saved as Locale;
+  return detectLocale(navigator.languages?.length ? navigator.languages : [navigator.language]);
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocale] = useState<Locale>(initialLocale);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, locale);
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  const value = useMemo<I18nValue>(() => ({
+    locale,
+    languageTag: `${locale}-CH`,
+    setLocale,
+    t: (key, variables) => translate(locale, key, variables),
+  }), [locale]);
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+export function useI18n(): I18nValue {
+  return useContext(I18nContext);
+}
+
+export function stageLabel(t: Translate, stage: Stage): string {
+  return t(`stage.${stage}` as MessageKey);
+}
+
+export function LanguageControl({ className = '' }: { className?: string }) {
+  const { locale, setLocale, t } = useI18n();
+  return (
+    <label className={`language-control ${className}`.trim()}>
+      <span>{t('language.label')}</span>
+      <select
+        aria-label={t('language.label')}
+        value={locale}
+        onChange={(event) => setLocale(event.target.value as Locale)}
+      >
+        {SUPPORTED_LOCALES.map((option) => (
+          <option key={option} value={option}>{t(`language.${option}`)}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function localizedRelativeTime(
+  iso: string,
+  t: Translate,
+  now: number = Date.now(),
+): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const minutes = Math.floor((now - then) / 60_000);
+  if (minutes < 1) return t('time.justNow');
+  if (minutes < 60) return t('time.minutesAgo', { count: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t('time.hoursAgo', { count: hours });
+  const days = Math.floor(hours / 24);
+  if (days < 7) return t('time.daysAgo', { count: days });
+  return new Intl.DateTimeFormat('de-CH').format(new Date(iso));
+}
+
+export function localizedExpectedDelivery(
+  value: string,
+  t: Translate,
+  now: number = Date.now(),
+): string {
+  const windowMatch = /^(\d{4}-\d{2}-\d{2})[ T]+(\d{2}:\d{2})(?:[–-](\d{2}:\d{2}))?$/.exec(value.trim());
+  if (windowMatch) {
+    const date = localizedExpectedDelivery(windowMatch[1], t, now);
+    return `${date}, ${windowMatch[2]}${windowMatch[3] ? `–${windowMatch[3]}` : ''}`;
+  }
+  const expected = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
+  if (Number.isNaN(expected.getTime())) return value;
+  const today = new Date(now);
+  const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  if (dayKey(expected) === dayKey(today)) return t('time.today');
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  if (dayKey(expected) === dayKey(tomorrow)) return t('time.tomorrow');
+  return new Intl.DateTimeFormat('de-CH').format(expected);
+}

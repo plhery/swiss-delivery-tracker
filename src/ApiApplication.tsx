@@ -9,8 +9,10 @@ import {
 } from './lib/pushNotifications';
 import { clearApiCache, createApiRepo } from './store/apiRepo';
 import { ParcelsProvider } from './store/ParcelsContext';
+import { useI18n } from './i18n';
 
 export function ApiApplication() {
+  const { t } = useI18n();
   const auth = useAuth();
   const signOut = auth.signOut;
   const sessionAuth = useMemo(
@@ -61,7 +63,7 @@ export function ApiApplication() {
     [apiAuth],
   );
   if (auth.status === 'loading') {
-    return <div className="auth-loading" role="status">Opening your secure delivery box…</div>;
+    return <div className="auth-loading" role="status">{t('auth.loading')}</div>;
   }
   if (auth.status === 'unconfigured' || auth.status === 'anonymous') {
     return (

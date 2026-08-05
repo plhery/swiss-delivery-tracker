@@ -4,6 +4,7 @@ import { AccountMenu } from './components/AccountMenu';
 import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
+import { LanguageControl, type MessageKey, useI18n } from './i18n';
 import type { ApiAuth } from './lib/apiClient';
 import {
   isActiveParcel,
@@ -17,13 +18,13 @@ import type { ParcelWithEvents } from './types';
 
 const DETAIL_HISTORY_KEY = 'parcelPostDetail';
 
-const ATTENTION_LABELS: Record<ParcelAttention, string> = {
-  sync_error: 'Tracking check failed',
-  failed_attempt: 'Delivery attempt needs action',
-  ready_for_pickup: 'Ready for pickup',
-  customs: 'Held at customs',
-  stalled: 'No tracking update for four days',
-  not_announced: 'Carrier has not published an update',
+const ATTENTION_LABELS: Record<ParcelAttention, MessageKey> = {
+  sync_error: 'attention.sync_error',
+  failed_attempt: 'attention.failed_attempt',
+  ready_for_pickup: 'attention.ready_for_pickup',
+  customs: 'attention.customs',
+  stalled: 'attention.stalled',
+  not_announced: 'attention.not_announced',
 };
 
 export default function App({
@@ -39,6 +40,7 @@ export default function App({
   onDeleteAccount?: (confirmation: string) => Promise<void>;
   apiAuth?: ApiAuth;
 } = {}) {
+  const { t } = useI18n();
   const {
     parcels,
     loading,
@@ -176,7 +178,7 @@ export default function App({
     try {
       await handleRestore(undoParcel);
     } catch (reason) {
-      setUndoError(reason instanceof Error ? reason.message : 'Could not restore the parcel');
+      setUndoError(reason instanceof Error ? reason.message : t('detail.restoreFailed'));
     } finally {
       setUndoing(false);
     }
@@ -186,7 +188,7 @@ export default function App({
     setRefreshNotice(null);
     try {
       await refresh();
-      setRefreshNotice('Tracking checks queued. Updates will appear automatically.');
+      setRefreshNotice(t('app.refreshQueued'));
     } catch {
       // The shared error banner contains the actionable failure message.
     }
@@ -201,16 +203,17 @@ export default function App({
               <span />
             </span>
             <div>
-              <p className="app__eyebrow">All your parcels</p>
-              <h1 className="app__title">Swiss Delivery Tracker</h1>
+              <p className="app__eyebrow">{t('app.eyebrow')}</p>
+              <h1 className="app__title">{t('app.title')}</h1>
             </div>
           </div>
           <div className="app__header-actions">
+            <LanguageControl className="language-control--header" />
             {mode === 'api' && <NotificationControl apiAuth={apiAuth} />}
             <button
               type="button"
               className="icon-button"
-              aria-label={refreshing ? 'Queueing tracking checks' : 'Refresh tracking'}
+              aria-label={refreshing ? t('app.refreshing') : t('app.refresh')}
               aria-busy={refreshing}
               onClick={() => void refreshAll()}
               disabled={refreshing}
@@ -237,19 +240,19 @@ export default function App({
           <div className="app__summary-count">
             <strong>{loading ? '—' : activeCount}</strong>
             <span>
-              {activeCount === 1 ? 'parcel' : 'parcels'}
+              {activeCount === 1 ? t('app.parcel.one') : t('app.parcel.many')}
               <br />
-              on the way
+              {t('app.onTheWay')}
             </span>
           </div>
           <p className="app__subtitle">
             {loading
-              ? 'Opening your delivery box…'
+              ? t('app.opening')
               : error && parcels.length === 0
-                ? 'Your delivery box could not be loaded'
+                ? t('app.loadFailed')
               : activeCount === 0
-                ? 'Nothing on the way right now'
-                : 'Every shipment, from first lookup to arrival.'}
+                ? t('app.noneOnWay')
+                : t('app.subtitle')}
           </p>
         </div>
       </header>
@@ -257,21 +260,21 @@ export default function App({
       <main className="app__content">
         {mode === 'demo' && (
           <div className="demo-banner">
-            <span className="demo-banner__stamp">Demo mode</span>
-            <span>These sample parcels stay on this device.</span>
+            <span className="demo-banner__stamp">{t('app.demo')}</span>
+            <span>{t('app.demoDescription')}</span>
           </div>
         )}
 
         {error && (
           <div className="error-banner" role="alert">
             <strong>
-              {authenticationRequired ? 'Sign-in needed.' : 'Tracking is taking a break.'}
+              {authenticationRequired ? t('app.signInNeeded') : t('app.trackingBreak')}
             </strong>
             <span>{error}</span>
-            {usingCachedData && <span>Showing the last parcel data saved on this device.</span>}
+            {usingCachedData && <span>{t('app.cachedData')}</span>}
             {authenticationRequired && (
               <a className="error-banner__action" href="/">
-                Sign in again
+                {t('app.signInAgain')}
               </a>
             )}
             {!authenticationRequired && (
@@ -280,14 +283,14 @@ export default function App({
                 type="button"
                 onClick={() => void retryLoad()}
               >
-                Try again
+                {t('app.tryAgain')}
               </button>
             )}
           </div>
         )}
 
         {loading && (
-          <div className="parcel-grid" aria-label="Loading parcels">
+          <div className="parcel-grid" aria-label={t('app.loadingParcels')}>
             <div className="parcel-card parcel-card--skeleton" />
             <div className="parcel-card parcel-card--skeleton" />
           </div>
@@ -296,9 +299,9 @@ export default function App({
         {!loading && !error && parcels.length === 0 && (
           <div className="empty-state">
             <div className="empty-state__mailbox" aria-hidden="true"><span /></div>
-            <p className="empty-state__eyebrow">Delivery box empty</p>
-            <h2>No parcels yet</h2>
-            <p>Add a tracking number and follow every step of the journey.</p>
+            <p className="empty-state__eyebrow">{t('app.emptyEyebrow')}</p>
+            <h2>{t('app.emptyTitle')}</h2>
+            <p>{t('app.emptyDescription')}</p>
           </div>
         )}
 
@@ -308,7 +311,7 @@ export default function App({
             aria-labelledby="attention-parcels-title"
           >
             <div className="parcel-section__heading">
-              <h2 id="attention-parcels-title">Needs attention</h2>
+              <h2 id="attention-parcels-title">{t('app.needsAttention')}</h2>
               <span>{prioritized.attention.length}</span>
             </div>
             <div className="parcel-grid">
@@ -316,7 +319,7 @@ export default function App({
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  notice={ATTENTION_LABELS[reason]}
+                  notice={t(ATTENTION_LABELS[reason])}
                   onOpen={(p) => openParcelDetail(p.id)}
                 />
               ))}
@@ -330,7 +333,7 @@ export default function App({
             aria-labelledby="today-parcels-title"
           >
             <div className="parcel-section__heading">
-              <h2 id="today-parcels-title">Arriving today</h2>
+              <h2 id="today-parcels-title">{t('app.arrivingToday')}</h2>
               <span>{prioritized.arrivingToday.length}</span>
             </div>
             <div className="parcel-grid">
@@ -338,7 +341,7 @@ export default function App({
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  notice="Expected today"
+                  notice={t('parcel.expectedToday')}
                   onOpen={(p) => openParcelDetail(p.id)}
                 />
               ))}
@@ -352,7 +355,7 @@ export default function App({
             aria-labelledby="active-parcels-title"
           >
             <div className="parcel-section__heading">
-              <h2 id="active-parcels-title">On the way</h2>
+              <h2 id="active-parcels-title">{t('app.onTheWaySection')}</h2>
               <span>{prioritized.onTheWay.length}</span>
             </div>
             <div className="parcel-grid">
@@ -373,7 +376,7 @@ export default function App({
             aria-labelledby="past-parcels-title"
           >
             <div className="parcel-section__heading">
-              <h2 id="past-parcels-title">Past deliveries</h2>
+              <h2 id="past-parcels-title">{t('app.pastDeliveries')}</h2>
               <span>{deliveredParcels.length}</span>
             </div>
             <div className="parcel-grid">
@@ -394,7 +397,7 @@ export default function App({
             aria-labelledby="returned-parcels-title"
           >
             <div className="parcel-section__heading">
-              <h2 id="returned-parcels-title">Returned</h2>
+              <h2 id="returned-parcels-title">{t('app.returned')}</h2>
               <span>{returnedParcels.length}</span>
             </div>
             <div className="parcel-grid">
@@ -416,7 +419,7 @@ export default function App({
           >
             <details>
               <summary>
-                <span id="archived-parcels-title">Archived</span>
+                <span id="archived-parcels-title">{t('app.archived')}</span>
                 <span className="archived-section__count">{archivedParcels.length}</span>
               </summary>
               <div className="parcel-grid">
@@ -436,11 +439,11 @@ export default function App({
       <button
         type="button"
         className="fab"
-        aria-label="Add a parcel"
+        aria-label={t('app.addParcelAria')}
         onClick={() => setAdding(true)}
       >
         <span aria-hidden="true">+</span>
-        Add parcel
+        {t('app.addParcel')}
       </button>
 
       {adding && (
@@ -467,11 +470,11 @@ export default function App({
       {undoParcel && (
         <div className="undo-toast" role="status">
           <span className="undo-toast__message">
-            <span>{undoParcel.label || 'Parcel'} archived</span>
+            <span>{t('app.archivedToast', { name: undoParcel.label || t('common.parcel') })}</span>
             {undoError && <small role="alert">{undoError}</small>}
           </span>
           <button type="button" disabled={undoing} onClick={() => void undoArchive()}>
-            {undoing ? 'Restoring…' : undoError ? 'Retry' : 'Undo'}
+            {undoing ? t('common.restoring') : undoError ? t('common.retry') : t('app.undo')}
           </button>
         </div>
       )}

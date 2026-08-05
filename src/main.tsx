@@ -4,6 +4,7 @@ import App from './App';
 import { ApiApplication } from './ApiApplication';
 import { AuthProvider } from './auth/AuthContext';
 import { authConfigFromEnvironment } from './auth/authConfig';
+import { I18nProvider } from './i18n';
 import { enableAppBadgeClearing } from './lib/pushNotifications';
 import { enablePwaLiveReload } from './lib/pwaUpdates';
 import { createDemoRepo } from './store/demoRepo';
@@ -19,14 +20,16 @@ enableAppBadgeClearing();
 
 root.render(
   <StrictMode>
-    {useDemo ? (
-      <ParcelsProvider repo={createDemoRepo()}>
-        <App />
-      </ParcelsProvider>
-    ) : (
-      <AuthProvider config={authConfig}>
-        <ApiApplication />
-      </AuthProvider>
-    )}
+    <I18nProvider>
+      {useDemo ? (
+        <ParcelsProvider repo={createDemoRepo()}>
+          <App />
+        </ParcelsProvider>
+      ) : (
+        <AuthProvider config={authConfig}>
+          <ApiApplication />
+        </AuthProvider>
+      )}
+    </I18nProvider>
   </StrictMode>,
 );

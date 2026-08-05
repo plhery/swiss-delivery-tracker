@@ -1,4 +1,5 @@
 import { CORE_STAGES, stageMeta } from '../lib/stages';
+import { stageLabel, useI18n } from '../i18n';
 import type { Stage } from '../types';
 
 /**
@@ -6,11 +7,16 @@ import type { Stage } from '../types';
  * parcel's current position.
  */
 export function ProgressTrack({ stage }: { stage: Stage | null }) {
+  const { t } = useI18n();
   const meta = stage ? stageMeta(stage) : null;
   const position = meta?.progress ?? -1;
   const label = meta
-    ? `Step ${position + 1} of ${CORE_STAGES.length}: ${meta.label}`
-    : 'No tracking updates yet';
+    ? t('progress.step', {
+      step: position + 1,
+      total: CORE_STAGES.length,
+      stage: stageLabel(t, stage!),
+    })
+    : t('progress.empty');
 
   return (
     <div

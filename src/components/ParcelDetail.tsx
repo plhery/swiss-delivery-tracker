@@ -1,8 +1,8 @@
 import { useState, useRef, type FormEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
-import { formatExpectedDelivery } from '../lib/format';
-import { parcelDisplayStatus } from '../lib/parcelStatus';
+import { localizedExpectedDelivery, useI18n } from '../i18n';
+import { parcelDisplayStatus, parcelDisplayStatusKey } from '../lib/parcelStatus';
 import { currentEvent } from '../lib/stages';
 import { isBackSwipe, type TouchPoint } from '../lib/swipe';
 import { useModalDialog } from '../lib/modal';
@@ -25,6 +25,7 @@ export function ParcelDetail({
   onRestore: (parcel: ParcelWithEvents) => Promise<unknown>;
   onDelete: (parcel: ParcelWithEvents) => Promise<unknown>;
 }) {
+  const { languageTag, t } = useI18n();
   const carrier = carrierInfo(parcel.carrier);
   const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
@@ -69,7 +70,7 @@ export function ParcelDetail({
       await onRename(parcel, nextTitle);
       setEditingTitle(false);
     } catch (error) {
-      setTitleError(error instanceof Error ? error.message : 'Could not rename the parcel');
+      setTitleError(error instanceof Error ? error.message : t('detail.renameFailed'));
     } finally {
       setSavingTitle(false);
     }
@@ -82,9 +83,9 @@ export function ParcelDetail({
     setCheckNotice(null);
     try {
       await onRefresh(parcel);
-      setCheckNotice('Tracking check queued. Updates will appear automatically.');
+      setCheckNotice(t('detail.checkQueued'));
     } catch (error) {
-      setCheckError(error instanceof Error ? error.message : 'Could not queue a tracking check');
+      setCheckError(error instanceof Error ? error.message : t('detail.checkFailed'));
     } finally {
       setChecking(false);
     }
@@ -97,7 +98,7 @@ export function ParcelDetail({
     try {
       await onRestore(parcel);
     } catch (error) {
-      setCheckError(error instanceof Error ? error.message : 'Could not restore the parcel');
+      setCheckError(error instanceof Error ? error.message : t('detail.restoreFailed'));
       setRestoring(false);
     }
   }
@@ -109,7 +110,7 @@ export function ParcelDetail({
     try {
       await onDelete(parcel);
     } catch (error) {
-      setCheckError(error instanceof Error ? error.message : 'Could not archive the parcel');
+      setCheckError(error instanceof Error ? error.message : t('detail.archiveFailed'));
       setArchiving(false);
     }
   }
@@ -154,7 +155,7 @@ export function ParcelDetail({
       className="detail"
       role="dialog"
       aria-modal="true"
-      aria-label={parcel.label || 'Parcel'}
+      aria-label={parcel.label || t('common.parcel')}
       tabIndex={-1}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
@@ -163,9 +164,9 @@ export function ParcelDetail({
       <header className="detail__header">
         <button ref={backButton} type="button" className="detail__back" onClick={onBack}>
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m13 4-6 6 6 6" /></svg>
-          Back
+          {t('detail.back')}
         </button>
-        <span>Parcel details</span>
+        <span>{t('detail.label')}</span>
       </header>
 
       <div className="detail__hero">
@@ -181,10 +182,10 @@ export function ParcelDetail({
             <input
               className="detail__title-input"
               type="text"
-              aria-label="Parcel title"
+              aria-label={t('detail.titleAria')}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Parcel"
+              placeholder={t('common.parcel')}
               maxLength={80}
               autoFocus
             />
@@ -198,24 +199,24 @@ export function ParcelDetail({
                 onClick={cancelTitleEdit}
                 disabled={savingTitle}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 className="button button--primary"
                 disabled={savingTitle}
               >
-                {savingTitle ? 'Saving…' : 'Save title'}
+                {savingTitle ? t('detail.saving') : t('detail.saveTitle')}
               </button>
             </div>
           </form>
         ) : (
           <div className="detail__title-row">
-            <h1 className="detail__title">{parcel.label || 'Parcel'}</h1>
+            <h1 className="detail__title">{parcel.label || t('common.parcel')}</h1>
             <button
               type="button"
               className="detail__title-edit"
-              aria-label="Edit parcel title"
+              aria-label={t('detail.editTitle')}
               onClick={beginTitleEdit}
             >
               <svg aria-hidden="true" viewBox="0 0 20 20">
@@ -226,36 +227,40 @@ export function ParcelDetail({
         )}
         <p className="detail__status">
           <span className={`status-badge status-badge--${status.tone}${status.syncing ? ' status-badge--syncing' : ''}`}>
-            {status.label}
+            {t(parcelDisplayStatusKey(parcel))}
           </span>
         </p>
         <ProgressTrack stage={current?.stage ?? null} />
         <div className="detail__tracking-ticket">
-          <span className="detail__tracking-label">Tracking number</span>
+          <span className="detail__tracking-label">{t('detail.trackingNumber')}</span>
           <strong>{formatTrackingNumber(parcel.trackingNumber)}</strong>
           <button
             type="button"
             className="detail__tracking-copy"
             onClick={() => void copyTrackingNumber()}
-            aria-label="Copy tracking number"
+            aria-label={t('detail.copyTracking')}
           >
-            {copyStatus === 'copied' ? 'Copied' : 'Copy'}
+            {copyStatus === 'copied' ? t('detail.copied') : t('detail.copy')}
           </button>
           <span className="detail__barcode" aria-hidden="true" />
         </div>
         {copyStatus === 'error' && (
           <p className="detail__copy-error" role="alert">
-            Copying is unavailable. Press and hold the tracking number instead.
+            {t('detail.copyUnavailable')}
           </p>
         )}
         {parcel.expectedDelivery && (
           <p className="detail__meta">
-            Expected: {formatExpectedDelivery(parcel.expectedDelivery)}
+            {t('detail.expected', {
+              date: localizedExpectedDelivery(parcel.expectedDelivery, t),
+            })}
           </p>
         )}
         {parcel.lastSyncedAt && (
           <p className="detail__meta">
-            Last checked: {new Date(parcel.lastSyncedAt).toLocaleString('de-CH')}
+            {t('detail.lastChecked', {
+              date: new Date(parcel.lastSyncedAt).toLocaleString(languageTag),
+            })}
           </p>
         )}
         {parcel.syncError && (
@@ -268,15 +273,15 @@ export function ParcelDetail({
             target="_blank"
             rel="noreferrer"
           >
-            Open on {carrier.name} ↗
+            {t('detail.openCarrier', { carrier: carrier.name })}
           </a>
         )}
       </div>
 
       <section className="detail__timeline">
         <div className="detail__section-heading">
-          <p>Tracking history</p>
-          <h2 className="detail__section-title">Journey</h2>
+          <p>{t('detail.history')}</p>
+          <h2 className="detail__section-title">{t('detail.journey')}</h2>
         </div>
         <Timeline events={parcel.events} syncing={status.syncing} />
       </section>
@@ -291,17 +296,19 @@ export function ParcelDetail({
             onClick={() => void restoreNow()}
             disabled={restoring}
           >
-            {restoring ? 'Restoring…' : 'Restore parcel'}
+            {restoring ? t('common.restoring') : t('detail.restore')}
           </button>
         ) : confirmingArchive ? (
           <div
             className="detail__archive-confirm"
             role="group"
-            aria-label={`Archive ${parcel.label || 'parcel'}?`}
+            aria-label={t('detail.archiveQuestionAria', {
+              name: parcel.label || t('common.parcel').toLocaleLowerCase(languageTag),
+            })}
           >
             <p>
-              <strong>Archive this parcel?</strong>
-              <span>Its tracking history will stay available.</span>
+              <strong>{t('detail.archiveQuestion')}</strong>
+              <span>{t('detail.archiveDescription')}</span>
             </p>
             <div className="detail__archive-actions">
               <button
@@ -313,7 +320,7 @@ export function ParcelDetail({
                 }}
                 disabled={archiving}
               >
-                Keep parcel
+                {t('detail.keep')}
               </button>
               <button
                 type="button"
@@ -321,7 +328,7 @@ export function ParcelDetail({
                 onClick={() => void archiveNow()}
                 disabled={archiving}
               >
-                {archiving ? 'Archiving…' : 'Confirm archive'}
+                {archiving ? t('detail.archiving') : t('detail.confirmArchive')}
               </button>
             </div>
           </div>
@@ -333,7 +340,7 @@ export function ParcelDetail({
               onClick={() => void checkNow()}
               disabled={checking}
             >
-              {checking ? 'Queueing check…' : 'Check now'}
+              {checking ? t('detail.queueing') : t('detail.checkNow')}
             </button>
             <button
               type="button"
@@ -343,7 +350,7 @@ export function ParcelDetail({
                 setConfirmingArchive(true);
               }}
             >
-              Archive parcel
+              {t('detail.archive')}
             </button>
           </>
         )}

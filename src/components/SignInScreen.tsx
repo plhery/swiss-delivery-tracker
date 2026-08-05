@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { LanguageControl, useI18n } from '../i18n';
 
 export function SignInScreen({
   configured,
@@ -15,6 +16,7 @@ export function SignInScreen({
   sendCode: (email: string) => Promise<void>;
   verifyCode: (email: string, code: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
@@ -28,7 +30,7 @@ export function SignInScreen({
     try {
       await signInWithGoogle();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not start Google sign-in');
+      setError(reason instanceof Error ? reason.message : t('auth.googleFailed'));
       setWorking(false);
     }
   }
@@ -42,7 +44,7 @@ export function SignInScreen({
       await sendCode(email.trim().toLowerCase());
       setCodeSent(true);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not send a sign-in code');
+      setError(reason instanceof Error ? reason.message : t('auth.sendFailed'));
     } finally {
       setWorking(false);
     }
@@ -56,7 +58,7 @@ export function SignInScreen({
     try {
       await verifyCode(email.trim().toLowerCase(), code.replace(/\s/g, ''));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not verify the sign-in code');
+      setError(reason instanceof Error ? reason.message : t('auth.verifyFailed'));
     } finally {
       setWorking(false);
     }
@@ -65,14 +67,15 @@ export function SignInScreen({
   return (
     <main className="auth-screen">
       <section className="auth-card" aria-labelledby="sign-in-title">
+        <LanguageControl className="language-control--auth" />
         <div className="auth-card__mark" aria-hidden="true"><span /></div>
         <p className="auth-card__eyebrow">Swiss Delivery Tracker</p>
         <h1 id="sign-in-title">
-          Sign in to start tracking your Post.CH, UPS, DHL, ... packages!
+          {t('auth.title')}
         </h1>
         {!configured ? (
           <div className="auth-card__configuration" role="alert">
-            <strong>Authentication needs configuration.</strong>
+            <strong>{t('auth.configTitle')}</strong>
             <span>
               Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` when
               building the production app.
@@ -81,9 +84,9 @@ export function SignInScreen({
         ) : codeSent && emailOtpEnabled ? (
           <form onSubmit={(event) => void submitCode(event)}>
             <p className="auth-card__intro">
-              Enter the six-digit code sent to <strong>{email}</strong>.
+              {t('auth.codeIntro', { email })}
             </p>
-            <label htmlFor="sign-in-code">Sign-in code</label>
+            <label htmlFor="sign-in-code">{t('auth.code')}</label>
             <input
               id="sign-in-code"
               type="text"
@@ -99,7 +102,7 @@ export function SignInScreen({
             />
             {error && <p className="auth-card__error" role="alert">{error}</p>}
             <button className="button button--primary" type="submit" disabled={working}>
-              {working ? 'Signing in…' : 'Open my delivery box'}
+              {working ? t('auth.signingIn') : t('auth.openBox')}
             </button>
             <button
               className="auth-card__text-button"
@@ -111,7 +114,7 @@ export function SignInScreen({
               }}
               disabled={working}
             >
-              Use a different email
+              {t('auth.differentEmail')}
             </button>
           </form>
         ) : (
@@ -129,18 +132,18 @@ export function SignInScreen({
                   <path fill="#fbbc05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.4H3.1a10 10 0 0 0 0 9.2l3.3-2.7Z" />
                   <path fill="#ea4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.1 7.4l3.3 2.7c.8-2.4 3-4.2 5.6-4.2Z" />
                 </svg>
-                {working ? 'Opening Google…' : 'Continue with Google'}
+                {working ? t('auth.googleOpening') : t('auth.google')}
               </button>
             )}
             {googleEnabled && emailOtpEnabled && (
-              <div className="auth-card__divider"><span>or</span></div>
+              <div className="auth-card__divider"><span>{t('auth.or')}</span></div>
             )}
             {emailOtpEnabled && (
               <form onSubmit={(event) => void requestCode(event)}>
                 <p className="auth-card__intro">
-                  No password to remember. We’ll email you a one-time sign-in code.
+                  {t('auth.emailIntro')}
                 </p>
-                <label htmlFor="sign-in-email">Email address</label>
+                <label htmlFor="sign-in-email">{t('auth.email')}</label>
                 <input
                   id="sign-in-email"
                   type="email"
@@ -154,7 +157,7 @@ export function SignInScreen({
                 />
                 {error && <p className="auth-card__error" role="alert">{error}</p>}
                 <button className="button button--primary" type="submit" disabled={working}>
-                  {working ? 'Sending code…' : 'Email me a code'}
+                  {working ? t('auth.sending') : t('auth.send')}
                 </button>
               </form>
             )}
@@ -164,8 +167,8 @@ export function SignInScreen({
           </div>
         )}
         <p className="auth-card__privacy">
-          Tracking numbers and delivery history stay private to your account.{' '}
-          <a href="/privacy.html">Read the privacy notice.</a>
+          {t('auth.privacy')}{' '}
+          <a href="/privacy.html">{t('auth.readPrivacy')}</a>
         </p>
       </section>
     </main>

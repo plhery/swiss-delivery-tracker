@@ -1,4 +1,5 @@
 import type { ParcelWithEvents } from '../types';
+import type { MessageKey } from '../i18n';
 import { currentEvent, stageMeta } from './stages';
 
 export interface ParcelDisplayStatus {
@@ -19,7 +20,11 @@ export function parcelDisplayStatus(parcel: ParcelWithEvents): ParcelDisplayStat
     return { label: 'Sync failed', tone: 'warn', syncing: false };
   }
   if (!hasCarrierUpdate && parcel.syncStatus === 'unsupported') {
-    return { label: 'Automatic sync unavailable', tone: 'warn', syncing: false };
+    return {
+      label: 'Automatic sync unavailable',
+      tone: 'warn',
+      syncing: false,
+    };
   }
 
   const meta = current ? stageMeta(current.stage) : null;
@@ -28,4 +33,15 @@ export function parcelDisplayStatus(parcel: ParcelWithEvents): ParcelDisplayStat
     tone: meta?.tone ?? 'ok',
     syncing: false,
   };
+}
+
+export function parcelDisplayStatusKey(parcel: ParcelWithEvents): MessageKey {
+  const current = currentEvent(parcel.events);
+  const hasCarrierUpdate = Boolean(current && current.stage !== 'pending');
+  if (!hasCarrierUpdate && (parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing')) {
+    return 'status.syncing';
+  }
+  if (!hasCarrierUpdate && parcel.syncStatus === 'error') return 'status.failed';
+  if (!hasCarrierUpdate && parcel.syncStatus === 'unsupported') return 'status.unsupported';
+  return current ? (`stage.${current.stage}` as MessageKey) : 'status.unannounced';
 }

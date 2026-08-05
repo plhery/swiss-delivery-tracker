@@ -8,8 +8,10 @@ import {
 } from '../lib/pushNotifications';
 import type { ApiAuth } from '../lib/apiClient';
 import { useModalDialog } from '../lib/modal';
+import { type Translate, useI18n } from '../i18n';
 
 export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -20,9 +22,9 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
 
   useEffect(() => {
     void inspectPushState(apiAuth).then(setState).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : 'Notification settings are unavailable');
+      setError(reason instanceof Error ? reason.message : t('notifications.error.unavailable'));
     });
-  }, [apiAuth]);
+  }, [apiAuth, t]);
 
   async function enable() {
     if (!state || state.kind !== 'prompt') return;
@@ -31,9 +33,9 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
     try {
       const testSent = await enablePushNotifications(state.publicKey, apiAuth);
       setState({ kind: 'enabled', publicKey: state.publicKey });
-      if (!testSent) setError('Enabled. The welcome alert could not be sent, but updates will retry.');
+      if (!testSent) setError(t('notifications.error.welcome'));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not enable notifications');
+      setError(reason instanceof Error ? reason.message : t('notifications.error.enable'));
       setState(await inspectPushState(apiAuth));
     } finally {
       setBusy(false);
@@ -48,7 +50,7 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
       const next = await inspectPushState(apiAuth);
       setState(next.kind === 'enabled' ? { kind: 'prompt', publicKey: next.publicKey } : next);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not disable notifications');
+      setError(reason instanceof Error ? reason.message : t('notifications.error.disable'));
     } finally {
       setBusy(false);
     }
@@ -59,7 +61,7 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
       <button
         type="button"
         className={`icon-button notification-button${enabled ? ' notification-button--enabled' : ''}`}
-        aria-label={enabled ? 'Notifications enabled' : 'Notification settings'}
+        aria-label={enabled ? t('notifications.enabledButton') : t('notifications.button')}
         onClick={() => setOpen(true)}
       >
         <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -81,33 +83,33 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
             <div className="sheet__grabber" />
             <div className="sheet__heading">
               <div>
-                <p className="sheet__eyebrow">Parcel alerts</p>
-                <h2 className="sheet__title" id="notifications-title">Notifications</h2>
+                <p className="sheet__eyebrow">{t('notifications.eyebrow')}</p>
+                <h2 className="sheet__title" id="notifications-title">{t('notifications.title')}</h2>
               </div>
-              <button ref={closeButton} className="sheet__close" type="button" aria-label="Close" onClick={() => setOpen(false)}>×</button>
+              <button ref={closeButton} className="sheet__close" type="button" aria-label={t('common.close')} onClick={() => setOpen(false)}>×</button>
             </div>
 
             <div className={`notification-status${enabled ? ' notification-status--enabled' : ''}`}>
               <span className="notification-status__mark" aria-hidden="true" />
               <div>
-                <strong>{enabled ? 'Updates will find you' : 'Get parcel progress on your phone'}</strong>
-                <p>{copyFor(state, Boolean(error))}</p>
+                <strong>{enabled ? t('notifications.enabledTitle') : t('notifications.disabledTitle')}</strong>
+                <p>{copyFor(state, Boolean(error), t)}</p>
               </div>
             </div>
 
             <p className="notification-schedule">
-              Tracking checks run every 10 minutes from 08:00 to 22:00, then hourly overnight.
+              {t('notifications.schedule')}
             </p>
             {error && <p className="sheet__error" role="alert">{error}</p>}
 
             {state?.kind === 'prompt' && (
               <button className="button button--primary notification-action" type="button" disabled={busy} onClick={() => void enable()}>
-                {busy ? 'Enabling…' : 'Enable notifications'}
+                {busy ? t('notifications.enabling') : t('notifications.enable')}
               </button>
             )}
             {enabled && (
               <button className="button button--secondary notification-action" type="button" disabled={busy} onClick={() => void disable()}>
-                {busy ? 'Turning off…' : 'Turn off on this device'}
+                {busy ? t('notifications.disabling') : t('notifications.disable')}
               </button>
             )}
           </section>
@@ -118,14 +120,14 @@ export function NotificationControl({ apiAuth }: { apiAuth?: ApiAuth }) {
   );
 }
 
-function copyFor(state: PushState | null, hasError: boolean): string {
-  if (hasError) return 'Open these settings again to retry.';
+function copyFor(state: PushState | null, hasError: boolean, t: Translate): string {
+  if (hasError) return t('notifications.state.retry');
   switch (state?.kind) {
-    case 'enabled': return 'This device is subscribed to new tracking events.';
-    case 'unsupported': return 'On iPhone, add Swiss Delivery Tracker to your Home Screen, then open it there.';
-    case 'unavailable': return 'The notification service is not configured yet.';
-    case 'blocked': return 'Notifications are blocked. Allow them in this app’s system settings.';
-    case 'prompt': return 'Enable alerts once on every device where you want to receive them.';
-    default: return 'Checking this device…';
+    case 'enabled': return t('notifications.state.enabled');
+    case 'unsupported': return t('notifications.state.unsupported');
+    case 'unavailable': return t('notifications.state.unavailable');
+    case 'blocked': return t('notifications.state.blocked');
+    case 'prompt': return t('notifications.state.prompt');
+    default: return t('notifications.state.checking');
   }
 }

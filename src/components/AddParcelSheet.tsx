@@ -11,6 +11,7 @@ import {
 } from '../lib/carriers';
 import type { CarrierId, NewParcelInput } from '../types';
 import { useModalDialog } from '../lib/modal';
+import { useI18n } from '../i18n';
 
 export function AddParcelSheet({
   onAdd,
@@ -25,6 +26,7 @@ export function AddParcelSheet({
   initialLabel?: string;
   initialTrackingInput?: string;
 }) {
+  const { locale, t } = useI18n();
   const [label, setLabel] = useState(initialLabel);
   const [trackingInputValue, setTrackingInputValue] = useState(initialTrackingInput);
   const [carrierInputs, setCarrierInputs] = useState<Record<CarrierInputField, string>>({
@@ -74,7 +76,7 @@ export function AddParcelSheet({
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add the parcel');
+      setError(err instanceof Error ? err.message : t('add.failed'));
       setSaving(false);
     }
   }
@@ -93,40 +95,40 @@ export function AddParcelSheet({
         <div className="sheet__grabber" aria-hidden="true" />
         <div className="sheet__heading">
           <div>
-            <p className="sheet__eyebrow">New shipment</p>
-            <h2 className="sheet__title" id="add-parcel-title">Add a parcel</h2>
+            <p className="sheet__eyebrow">{t('add.eyebrow')}</p>
+            <h2 className="sheet__title" id="add-parcel-title">{t('add.title')}</h2>
           </div>
           <button
             type="button"
             className="sheet__close"
-            aria-label="Close"
+            aria-label={t('common.close')}
             onClick={onClose}
           >
             ×
           </button>
         </div>
         <p className="sheet__intro">
-          Paste a tracking number, carrier link, or text from a shipping email.
+          {t('add.intro')}
         </p>
         <form onSubmit={handleSubmit} className="sheet__form">
           <label className="field">
-            <span className="field__label">What's inside? <small>Optional</small></span>
+            <span className="field__label">{t('add.contents')} <small>{t('add.optional')}</small></span>
             <input
               className="field__input"
               type="text"
               value={label}
-              placeholder="Coffee beans, new shoes…"
+              placeholder={t('add.contentsPlaceholder')}
               onChange={(e) => setLabel(e.target.value)}
               maxLength={80}
             />
           </label>
           <label className="field">
-            <span className="field__label">Tracking number or link</span>
+            <span className="field__label">{t('add.tracking')}</span>
             <textarea
               className="field__input field__input--tracking"
               ref={trackingInput}
               value={trackingInputValue}
-              placeholder="Paste a number, link, or shipping message"
+              placeholder={t('add.trackingPlaceholder')}
               onChange={(e) => setTrackingInputValue(e.target.value)}
               autoCapitalize="characters"
               autoCorrect="off"
@@ -136,26 +138,29 @@ export function AddParcelSheet({
           </label>
           {trackingInputValue.trim() && !trackingNumber && (
             <p className="sheet__error" role="status">
-              We couldn&apos;t find a tracking number. Paste the code itself or a carrier link.
+              {t('add.notFound')}
             </p>
           )}
           {parsedTracking.source !== 'number' && trackingNumber && (
             <p className="sheet__carrier-hint">
-              Found <strong>{formatTrackingNumber(trackingNumber)}</strong> in the pasted{' '}
-              {parsedTracking.source === 'link' ? 'link' : 'text'}.
+              {t('add.foundPrefix')}{t('add.foundPrefix') ? ' ' : ''}
+              <strong>{formatTrackingNumber(trackingNumber)}</strong>{' '}
+              {t(parsedTracking.source === 'link'
+                ? 'add.foundLinkSuffix'
+                : 'add.foundTextSuffix')}
             </p>
           )}
           <label className="field">
-            <span className="field__label">Carrier</span>
+            <span className="field__label">{t('add.carrier')}</span>
             <select
               className="field__input"
               value={selectedCarrier}
               onChange={(e) => setSelectedCarrier(e.target.value as CarrierId | 'auto')}
             >
-              <option value="auto">Detect automatically</option>
+              <option value="auto">{t('add.detect')}</option>
               {SELECTABLE_CARRIERS.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {option.name}{tracksAutomatically(option.id) ? '' : ' (link only)'}
+                  {option.name}{tracksAutomatically(option.id) ? '' : ` (${t('add.linkOnly')})`}
                 </option>
               ))}
             </select>
@@ -164,7 +169,11 @@ export function AddParcelSheet({
             .filter(({ field }) => field !== 'trackingUrl' || !parsedCarrierTrackingUrl)
             .map((requirement) => (
               <label className="field" key={requirement.field}>
-                <span className="field__label">{requirement.label}</span>
+                <span className="field__label">
+                  {locale === 'en'
+                    ? requirement.label
+                    : t(`add.requirement.${requirement.field}`)}
+                </span>
                 <input
                   className="field__input"
                   type={requirement.type}
@@ -196,14 +205,16 @@ export function AddParcelSheet({
           {carrier && (
             <p className="sheet__carrier-hint">
               {requiresCarrierConfirmation
-                ? `This number format could belong to ${parsedTracking.candidates
-                  .map((candidate) => carrierInfo(candidate).name)
-                  .join(' or ')}. Choose the carrier to confirm.`
+                ? t('add.confirmCarrier', {
+                  carriers: parsedTracking.candidates
+                    .map((candidate) => carrierInfo(candidate).name)
+                    .join(` ${t('auth.or')} `),
+                })
                 : carrier.id === 'unknown'
-                  ? "We couldn't recognise this format. Choose the carrier to enable syncing."
+                  ? t('add.unknownCarrier')
                   : tracksAutomatically(carrier.id)
-                  ? `${carrier.name} will sync automatically.`
-                  : `${carrier.name} is saved with a link; automatic syncing needs a supported adapter.`}
+                  ? t('add.autoSync', { carrier: carrier.name })
+                  : t('add.linkSync', { carrier: carrier.name })}
             </p>
           )}
           {error && (
@@ -217,7 +228,7 @@ export function AddParcelSheet({
               className="button button--secondary"
               onClick={onClose}
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -229,7 +240,7 @@ export function AddParcelSheet({
                 || saving
               }
             >
-              {saving ? 'Adding…' : 'Add parcel'}
+              {saving ? t('add.adding') : t('app.addParcel')}
             </button>
           </div>
         </form>

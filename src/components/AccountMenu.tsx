@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '../i18n';
 
 type AccountAction = 'export' | 'delete' | 'sign-out';
 
@@ -13,6 +14,7 @@ export function AccountMenu({
   onDelete?: (confirmation: string) => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const initial = email.trim().charAt(0).toUpperCase() || '?';
   const [working, setWorking] = useState<AccountAction | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -27,24 +29,26 @@ export function AccountMenu({
       await operation();
       if (action === 'export') setWorking(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : `Could not ${action}`);
+      setError(reason instanceof Error ? reason.message : t('account.actionFailed'));
       setWorking(null);
     }
   }
 
   return (
     <details className="account-menu">
-      <summary aria-label={`Account options for ${email}`}>{initial}</summary>
+      <summary aria-label={t('account.options', { email })}>{initial}</summary>
       <div className="account-menu__popover">
-        <span>Signed in as</span>
+        <span>{t('account.signedIn')}</span>
         <strong>{email}</strong>
         {error && <span className="account-menu__error" role="alert">{error}</span>}
 
         {confirmingDelete ? (
           <div className="account-menu__delete-confirmation">
-            <strong>Delete this account permanently?</strong>
-            <span>All parcels, tracking history, and notification settings will be erased.</span>
-            <label htmlFor="delete-account-confirmation">Type {email} to confirm</label>
+            <strong>{t('account.deleteQuestion')}</strong>
+            <span>{t('account.deleteDescription')}</span>
+            <label htmlFor="delete-account-confirmation">
+              {t('account.typeToConfirm', { email })}
+            </label>
             <input
               id="delete-account-confirmation"
               type="email"
@@ -65,7 +69,7 @@ export function AccountMenu({
                 () => onDelete?.(confirmation) ?? Promise.resolve(),
               )}
             >
-              {working === 'delete' ? 'Deleting…' : 'Permanently delete'}
+              {working === 'delete' ? t('account.deleting') : t('account.deletePermanent')}
             </button>
             <button
               type="button"
@@ -76,7 +80,7 @@ export function AccountMenu({
                 setError(null);
               }}
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         ) : (
@@ -87,7 +91,7 @@ export function AccountMenu({
                 disabled={Boolean(working)}
                 onClick={() => void run('export', onExport)}
               >
-                {working === 'export' ? 'Preparing export…' : 'Download my data'}
+                {working === 'export' ? t('account.exporting') : t('account.export')}
               </button>
             )}
             <button
@@ -95,10 +99,10 @@ export function AccountMenu({
               disabled={Boolean(working)}
               onClick={() => void run('sign-out', onSignOut)}
             >
-              {working === 'sign-out' ? 'Signing out…' : 'Sign out'}
+              {working === 'sign-out' ? t('account.signingOut') : t('account.signOut')}
             </button>
             <a className="account-menu__privacy" href="/privacy.html">
-              Privacy notice
+              {t('account.privacy')}
             </a>
             {onDelete && (
               <button
@@ -107,7 +111,7 @@ export function AccountMenu({
                 disabled={Boolean(working)}
                 onClick={() => setConfirmingDelete(true)}
               >
-                Delete account
+                {t('account.delete')}
               </button>
             )}
           </>

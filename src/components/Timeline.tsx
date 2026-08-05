@@ -1,4 +1,4 @@
-import { formatDateTime } from '../lib/format';
+import { stageLabel, useI18n } from '../i18n';
 import { currentEvent, sortEventsDesc, stageMeta } from '../lib/stages';
 import type { TrackingEvent } from '../types';
 
@@ -10,6 +10,7 @@ export function Timeline({
   events: TrackingEvent[];
   syncing?: boolean;
 }) {
+  const { languageTag, t } = useI18n();
   const sorted = sortEventsDesc(events);
   const current = currentEvent(events);
 
@@ -17,14 +18,14 @@ export function Timeline({
     return (
       <p className="timeline-empty">
         {syncing
-          ? 'Checking with the carrier now…'
-          : 'The carrier hasn’t announced this shipment yet — check back soon! 🕊️'}
+          ? t('timeline.emptySyncing')
+          : t('timeline.empty')}
       </p>
     );
   }
 
   return (
-    <ol className="timeline" aria-label="Tracking history">
+    <ol className="timeline" aria-label={t('timeline.label')}>
       {sorted.map((event) => {
         const meta = stageMeta(event.stage);
         const isCurrent = event.id === current?.id;
@@ -40,13 +41,16 @@ export function Timeline({
             <div className="timeline__content">
               <div className="timeline__stage">
                 {syncing && isCurrent && event.stage === 'pending'
-                  ? 'Sync in progress'
-                  : meta.label}
+                  ? t('timeline.syncing')
+                  : stageLabel(t, event.stage)}
               </div>
               <div className="timeline__description">{event.description}</div>
               <div className="timeline__meta">
                 {event.location ? `${event.location} · ` : ''}
-                {formatDateTime(event.occurredAt)}
+                {new Intl.DateTimeFormat(languageTag, {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                }).format(new Date(event.occurredAt))}
               </div>
             </div>
           </li>
