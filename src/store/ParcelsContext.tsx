@@ -90,6 +90,9 @@ export function ParcelsProvider({
   }, [reload]);
 
   useEffect(() => {
+    // Fetching from and subscribing to the repository is the external system
+    // synchronization this provider owns.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload();
     const unsubscribe = repo.subscribe?.(reload);
     return unsubscribe;

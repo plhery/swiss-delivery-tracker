@@ -18,13 +18,15 @@
     "test:coverage": "vitest run --coverage",
     "test:pwa": "node scripts/test-pwa-build.mjs",
     "test:watch": "vitest",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "lint:frontend": "eslint src --max-warnings=0"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@resvg/resvg-js": "^2.6.2",
     "@testing-library/jest-dom": "^6.4.8",
     "@testing-library/react": "^16.0.0",
@@ -33,8 +35,13 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.9.0",
     "jsdom": "^29.1.1",
     "typescript": "^5.5.4",
+    "typescript-eslint": "^8.66.0",
     "vite": "^7.3.6",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.10"

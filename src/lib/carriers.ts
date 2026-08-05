@@ -136,7 +136,7 @@ export const CARRIERS: Record<CarrierId, CarrierInfo> = {
 
 /** Uppercase and strip spaces, dots and dashes (Swiss Post prints 99.34.…). */
 export function normalizeTrackingNumber(raw: string): string {
-  return raw.toUpperCase().replace(/[\s.\-]/g, '');
+  return raw.toUpperCase().replace(/[\s.-]/g, '');
 }
 
 /** Capability-link shipment numbers look like 999.90.########. */
@@ -246,9 +246,9 @@ const TRACKING_LINK_RULES: TrackingLinkRule[] = [
 
 const TRACKING_CANDIDATE_PATTERNS = [
   /\b1Z[A-Z0-9]{16}\b/gi,
-  /\b[A-Z]{2}\s*\d(?:[\s.\-]?\d){8}\s*[A-Z]{2}\b/gi,
+  /\b[A-Z]{2}\s*\d(?:[\s.-]?\d){8}\s*[A-Z]{2}\b/gi,
   /\b(?:JJD|JVGL)[A-Z0-9]{8,}\b/gi,
-  /\b\d(?:[\s.\-]?\d){9,19}\b/g,
+  /\b\d(?:[\s.-]?\d){9,19}\b/g,
 ];
 
 function matchesDomain(hostname: string, domain: string): boolean {
@@ -256,7 +256,7 @@ function matchesDomain(hostname: string, domain: string): boolean {
 }
 
 function trimPastedUrl(raw: string): string {
-  return raw.replace(/^[\s<'"(\[]+/, '').replace(/[\s>'")\],;.!?]+$/, '');
+  return raw.replace(/^[\s<'"(\x5b]+/, '').replace(/[\s>'")\],;.!?]+$/, '');
 }
 
 function cleanLinkTrackingNumber(raw: string): string {
@@ -299,7 +299,7 @@ function recognizedNumberInText(raw: string): string | undefined {
 
 function keywordNumberInText(raw: string): string | undefined {
   const match = raw.match(
-    /(?:(?:tracking|track(?:ing)?\s*(?:number|no\.?|id)?)|(?:parcel|shipment)(?:\s+(?:tracking|number|no\.?|id))?)\s*[:#-]?\s*([A-Z0-9][A-Z0-9.\-]{3,39})/i,
+    /(?:(?:tracking|track(?:ing)?\s*(?:number|no\.?|id)?)|(?:parcel|shipment)(?:\s+(?:tracking|number|no\.?|id))?)\s*[:#-]?\s*([A-Z0-9][A-Z0-9.-]{3,39})/i,
   );
   const candidate = match?.[1]?.trim();
   return candidate && validTrackingNumber(candidate) ? candidate : undefined;

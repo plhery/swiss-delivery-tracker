@@ -254,7 +254,8 @@ export function createDemoRepo(
       const parcels = getAll();
       const parcel = parcels.find((candidate) => candidate.id === id);
       if (!parcel) throw new Error('Parcel not found');
-      const { archivedAt: _archivedAt, ...restored } = parcel;
+      const restored = { ...parcel };
+      delete restored.archivedAt;
       save(
         storage,
         parcels.map((candidate) => candidate.id === id ? restored : candidate),

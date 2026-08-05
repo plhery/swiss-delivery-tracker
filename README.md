@@ -51,6 +51,9 @@ npm install
 npm run dev
 ```
 
+Run `npm run lint:frontend`, `npm run test:coverage` and `npm run build` before
+shipping frontend changes.
+
 The Vite development server starts in demo mode. To exercise the real API,
 build and run the production container with a Supabase database:
 
