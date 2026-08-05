@@ -87,6 +87,7 @@ class AppHttpTests(unittest.TestCase):
     def setUp(self):
         self.original_dist = app.DIST
         self.original_service = app.SERVICE
+        self.original_sync_jobs = app.SYNC_JOBS
         self.original_state = dict(app.STATE)
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
@@ -95,6 +96,10 @@ class AppHttpTests(unittest.TestCase):
         (root / "assets" / "app.js").write_text("console.log('ok')", encoding="utf-8")
         app.DIST = root.resolve()
         app.SERVICE = FakeService()
+        app.SYNC_JOBS = Mock(service=app.SERVICE)
+        app.SYNC_JOBS.enqueue_all.return_value = True
+        app.SYNC_JOBS.enqueue_package.return_value = True
+        app.SYNC_JOBS.pending_count.return_value = 1
         app.STATE.clear()
         app.STATE.update(last_scheduled_sync=123, last_summary={"checked": 1}, last_error=None)
         self.server = app.ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
@@ -108,6 +113,7 @@ class AppHttpTests(unittest.TestCase):
         self.temp.cleanup()
         app.DIST = self.original_dist
         app.SERVICE = self.original_service
+        app.SYNC_JOBS = self.original_sync_jobs
         app.STATE.clear()
         app.STATE.update(self.original_state)
 
@@ -389,18 +395,28 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertIn("already", json.loads(body)["error"])
 
-    def test_sync_is_shared_and_maps_worker_failures(self):
-        service = FakeService(summary=SyncSummary(checked=2, waiting=2))
-        app.SERVICE = service
+    def test_sync_requests_are_queued_globally_and_per_package(self):
         status, _, body = self.request("POST", "/api/sync")
-        self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body)["waiting"], 2)
-        service.sync.assert_called_once_with()
+        self.assertEqual(status, 202)
+        self.assertEqual(json.loads(body), {"queued": True, "pending": 1})
+        app.SYNC_JOBS.enqueue_all.assert_called_once_with()
 
-        app.SERVICE = FakeService(error=RuntimeError("carrier exploded"))
+        status, _, body = self.request("POST", f"/api/packages/{PACKAGE['id']}/sync")
+        self.assertEqual(status, 202)
+        self.assertEqual(json.loads(body), {"queued": True, "pending": 1})
+        app.SYNC_JOBS.enqueue_package.assert_called_once_with(PACKAGE)
+
+        app.SERVICE.client.get_package.return_value = None
+        status, _, body = self.request("POST", f"/api/packages/{PACKAGE['id']}/sync")
+        self.assertEqual(status, 404)
+
+        status, _, body = self.request("POST", "/api/packages/not-a-uuid/sync")
+        self.assertEqual(status, 400)
+
+        app.SYNC_JOBS.enqueue_all.side_effect = app.SyncQueueFull("queue busy")
         status, _, body = self.request("POST", "/api/sync")
-        self.assertEqual(status, 502)
-        self.assertEqual(json.loads(body), {"error": "carrier exploded"})
+        self.assertEqual(status, 429)
+        self.assertEqual(json.loads(body), {"error": "queue busy"})
 
     def test_database_errors_and_invalid_delete_ids_are_reported(self):
         app.SERVICE = FakeService(error=SupabaseError("database offline"))
@@ -436,10 +452,12 @@ class AppHttpTests(unittest.TestCase):
 class AppLifecycleTests(unittest.TestCase):
     def setUp(self):
         self.original_service = app.SERVICE
+        self.original_sync_jobs = app.SYNC_JOBS
         self.original_state = dict(app.STATE)
 
     def tearDown(self):
         app.SERVICE = self.original_service
+        app.SYNC_JOBS = self.original_sync_jobs
         app.STATE.clear()
         app.STATE.update(self.original_state)
 
@@ -506,16 +524,23 @@ class AppLifecycleTests(unittest.TestCase):
 
     def test_new_packages_start_syncing_in_the_background(self):
         service = FakeService()
-        with patch("server.app.threading.Thread") as thread_class:
-            app.start_immediate_sync(service, PACKAGE)
+        jobs = Mock(service=service)
+        app.SYNC_JOBS = jobs
 
-        thread_class.assert_called_once_with(
-            target=service.sync_package,
-            args=(PACKAGE,),
-            name=f"delivery-sync-{PACKAGE['id']}",
-            daemon=True,
-        )
-        thread_class.return_value.start.assert_called_once_with()
+        app.start_immediate_sync(service, PACKAGE)
+
+        jobs.enqueue_package.assert_called_once_with(PACKAGE)
+
+    def test_sync_queue_is_bounded_deduplicated_and_starts_once(self):
+        service = FakeService()
+        jobs = app.SyncJobQueue(service, max_pending=1)
+        with patch.object(jobs, "start") as start:
+            self.assertTrue(jobs.enqueue_all())
+            self.assertFalse(jobs.enqueue_all())
+            with self.assertRaises(app.SyncQueueFull):
+                jobs.enqueue_package(PACKAGE)
+        self.assertEqual(jobs.pending_count(), 1)
+        start.assert_called_once_with()
 
     def test_scheduler_records_success_and_top_level_failures(self):
         app.STATE.clear()

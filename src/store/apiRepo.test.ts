@@ -133,11 +133,13 @@ describe('createApiRepo', () => {
     }));
   });
 
-  it('deletes, syncs and reloads through the same-origin API', async () => {
+  it('deletes and queues global or per-parcel syncs through the same-origin API', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(response({ ok: true }))
-      .mockResolvedValueOnce(response({ checked: 1 }))
+      .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
+      .mockResolvedValueOnce(response({ packages: [packageRow] }))
+      .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
       .mockResolvedValueOnce(response({ packages: [packageRow] }));
     vi.stubGlobal('fetch', fetch);
     const repo = createApiRepo();
@@ -157,6 +159,14 @@ describe('createApiRepo', () => {
       redirect: 'manual',
     });
     expect(parcels).toHaveLength(1);
+
+    const parcel = await repo.refreshParcel!(packageRow.id);
+    expect(fetch).toHaveBeenNthCalledWith(
+      4,
+      `/api/packages/${packageRow.id}/sync`,
+      expect.objectContaining({ method: 'POST', cache: 'no-store', redirect: 'manual' }),
+    );
+    expect(parcel.id).toBe(packageRow.id);
   });
 
   it('renames a parcel through the same-origin API', async () => {

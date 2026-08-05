@@ -184,6 +184,21 @@ export function createDemoRepo(
   const sortNewestFirst = (parcels: ParcelWithEvents[]) =>
     [...parcels].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
+  const advance = (parcel: ParcelWithEvents): ParcelWithEvents => {
+    const stage = currentStage(parcel.events);
+    if (stage === null || isFinal(stage)) return parcel;
+    const next = nextStage(stage);
+    if (!next) return parcel;
+    // Keep timestamps strictly increasing so the newest event always wins,
+    // even when refreshing several times in the same instant.
+    const lastTs = Date.parse(latestEvent(parcel.events)!.occurredAt);
+    const occurredAt = new Date(Math.max(now(), lastTs + 1000)).toISOString();
+    return {
+      ...parcel,
+      events: [...parcel.events, event(parcel.id, next, occurredAt)],
+    };
+  };
+
   return {
     mode: 'demo',
 
@@ -234,22 +249,21 @@ export function createDemoRepo(
     },
 
     async refresh() {
-      const advanced = getAll().map((parcel) => {
-        const stage = currentStage(parcel.events);
-        if (stage === null || isFinal(stage)) return parcel;
-        const next = nextStage(stage);
-        if (!next) return parcel;
-        // Keep timestamps strictly increasing so the newest event always
-        // wins, even when refreshing several times in the same instant.
-        const lastTs = Date.parse(latestEvent(parcel.events)!.occurredAt);
-        const occurredAt = new Date(Math.max(now(), lastTs + 1000)).toISOString();
-        return {
-          ...parcel,
-          events: [...parcel.events, event(parcel.id, next, occurredAt)],
-        };
-      });
+      const advanced = getAll().map(advance);
       save(storage, advanced);
       return sortNewestFirst(advanced);
+    },
+
+    async refreshParcel(id: string) {
+      const parcels = getAll();
+      const parcel = parcels.find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Parcel not found');
+      const advanced = advance(parcel);
+      save(
+        storage,
+        parcels.map((candidate) => candidate.id === id ? advanced : candidate),
+      );
+      return advanced;
     },
   };
 }

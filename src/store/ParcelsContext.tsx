@@ -22,6 +22,7 @@ interface ParcelsState {
   renameParcel: (id: string, label: string) => Promise<ParcelWithEvents>;
   removeParcel: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
+  refreshParcel: (id: string) => Promise<void>;
 }
 
 const ParcelsContext = createContext<ParcelsState | null>(null);
@@ -137,6 +138,25 @@ export function ParcelsProvider({
     }
   }, [repo, rememberError]);
 
+  const refreshParcel = useCallback(async (id: string) => {
+    try {
+      const parcel = repo.refreshParcel
+        ? await repo.refreshParcel(id)
+        : (await repo.refresh()).find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Parcel not found after refreshing');
+      if (mounted.current) {
+        setParcels((current) =>
+          current.map((candidate) => candidate.id === parcel.id ? parcel : candidate),
+        );
+        setError(null);
+        setAuthenticationRequired(false);
+      }
+    } catch (error) {
+      rememberError(error);
+      throw error;
+    }
+  }, [repo, rememberError]);
+
   const value = useMemo(
     () => ({
       parcels,
@@ -149,6 +169,7 @@ export function ParcelsProvider({
       renameParcel,
       removeParcel,
       refresh,
+      refreshParcel,
     }),
     [
       parcels,
@@ -161,6 +182,7 @@ export function ParcelsProvider({
       renameParcel,
       removeParcel,
       refresh,
+      refreshParcel,
     ],
   );
 

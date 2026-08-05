@@ -77,6 +77,8 @@ export interface ParcelRepo {
   remove(id: string): Promise<void>;
   /** Re-sync tracking; in demo mode this advances the simulation. */
   refresh(): Promise<ParcelWithEvents[]>;
+  /** Re-sync one parcel without waiting for every active carrier. */
+  refreshParcel?(id: string): Promise<ParcelWithEvents>;
   /** Optional shared-data polling. Returns unsubscribe. */
   subscribe?(onChange: () => void | Promise<void>): () => void;
 }

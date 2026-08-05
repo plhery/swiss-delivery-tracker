@@ -12,11 +12,13 @@ export function ParcelDetail({
   parcel,
   onBack,
   onRename,
+  onRefresh,
   onDelete,
 }: {
   parcel: ParcelWithEvents;
   onBack: () => void;
   onRename: (parcel: ParcelWithEvents, label: string) => Promise<unknown>;
+  onRefresh: (parcel: ParcelWithEvents) => Promise<unknown>;
   onDelete: (parcel: ParcelWithEvents) => void;
 }) {
   const carrier = carrierInfo(parcel.carrier);
@@ -28,6 +30,8 @@ export function ParcelDetail({
   const [title, setTitle] = useState(parcel.label);
   const [savingTitle, setSavingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
 
   function beginTitleEdit() {
     setTitle(parcel.label);
@@ -57,6 +61,19 @@ export function ParcelDetail({
       setTitleError(error instanceof Error ? error.message : 'Could not rename the parcel');
     } finally {
       setSavingTitle(false);
+    }
+  }
+
+  async function checkNow() {
+    if (checking) return;
+    setChecking(true);
+    setCheckError(null);
+    try {
+      await onRefresh(parcel);
+    } catch (error) {
+      setCheckError(error instanceof Error ? error.message : 'Could not queue a tracking check');
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -197,6 +214,15 @@ export function ParcelDetail({
       </section>
 
       <footer className="detail__footer">
+        {checkError && <p className="detail__check-error" role="alert">{checkError}</p>}
+        <button
+          type="button"
+          className="button button--secondary"
+          onClick={() => void checkNow()}
+          disabled={checking}
+        >
+          {checking ? 'Queueing check…' : 'Check now'}
+        </button>
         <button
           type="button"
           className="button button--danger"

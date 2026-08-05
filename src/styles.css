@@ -1187,7 +1187,17 @@ button:disabled {
 }
 
 .detail__footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
   padding: 0 16px;
+}
+
+.detail__check-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #8a481f;
+  font-size: 12px;
 }
 
 .timeline {

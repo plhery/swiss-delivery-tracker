@@ -65,6 +65,7 @@ describe('App', () => {
       rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn().mockResolvedValue([parcel]),
+      refreshParcel: vi.fn().mockResolvedValue(parcel),
     };
 
     renderApp(repo);
@@ -341,6 +342,7 @@ describe('App', () => {
       rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn().mockResolvedValue([parcel]),
+      refreshParcel: vi.fn().mockResolvedValue(parcel),
     };
     window.history.replaceState({}, '', '/?parcel=parcel-from-push');
     const user = userEvent.setup();
@@ -461,6 +463,7 @@ describe('App', () => {
       rename: vi.fn(),
       remove: vi.fn(),
       refresh: vi.fn().mockResolvedValue([parcel]),
+      refreshParcel: vi.fn().mockResolvedValue(parcel),
     };
     const user = userEvent.setup();
     renderApp(repo);
@@ -473,6 +476,8 @@ describe('App', () => {
     expect(
       screen.getByText(/carrier hasn’t announced this shipment yet/i),
     ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /check now/i }));
+    expect(repo.refreshParcel).toHaveBeenCalledWith(parcel.id);
   });
 
   it('shows a friendly empty state when there are no parcels', async () => {

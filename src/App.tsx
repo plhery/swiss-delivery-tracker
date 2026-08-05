@@ -20,6 +20,7 @@ export default function App() {
     renameParcel,
     removeParcel,
     refresh,
+    refreshParcel,
   } = useParcels();
   const [adding, setAdding] = useState(false);
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
@@ -219,6 +220,7 @@ export default function App() {
           parcel={openParcel}
           onBack={() => showParcel(null)}
           onRename={(p, label) => renameParcel(p.id, label)}
+          onRefresh={(p) => refreshParcel(p.id)}
           onDelete={(p) => void handleDelete(p)}
         />
       )}

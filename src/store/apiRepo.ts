@@ -132,7 +132,20 @@ export function createApiRepo(
 
     async refresh(): Promise<ParcelWithEvents[]> {
       await request('/api/sync', { method: 'POST' });
-      return list();
+      hasActiveSync = true;
+      return list().then((parcels) => {
+        hasActiveSync = true;
+        return parcels;
+      });
+    },
+
+    async refreshParcel(id: string): Promise<ParcelWithEvents> {
+      await request(`/api/packages/${encodeURIComponent(id)}/sync`, { method: 'POST' });
+      const parcels = await list();
+      hasActiveSync = true;
+      const parcel = parcels.find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Package not found after queueing its tracking check');
+      return parcel;
     },
 
     subscribe(onChange: () => void | Promise<void>): () => void {

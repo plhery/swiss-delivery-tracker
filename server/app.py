@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import queue
 import re
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -55,13 +57,96 @@ def build_service() -> TrackingSyncService | None:
     return TrackingSyncService(client, notifier=notifier)
 
 
-SERVICE = build_service()
 STATE: dict[str, object] = {
     "last_scheduled_sync": None,
     "next_scheduled_sync": None,
     "last_summary": None,
     "last_error": None,
 }
+
+
+class SyncQueueFull(RuntimeError):
+    """Raised when the bounded background queue cannot accept more work."""
+
+
+@dataclass(frozen=True)
+class SyncJob:
+    key: str
+    package: dict[str, object] | None = None
+
+
+class SyncJobQueue:
+    """Run deduplicated sync requests away from HTTP request threads."""
+
+    def __init__(self, service: TrackingSyncService, max_pending: int = 64) -> None:
+        self.service = service
+        self._queue: queue.Queue[SyncJob] = queue.Queue(maxsize=max_pending)
+        self._queued: set[str] = set()
+        self._lock = threading.Lock()
+        self._started = False
+
+    def start(self) -> None:
+        with self._lock:
+            if self._started:
+                return
+            self._started = True
+            threading.Thread(
+                target=self._run,
+                name="delivery-sync-jobs",
+                daemon=True,
+            ).start()
+
+    def enqueue_all(self) -> bool:
+        return self._enqueue(SyncJob("all"))
+
+    def enqueue_package(self, package: dict[str, object]) -> bool:
+        return self._enqueue(SyncJob(f"package:{package['id']}", package))
+
+    def pending_count(self) -> int:
+        with self._lock:
+            return len(self._queued)
+
+    def _enqueue(self, job: SyncJob) -> bool:
+        with self._lock:
+            if job.key in self._queued:
+                return False
+            try:
+                self._queue.put_nowait(job)
+            except queue.Full as exc:
+                raise SyncQueueFull("Too many tracking checks are already queued") from exc
+            self._queued.add(job.key)
+        self.start()
+        return True
+
+    def _run(self) -> None:
+        while True:
+            job = self._queue.get()
+            try:
+                summary = (
+                    self.service.sync_package(job.package)
+                    if job.package is not None
+                    else self.service.sync()
+                )
+                STATE.update(last_summary=summary.to_dict(), last_error=None)
+            except Exception as exc:
+                STATE["last_error"] = str(exc)[:500]
+            finally:
+                with self._lock:
+                    self._queued.discard(job.key)
+                self._queue.task_done()
+
+
+SERVICE = build_service()
+SYNC_JOBS: SyncJobQueue | None = SyncJobQueue(SERVICE) if SERVICE else None
+
+
+def sync_jobs(service: TrackingSyncService) -> SyncJobQueue:
+    global SYNC_JOBS
+    if SYNC_JOBS is None or (
+        isinstance(SYNC_JOBS, SyncJobQueue) and SYNC_JOBS.service is not service
+    ):
+        SYNC_JOBS = SyncJobQueue(service)
+    return SYNC_JOBS
 
 
 def seconds_until_next_sync(now: datetime | None = None) -> float:
@@ -95,13 +180,8 @@ def scheduler() -> None:
 def start_immediate_sync(
     service: TrackingSyncService, package: dict[str, object]
 ) -> None:
-    """Start the first carrier lookup without delaying the create response."""
-    threading.Thread(
-        target=service.sync_package,
-        args=(package,),
-        name=f"delivery-sync-{package['id']}",
-        daemon=True,
-    ).start()
+    """Queue the first carrier lookup without delaying the create response."""
+    sync_jobs(service).enqueue_package(package)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -132,7 +212,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/health":
             healthy = SERVICE is not None
-            self._json(200 if healthy else 503, {"ok": healthy, **STATE})
+            pending_jobs = sync_jobs(SERVICE).pending_count() if SERVICE else 0
+            self._json(
+                200 if healthy else 503,
+                {"ok": healthy, "pending_sync_jobs": pending_jobs, **STATE},
+            )
             return
         if path == "/api/packages":
             if not SERVICE:
@@ -174,9 +258,36 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/sync":
             try:
-                self._json(200, SERVICE.sync().to_dict())
-            except Exception as exc:
-                self._json(502, {"error": str(exc)[:500]})
+                jobs = sync_jobs(SERVICE)
+                queued = jobs.enqueue_all()
+                self._json(
+                    HTTPStatus.ACCEPTED,
+                    {"queued": queued, "pending": jobs.pending_count()},
+                )
+            except SyncQueueFull as exc:
+                self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": str(exc)})
+            return
+
+        package_sync = re.fullmatch(r"/api/packages/([^/]+)/sync", path)
+        if package_sync:
+            try:
+                package_id = str(UUID(package_sync.group(1)))
+                package = SERVICE.client.get_package(package_id)
+                if not package:
+                    self._json(404, {"error": "Package not found"})
+                    return
+                jobs = sync_jobs(SERVICE)
+                queued = jobs.enqueue_package(package)
+                self._json(
+                    HTTPStatus.ACCEPTED,
+                    {"queued": queued, "pending": jobs.pending_count()},
+                )
+            except ValueError:
+                self._json(400, {"error": "Invalid package id"})
+            except SyncQueueFull as exc:
+                self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": str(exc)})
+            except SupabaseError as exc:
+                self._json(502, {"error": str(exc)})
             return
 
         if path == "/api/push/subscriptions":
@@ -242,7 +353,16 @@ class Handler(BaseHTTPRequestHandler):
             package = SERVICE.client.create_package(
                 tracking_number, label.strip(), carrier, tracking_url
             )
-            start_immediate_sync(SERVICE, package)
+            try:
+                start_immediate_sync(SERVICE, package)
+            except SyncQueueFull:
+                SERVICE.client.update_package(
+                    str(package["id"]),
+                    {
+                        "sync_status": "error",
+                        "sync_error": "The first tracking check could not be queued. Try again shortly.",
+                    },
+                )
             self._json(HTTPStatus.CREATED, package)
         except ValueError as exc:
             self._json(400, {"error": str(exc)})

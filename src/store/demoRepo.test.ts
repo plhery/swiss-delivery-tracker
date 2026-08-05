@@ -139,6 +139,18 @@ describe('createDemoRepo', () => {
     expect(mine.events).toHaveLength(2);
   });
 
+  it('refreshes only the selected parcel', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    const first = await repo.add({ trackingNumber: '1234567890', label: 'Socks' });
+    const second = await repo.add({ trackingNumber: '1234567891', label: 'Hat' });
+
+    const refreshed = await repo.refreshParcel!(first.id);
+    const parcels = await repo.list();
+
+    expect(currentStage(refreshed.events)).toBe('registered');
+    expect(currentStage(parcels.find((parcel) => parcel.id === second.id)!.events)).toBe('pending');
+  });
+
   it('refresh leaves delivered parcels alone and eventually delivers everything', async () => {
     const repo = createDemoRepo(window.localStorage);
     await repo.add({ trackingNumber: '1234567890', label: 'Socks' });

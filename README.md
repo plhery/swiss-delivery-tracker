@@ -89,6 +89,7 @@ The backend endpoints are:
 - `POST /api/packages`
 - `DELETE /api/packages/:id`
 - `POST /api/sync`
+- `POST /api/packages/:id/sync`
 - `GET /api/push/config`
 - `POST /api/push/subscriptions`
 - `DELETE /api/push/subscriptions`
