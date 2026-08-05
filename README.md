@@ -29,6 +29,9 @@ code. Every device admitted by Cloudflare Access sees the same packages.
   Quickpac, Planzer, Cainiao/AliExpress, SunYou, Hermes, Spring GDS,
   PostLogistics, DPD and UPS, with carrier-link or manual fallbacks for the
   remaining choices.
+- **Paste-anything add flow** — paste a tracking number, supported carrier URL,
+  or surrounding shipping-email text; the app extracts the number and carrier.
+  Complete Planzer shared links also carry their required capability URL.
 - **Durable history** — provider events are deduplicated and carrier failures
   remain visible without deleting the parcel. Removed parcels are archived and
   can be restored; delivered parcels are archived automatically after 60 days.

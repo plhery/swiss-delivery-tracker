@@ -7,6 +7,7 @@ import {
   formatTrackingNumber,
   isPlanzerSharedTrackingNumber,
   normalizeTrackingNumber,
+  parseTrackingInput,
 } from './carriers';
 
 describe('normalizeTrackingNumber', () => {
@@ -95,6 +96,82 @@ describe('formatTrackingNumber', () => {
 
   it('formats Planzer shared-link numbers with their original separators', () => {
     expect(formatTrackingNumber('9999003316119')).toBe('999.90.03316119');
+  });
+});
+
+describe('parseTrackingInput', () => {
+  it.each([
+    ['swiss-post', '993412345612345678'],
+    ['quickpac', '440012345612345678'],
+    ['planzer', '91346097020038089282'],
+    ['aliexpress', 'LP123456789CN'],
+    ['sunyou', 'SY12345678901'],
+    ['spring-gds', 'LX123456789DE'],
+    ['dhl', '1234567890'],
+    ['ups', '1Z999AA10123456784'],
+    ['fedex', '123456789012'],
+    ['dpd', '01234567890123'],
+  ] as const)('round-trips a generated %s tracking link', (carrier, trackingNumber) => {
+    const link = CARRIERS[carrier].trackingUrl?.(trackingNumber);
+    expect(link).toBeDefined();
+    expect(parseTrackingInput(`Track it here: ${link}`)).toMatchObject({
+      trackingNumber,
+      carrier,
+      source: 'link',
+    });
+  });
+
+  it('captures a complete Planzer shared capability link', () => {
+    const link =
+      'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';
+
+    expect(parseTrackingInput(`Your delivery: ${link}.`)).toEqual({
+      trackingNumber: '999.90.03316119',
+      carrier: 'planzer',
+      trackingUrl: link,
+      source: 'link',
+    });
+  });
+
+  it('does not retain capability URLs from lookalike domains', () => {
+    const result = parseTrackingInput(
+      'https://trackandtrace.planzergroup.com.evil.test/shared/sendungen/999.90.03316119?accessKey=secret',
+    );
+
+    expect(result.trackingNumber).toBe('999.90.03316119');
+    expect(result.carrier).toBe('planzer');
+    expect(result.trackingUrl).toBeUndefined();
+  });
+
+  it('finds recognised numbers in pasted shipping text', () => {
+    expect(
+      parseTrackingInput('Your order is on its way. UPS tracking number: 1Z999AA10123456784.'),
+    ).toEqual({
+      trackingNumber: '1Z999AA10123456784',
+      carrier: 'ups',
+      source: 'text',
+    });
+  });
+
+  it('extracts an unknown-format number following a tracking label', () => {
+    expect(parseTrackingInput('Shipment tracking: ABC123XYZ')).toEqual({
+      trackingNumber: 'ABC123XYZ',
+      carrier: 'unknown',
+      source: 'text',
+    });
+  });
+
+  it('keeps plain manual numbers and rejects prose without a number', () => {
+    expect(parseTrackingInput('ambiguous-123')).toEqual({
+      trackingNumber: 'ambiguous-123',
+      carrier: 'unknown',
+      source: 'number',
+    });
+    expect(parseTrackingInput('Where is my parcel?')).toEqual({
+      trackingNumber: '',
+      carrier: 'unknown',
+      source: 'none',
+    });
   });
 });
 

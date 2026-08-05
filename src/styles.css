@@ -865,6 +865,13 @@ button:disabled {
   color: #969187;
 }
 
+.field__input--tracking {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
 .field__help {
   color: var(--ink-soft);
   font-size: 11px;

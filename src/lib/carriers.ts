@@ -10,6 +10,13 @@ export interface CarrierInfo {
   automatic: boolean;
 }
 
+export interface TrackingInputMatch {
+  trackingNumber: string;
+  carrier: CarrierId;
+  trackingUrl?: string;
+  source: 'number' | 'link' | 'text' | 'none';
+}
+
 export const CARRIERS: Record<CarrierId, CarrierInfo> = {
   'swiss-post': {
     id: 'swiss-post',
@@ -168,6 +175,201 @@ export function detectCarrier(raw: string): CarrierId {
   if (/^\d{10}$/.test(n)) return 'dhl'; // DHL Express waybill
 
   return 'unknown';
+}
+
+interface TrackingLinkRule {
+  carrier: CarrierId;
+  domains: string[];
+  params?: string[];
+  path?: RegExp;
+  keepsCapabilityUrl?: boolean;
+}
+
+const TRACKING_LINK_RULES: TrackingLinkRule[] = [
+  {
+    carrier: 'swiss-post',
+    domains: ['service.post.ch'],
+    path: /\/entry\/search\/([^/?#]+)/i,
+  },
+  {
+    carrier: 'quickpac',
+    domains: ['quickpac.ch'],
+    params: ['parcel'],
+  },
+  {
+    carrier: 'planzer',
+    domains: ['trackandtrace.planzergroup.com'],
+    path: /\/shared\/sendungen\/([^/?#]+)/i,
+    keepsCapabilityUrl: true,
+  },
+  {
+    carrier: 'planzer',
+    domains: ['tracking.app.planzer.ch'],
+    params: ['deliveryNumber'],
+  },
+  {
+    carrier: 'aliexpress',
+    domains: ['global.cainiao.com'],
+    params: ['mailNoList'],
+  },
+  {
+    carrier: 'sunyou',
+    domains: ['sypost.net'],
+    params: ['trackNumber'],
+  },
+  {
+    carrier: 'spring-gds',
+    domains: ['postnl.post'],
+    path: /\/details\/([^/?#]+)/i,
+  },
+  {
+    carrier: 'dhl',
+    domains: ['dhl.com'],
+    params: ['tracking-id', 'trackingId', 'piececode'],
+  },
+  {
+    carrier: 'ups',
+    domains: ['ups.com'],
+    params: ['tracknum', 'trackNums'],
+  },
+  {
+    carrier: 'fedex',
+    domains: ['fedex.com'],
+    params: ['trknbr', 'tracknumbers'],
+  },
+  {
+    carrier: 'dpd',
+    domains: ['dpdgroup.com', 'dpd.com'],
+    params: ['parcelNumber', 'parcelnumber'],
+  },
+];
+
+const TRACKING_CANDIDATE_PATTERNS = [
+  /\b1Z[A-Z0-9]{16}\b/gi,
+  /\b[A-Z]{2}\s*\d(?:[\s.\-]?\d){8}\s*[A-Z]{2}\b/gi,
+  /\b(?:JJD|JVGL)[A-Z0-9]{8,}\b/gi,
+  /\b\d(?:[\s.\-]?\d){9,19}\b/g,
+];
+
+function matchesDomain(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+function trimPastedUrl(raw: string): string {
+  return raw.replace(/^[\s<'"(\[]+/, '').replace(/[\s>'")\],;.!?]+$/, '');
+}
+
+function cleanLinkTrackingNumber(raw: string): string {
+  return raw.split(/[,|]/, 1)[0].trim();
+}
+
+function validTrackingNumber(raw: string): boolean {
+  const normalized = normalizeTrackingNumber(raw);
+  return normalized.length >= 4 && normalized.length <= 40 && /^[A-Z0-9]+$/.test(normalized);
+}
+
+function queryParam(url: URL, names: string[]): string | undefined {
+  const wanted = new Set(names.map((name) => name.toLowerCase()));
+  for (const [name, value] of url.searchParams) {
+    if (wanted.has(name.toLowerCase()) && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function numberFromRule(url: URL, rule: TrackingLinkRule): string | undefined {
+  const fromQuery = rule.params ? queryParam(url, rule.params) : undefined;
+  const fromPath = rule.path?.exec(url.pathname)?.[1];
+  const candidate = cleanLinkTrackingNumber(fromQuery ?? fromPath ?? '');
+  return validTrackingNumber(candidate) ? candidate : undefined;
+}
+
+function recognizedNumberInText(raw: string): string | undefined {
+  for (const pattern of TRACKING_CANDIDATE_PATTERNS) {
+    pattern.lastIndex = 0;
+    for (const match of raw.matchAll(pattern)) {
+      const candidate = match[0].trim();
+      if (detectCarrier(candidate) !== 'unknown') return candidate;
+    }
+  }
+  return undefined;
+}
+
+function keywordNumberInText(raw: string): string | undefined {
+  const match = raw.match(
+    /(?:(?:tracking|track(?:ing)?\s*(?:number|no\.?|id)?)|(?:parcel|shipment)(?:\s+(?:tracking|number|no\.?|id))?)\s*[:#-]?\s*([A-Z0-9][A-Z0-9.\-]{3,39})/i,
+  );
+  const candidate = match?.[1]?.trim();
+  return candidate && validTrackingNumber(candidate) ? candidate : undefined;
+}
+
+/**
+ * Pull a tracking number and carrier out of a number, carrier URL, or pasted
+ * shipping message. Known carrier links win over number-shape heuristics.
+ */
+export function parseTrackingInput(raw: string): TrackingInputMatch {
+  const input = raw.trim();
+  if (!input) return { trackingNumber: '', carrier: 'unknown', source: 'none' };
+
+  const pastedUrls = input.match(/https?:\/\/[^\s<>"']+/gi) ?? [];
+  for (const pastedUrl of pastedUrls) {
+    const trackingUrl = trimPastedUrl(pastedUrl);
+    try {
+      const url = new URL(trackingUrl);
+      const rule = TRACKING_LINK_RULES.find((candidate) =>
+        candidate.domains.some((domain) => matchesDomain(url.hostname.toLowerCase(), domain)),
+      );
+      if (rule) {
+        const trackingNumber = numberFromRule(url, rule);
+        if (trackingNumber) {
+          return {
+            trackingNumber,
+            carrier: rule.carrier,
+            trackingUrl: rule.keepsCapabilityUrl ? trackingUrl : undefined,
+            source: 'link',
+          };
+        }
+      }
+
+      const trackingNumber = recognizedNumberInText(decodeURIComponent(url.href));
+      if (trackingNumber) {
+        return {
+          trackingNumber,
+          carrier: detectCarrier(trackingNumber),
+          source: 'link',
+        };
+      }
+    } catch {
+      // Keep looking: pasted prose can contain a truncated or malformed URL.
+    }
+  }
+
+  const recognized = recognizedNumberInText(input);
+  if (recognized) {
+    return {
+      trackingNumber: recognized,
+      carrier: detectCarrier(recognized),
+      source: input === recognized ? 'number' : 'text',
+    };
+  }
+
+  const keywordNumber = keywordNumberInText(input);
+  if (keywordNumber) {
+    return {
+      trackingNumber: keywordNumber,
+      carrier: detectCarrier(keywordNumber),
+      source: 'text',
+    };
+  }
+
+  if (!input.includes('://') && validTrackingNumber(input)) {
+    return {
+      trackingNumber: input,
+      carrier: detectCarrier(input),
+      source: 'number',
+    };
+  }
+
+  return { trackingNumber: '', carrier: 'unknown', source: 'none' };
 }
 
 /** Swiss carriers show 18-digit barcodes as 99.34.123456.12345678. */

@@ -241,6 +241,59 @@ describe('App', () => {
     });
   });
 
+  it('extracts the carrier and tracking number from a pasted tracking link', async () => {
+    const base = createDemoRepo(window.localStorage);
+    const add = vi.fn(base.add);
+    const user = userEvent.setup();
+    renderApp({ ...base, add });
+    await screen.findByText('Coffee beans ☕');
+
+    await user.click(screen.getByRole('button', { name: /add a parcel/i }));
+    const sheet = screen.getByRole('dialog', { name: /add a parcel/i });
+    await user.type(
+      within(sheet).getByLabelText(/tracking number or link/i),
+      'https://www.dpdgroup.com/ch/mydpd/my-parcels/incoming?parcelNumber=06086514587082',
+    );
+
+    expect(within(sheet).getByText('06086514587082').closest('p')).toHaveTextContent(
+      /found 06086514587082 in the pasted link/i,
+    );
+    expect(within(sheet).getByText(/DPD will sync automatically/i)).toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
+
+    expect(add).toHaveBeenCalledWith({
+      trackingNumber: '06086514587082',
+      label: '',
+      carrier: 'dpd',
+    });
+  });
+
+  it('captures a complete Planzer shared link from the primary paste field', async () => {
+    const base = createDemoRepo(window.localStorage);
+    const add = vi.fn(base.add);
+    const user = userEvent.setup();
+    renderApp({ ...base, add });
+    await screen.findByText('Coffee beans ☕');
+
+    await user.click(screen.getByRole('button', { name: /add a parcel/i }));
+    const sheet = screen.getByRole('dialog', { name: /add a parcel/i });
+    const trackingUrl =
+      'https://trackandtrace.planzergroup.com/shared/sendungen/999.90.03316119?accessKey=abcdefghijklmnopqrstuvwxyzABCDEFGH';
+    await user.type(within(sheet).getByLabelText(/tracking number or link/i), trackingUrl);
+
+    expect(within(sheet).queryByLabelText(/planzer tracking url/i)).not.toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: /add parcel/i })).toBeEnabled();
+    await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
+
+    expect(add).toHaveBeenCalledWith({
+      trackingNumber: '999.90.03316119',
+      label: '',
+      carrier: 'planzer',
+      trackingUrl,
+    });
+  });
+
   it('asks for the complete URL for a Planzer shared-link shipment', async () => {
     const base = createDemoRepo(window.localStorage);
     const add = vi.fn(base.add);

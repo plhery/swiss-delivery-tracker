@@ -2,8 +2,9 @@ import { useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   carrierInfo,
-  detectCarrier,
+  formatTrackingNumber,
   isPlanzerSharedTrackingNumber,
+  parseTrackingInput,
   SELECTABLE_CARRIERS,
 } from '../lib/carriers';
 import type { CarrierId, NewParcelInput } from '../types';
@@ -17,20 +18,22 @@ export function AddParcelSheet({
   onClose: () => void;
 }) {
   const [label, setLabel] = useState('');
-  const [trackingNumber, setTrackingNumber] = useState('');
+  const [trackingInputValue, setTrackingInputValue] = useState('');
   const [trackingUrl, setTrackingUrl] = useState('');
   const [selectedCarrier, setSelectedCarrier] = useState<CarrierId | 'auto'>('auto');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const trackingInput = useRef<HTMLInputElement>(null);
+  const trackingInput = useRef<HTMLTextAreaElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, onClose, trackingInput);
 
-  const detectedCarrier = trackingNumber.trim() ? detectCarrier(trackingNumber) : 'unknown';
-  const carrier = trackingNumber.trim()
-    ? carrierInfo(selectedCarrier === 'auto' ? detectedCarrier : selectedCarrier)
+  const parsedTracking = parseTrackingInput(trackingInputValue);
+  const trackingNumber = parsedTracking.trackingNumber;
+  const carrier = trackingNumber
+    ? carrierInfo(selectedCarrier === 'auto' ? parsedTracking.carrier : selectedCarrier)
     : null;
   const needsPlanzerUrl =
     carrier?.id === 'planzer' && isPlanzerSharedTrackingNumber(trackingNumber);
+  const resolvedTrackingUrl = parsedTracking.trackingUrl ?? trackingUrl.trim();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -41,8 +44,8 @@ export function AddParcelSheet({
       await onAdd({
         trackingNumber: trackingNumber.trim(),
         label: label.trim(),
-        carrier: selectedCarrier === 'auto' ? detectedCarrier : selectedCarrier,
-        trackingUrl: needsPlanzerUrl ? trackingUrl.trim() : undefined,
+        carrier: selectedCarrier === 'auto' ? parsedTracking.carrier : selectedCarrier,
+        trackingUrl: needsPlanzerUrl ? resolvedTrackingUrl : undefined,
       });
       onClose();
     } catch (err) {
@@ -78,7 +81,7 @@ export function AddParcelSheet({
           </button>
         </div>
         <p className="sheet__intro">
-          Paste the tracking number from your receipt or shipping email.
+          Paste a tracking number, carrier link, or text from a shipping email.
         </p>
         <form onSubmit={handleSubmit} className="sheet__form">
           <label className="field">
@@ -93,22 +96,26 @@ export function AddParcelSheet({
             />
           </label>
           <label className="field">
-            <span className="field__label">Tracking number</span>
-            <input
-              className="field__input"
+            <span className="field__label">Tracking number or link</span>
+            <textarea
+              className="field__input field__input--tracking"
               ref={trackingInput}
-              type="text"
-              value={trackingNumber}
-              placeholder="e.g. 99.34.123456.12345678"
-              onChange={(e) => setTrackingNumber(e.target.value)}
+              value={trackingInputValue}
+              placeholder="Paste a number, link, or shipping message"
+              onChange={(e) => setTrackingInputValue(e.target.value)}
               autoCapitalize="characters"
               autoCorrect="off"
               spellCheck={false}
-              inputMode="text"
               required
             />
           </label>
-          {needsPlanzerUrl && (
+          {parsedTracking.source !== 'number' && trackingNumber && (
+            <p className="sheet__carrier-hint">
+              Found <strong>{formatTrackingNumber(trackingNumber)}</strong> in the pasted{' '}
+              {parsedTracking.source === 'link' ? 'link' : 'text'}.
+            </p>
+          )}
+          {needsPlanzerUrl && !parsedTracking.trackingUrl && (
             <label className="field">
               <span className="field__label">Planzer tracking URL</span>
               <input
@@ -168,7 +175,7 @@ export function AddParcelSheet({
               type="submit"
               className="button button--primary"
               disabled={
-                !trackingNumber.trim() || (needsPlanzerUrl && !trackingUrl.trim()) || saving
+                !trackingNumber || (needsPlanzerUrl && !resolvedTrackingUrl) || saving
               }
             >
               {saving ? 'Adding…' : 'Add parcel'}
