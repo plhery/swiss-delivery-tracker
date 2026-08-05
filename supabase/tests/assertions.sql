@@ -183,6 +183,14 @@ select public.create_owned_package(
   null
 );
 
+select public.create_owned_package(
+  '9010000005678',
+  'Dachser parcel with maximum key length',
+  'dachser',
+  'https://customeriberia.dachser.com/customerarea/utilidades/seguimiento-publico/detalle?numeroUnico=9010000005678&hash=' || repeat('A', 256),
+  null
+);
+
 do $$
 begin
   if not exists (
