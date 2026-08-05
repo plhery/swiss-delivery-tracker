@@ -1,28 +1,33 @@
-"""UPS tracking through TRAWL's browser-backed public web application."""
+"""UPS tracking through its public web application with browser fallback."""
 
 from __future__ import annotations
 
-import html as html_module
 import json
 import os
 import re
+import subprocess
+import time
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
-from typing import Any, Protocol
+from http.cookiejar import Cookie, CookieJar
+from http.cookies import CookieError, SimpleCookie
+from threading import RLock
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, unquote, urlsplit
 from urllib.request import Request, urlopen
-
-from redis import Redis
-from redis.exceptions import RedisError
 
 
 UPS_TRACKING_BASE = "https://www.ups.com/track"
 UPS_STATUS_API = "https://webapis.ups.com/track/api/Track/GetStatus?loc=en_US"
 DEFAULT_TIMEOUT = 90
+DEFAULT_DIRECT_TIMEOUT = 20
 MAX_RESPONSE_BYTES = 10_000_000
-TRAWL_WEB_SESSION_KEY = "session:www.ups.com"
-TRAWL_API_SESSION_KEY = "session:webapis.ups.com"
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:147.0) "
+    "Gecko/20100101 Firefox/147.0"
+)
 
 
 def tracking_url(tracking_number: str) -> str:
@@ -36,29 +41,319 @@ def _clean(value: Any) -> str:
     return " ".join(str(value or "").split())
 
 
-class SessionBridge(Protocol):
-    def copy(self, source: str, destination: str) -> bool: ...
+class _UPSSessionRejected(RuntimeError):
+    """UPS returned a response that indicates the web session is not trusted."""
 
 
-class RedisSessionBridge:
-    """Copy TRAWL sessions across UPS hostnames while preserving their TTL."""
+class _UPSHTTPSession:
+    """An in-memory UPS cookie jar used for direct page and API requests."""
 
-    def __init__(self, redis_url: str) -> None:
-        parsed = urlsplit(redis_url)
-        if parsed.scheme not in {"redis", "rediss"} or not parsed.netloc:
-            raise ValueError("TRAWL_REDIS_URL must be a Redis URL")
-        self.client = Redis.from_url(
-            redis_url,
-            socket_connect_timeout=5,
-            socket_timeout=5,
-            health_check_interval=30,
+    def __init__(self, timeout: int, runner: Callable[..., Any] | None = None) -> None:
+        self.timeout = timeout
+        self.user_agent = DEFAULT_USER_AGENT
+        self.cookies = CookieJar()
+        self.runner = runner or subprocess.run
+
+    def fetch_page(self, url: str) -> str:
+        body = self._curl(
+            url,
+            "UPS tracking page",
+            headers={
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                    "*/*;q=0.8"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+                "DNT": "1",
+                "Pragma": "no-cache",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-GPC": "1",
+                "Upgrade-Insecure-Requests": "1",
+                "User-Agent": self.user_agent,
+            },
+            rejection_statuses={401, 403, 419, 429},
+        )
+        return body.decode(errors="replace")
+
+    def fetch_status(self, tracking_number: str) -> dict[str, Any]:
+        token = self.xsrf_token()
+        if not token:
+            raise _UPSSessionRejected("The UPS session has no XSRF token")
+
+        client_url = tracking_url(tracking_number)
+        post_data = json.dumps(
+            {
+                "Locale": "en_US",
+                "TrackingNumber": [tracking_number.lower()],
+                "isBarcodeScanned": False,
+                "Requester": "st/trackdetails",
+                "ClientUrl": client_url,
+                "returnToValue": "",
+                "AssociatedBcdnNumber": None,
+            },
+            separators=(",", ":"),
+        ).encode()
+        raw = self._curl(
+            UPS_STATUS_API,
+            "UPS status API",
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Content-Type": "application/json",
+                "DNT": "1",
+                "Origin": "https://www.ups.com",
+                "Referer": client_url,
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site",
+                "Sec-GPC": "1",
+                "User-Agent": self.user_agent,
+                "X-XSRF-TOKEN": token,
+            },
+            method="POST",
+            body=post_data,
+            rejection_statuses={401, 403, 419, 429},
+        )
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise _UPSSessionRejected("UPS returned an invalid tracking response") from exc
+        if not isinstance(payload, dict):
+            raise _UPSSessionRejected("UPS returned an invalid tracking response")
+        return payload
+
+    def seed_browser_cookies(
+        self, cookies: list[dict[str, Any]], user_agent: Any = None
+    ) -> None:
+        """Import a TRAWL browser jar without depending on its Redis cache."""
+        browser_user_agent = _clean(user_agent)
+        if browser_user_agent:
+            self.user_agent = browser_user_agent
+        self.cookies.clear()
+
+        for item in cookies:
+            if not isinstance(item, dict):
+                continue
+            name = _clean(item.get("name"))
+            value = str(item.get("value") or "")
+            domain = _clean(item.get("domain")).lower()
+            if not name or not self._valid_cookie_domain(domain):
+                continue
+
+            path = _clean(item.get("path")) or "/"
+            if not path.startswith("/"):
+                path = "/"
+            raw_expires = item.get("expires")
+            try:
+                expires_value = float(raw_expires)
+            except (TypeError, ValueError):
+                expires_value = -1
+            self._set_cookie(
+                name=name,
+                value=value,
+                domain=domain,
+                domain_specified=True,
+                path=path,
+                secure=bool(item.get("secure")),
+                expires=int(expires_value) if expires_value > 0 else None,
+                http_only=bool(item.get("httpOnly")),
+            )
+
+    def xsrf_token(self) -> str:
+        cookie_header = self._cookie_header(UPS_STATUS_API)
+        for part in cookie_header.split(";"):
+            name, separator, value = part.strip().partition("=")
+            if separator and name == "X-XSRF-TOKEN-ST":
+                return unquote(value)
+        return ""
+
+    def _curl(
+        self,
+        url: str,
+        description: str,
+        *,
+        headers: dict[str, str],
+        method: str = "GET",
+        body: bytes | None = None,
+        rejection_statuses: set[int] | None = None,
+    ) -> bytes:
+        request_headers = dict(headers)
+        cookie_header = self._cookie_header(url)
+        if cookie_header:
+            request_headers["Cookie"] = cookie_header
+
+        connect_timeout = max(1, min(self.timeout, 10))
+        config = [
+            "silent",
+            "show-error",
+            "location",
+            "compressed",
+            "http1.1",
+            f"connect-timeout = {connect_timeout}",
+            f"max-time = {self.timeout}",
+            f"max-filesize = {MAX_RESPONSE_BYTES}",
+            'dump-header = "/dev/stderr"',
+            'write-out = "%{stderr}__UPS_CURL_STATUS__:%{http_code}"',
+            f"url = {self._curl_value(url)}",
+        ]
+        if method != "GET":
+            config.append(f"request = {self._curl_value(method)}")
+        for name, value in request_headers.items():
+            header = f"{name}: {value}"
+            if "\r" in header or "\n" in header:
+                raise ValueError("UPS request headers must not contain newlines")
+            config.append(f"header = {self._curl_value(header)}")
+        if body is not None:
+            config.append(f"data-binary = {self._curl_value(body.decode())}")
+
+        try:
+            response = self.runner(
+                ["curl", "--config", "-"],
+                input=("\n".join(config) + "\n").encode(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=self.timeout + 5,
+                check=False,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+            raise RuntimeError(f"{description} is unavailable") from exc
+        response_body = bytes(response.stdout or b"")
+        response_headers = bytes(response.stderr or b"")
+        if response.returncode != 0:
+            raise RuntimeError(f"{description} is unavailable")
+        statuses = re.findall(rb"__UPS_CURL_STATUS__:(\d{3})", response_headers)
+        if not statuses:
+            raise RuntimeError(f"{description} returned an invalid HTTP response")
+        status = int(statuses[-1])
+        self._store_response_cookies(response_headers, url)
+        if status in (rejection_statuses or set()):
+            raise _UPSSessionRejected(f"{description} returned HTTP {status}")
+        if not 200 <= status < 300:
+            raise RuntimeError(f"{description} returned HTTP {status}")
+        if len(response_body) > MAX_RESPONSE_BYTES:
+            raise RuntimeError(f"{description} returned an unexpectedly large response")
+        return response_body
+
+    def _store_response_cookies(self, response_headers: bytes, url: str) -> None:
+        host = (urlsplit(url).hostname or "").lower()
+        if not self._valid_cookie_domain(host):
+            return
+        now = int(time.time())
+        for raw_line in response_headers.splitlines():
+            if not raw_line.lower().startswith(b"set-cookie:"):
+                continue
+            raw_cookie = raw_line.split(b":", 1)[1].strip().decode("latin-1")
+            parsed = SimpleCookie()
+            try:
+                parsed.load(raw_cookie)
+            except CookieError:
+                continue
+            for morsel in parsed.values():
+                domain_attribute = _clean(morsel["domain"]).lower()
+                domain = domain_attribute or host
+                if not self._valid_cookie_domain(domain):
+                    continue
+                path = _clean(morsel["path"]) or "/"
+                expires = self._cookie_expiry(morsel["max-age"], morsel["expires"], now)
+                if expires is not None and expires <= now:
+                    self._remove_cookie(morsel.key, domain, path)
+                    continue
+                self._set_cookie(
+                    name=morsel.key,
+                    value=morsel.value,
+                    domain=domain,
+                    domain_specified=bool(domain_attribute),
+                    path=path,
+                    secure=bool(morsel["secure"]),
+                    expires=expires,
+                    http_only=bool(morsel["httponly"]),
+                )
+        self.cookies.clear_expired_cookies()
+
+    @staticmethod
+    def _cookie_expiry(max_age: str, expires: str, now: int) -> int | None:
+        if max_age:
+            try:
+                return now + int(max_age)
+            except ValueError:
+                pass
+        if expires:
+            try:
+                parsed = parsedate_to_datetime(expires)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return int(parsed.timestamp())
+            except (TypeError, ValueError, OverflowError):
+                pass
+        return None
+
+    def _set_cookie(
+        self,
+        *,
+        name: str,
+        value: str,
+        domain: str,
+        domain_specified: bool,
+        path: str,
+        secure: bool,
+        expires: int | None,
+        http_only: bool,
+    ) -> None:
+        self._remove_cookie(name, domain, path)
+        rest = {"HttpOnly": None} if http_only else {}
+        self.cookies.set_cookie(
+            Cookie(
+                version=0,
+                name=name,
+                value=value,
+                port=None,
+                port_specified=False,
+                domain=domain,
+                domain_specified=domain_specified,
+                domain_initial_dot=domain.startswith("."),
+                path=path,
+                path_specified=True,
+                secure=secure,
+                expires=expires,
+                discard=expires is None,
+                comment=None,
+                comment_url=None,
+                rest=rest,
+                rfc2109=False,
+            )
         )
 
-    def copy(self, source: str, destination: str) -> bool:
-        try:
-            return bool(self.client.copy(source, destination, replace=True))
-        except RedisError as exc:
-            raise RuntimeError("The TRAWL session cache is unavailable") from exc
+    def _remove_cookie(self, name: str, domain: str, path: str) -> None:
+        bare_domain = domain.lstrip(".")
+        for cookie in list(self.cookies):
+            if (
+                cookie.name == name
+                and cookie.domain.lstrip(".") == bare_domain
+                and cookie.path == path
+            ):
+                self.cookies.clear(cookie.domain, cookie.path, cookie.name)
+
+    def _cookie_header(self, url: str) -> str:
+        request = Request(url)
+        self.cookies.add_cookie_header(request)
+        return request.get_header("Cookie") or ""
+
+    @staticmethod
+    def _valid_cookie_domain(domain: str) -> bool:
+        bare_domain = domain.lstrip(".")
+        return bare_domain == "ups.com" or bare_domain.endswith(".ups.com")
+
+    @staticmethod
+    def _curl_value(value: str) -> str:
+        escaped = (
+            value.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+        )
+        return f'"{escaped}"'
 
 
 class _UPSPageParser(HTMLParser):
@@ -110,25 +405,6 @@ class _UPSPageParser(HTMLParser):
                 self.values.setdefault(capture["id"], []).append(value)
             self.captures.remove(capture)
         self.depth -= 1
-
-
-class _PreformattedJSONParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.pre_depth = 0
-        self.parts: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "pre":
-            self.pre_depth += 1
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "pre" and self.pre_depth:
-            self.pre_depth -= 1
-
-    def handle_data(self, data: str) -> None:
-        if self.pre_depth:
-            self.parts.append(data)
 
 
 def _status(text: str, *, has_events: bool = False) -> str:
@@ -215,24 +491,6 @@ def parse_tracking_html(page: str, tracking_number: str) -> dict[str, Any]:
         "expected_delivery": None,
         "events": events,
     }
-
-
-def _json_from_browser_page(page: str) -> dict[str, Any]:
-    try:
-        value = json.loads(page)
-    except json.JSONDecodeError:
-        parser = _PreformattedJSONParser()
-        parser.feed(page)
-        raw = html_module.unescape("".join(parser.parts)).strip()
-        if not raw:
-            raise RuntimeError("TRAWL did not return the UPS status response")
-        try:
-            value = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("UPS returned an invalid tracking response") from exc
-    if not isinstance(value, dict):
-        raise RuntimeError("UPS returned an invalid tracking response")
-    return value
 
 
 def _activity_time(activity: dict[str, Any]) -> str:
@@ -402,34 +660,62 @@ class UPSTracker:
     def __init__(
         self,
         trawl_url: str | None = None,
-        redis_url: str | None = None,
         timeout: int = DEFAULT_TIMEOUT,
-        session_bridge: SessionBridge | None = None,
+        direct_timeout: int = DEFAULT_DIRECT_TIMEOUT,
+        session_factory: Callable[[int], _UPSHTTPSession] | None = None,
     ) -> None:
         self.trawl_url = (
             trawl_url if trawl_url is not None else os.environ.get("FLARESOLVERR_URL", "")
         ).strip()
-        cache_url = (
-            redis_url if redis_url is not None else os.environ.get("TRAWL_REDIS_URL", "")
-        ).strip()
-        self.session_bridge = session_bridge or (
-            RedisSessionBridge(cache_url) if cache_url else None
-        )
         self.timeout = timeout
-        self.xsrf_token: str | None = None
+        self.direct_timeout = max(1, min(timeout, direct_timeout))
+        self.session_factory = session_factory or _UPSHTTPSession
+        self.session: _UPSHTTPSession | None = None
+        self.lock = RLock()
 
     def fetch(self, tracking_number: str) -> dict[str, Any]:
         number = tracking_number.upper()
         if not re.fullmatch(r"1Z[A-Z0-9]{16}", number):
             raise ValueError("UPS tracking numbers must start with 1Z and contain 18 characters")
-        if not self.trawl_url:
-            raise LookupError("UPS requires TRAWL; configure FLARESOLVERR_URL")
+        with self.lock:
+            return self._fetch_locked(number)
 
-        if self.xsrf_token:
+    def _fetch_locked(self, number: str) -> dict[str, Any]:
+        if self.session:
             try:
-                return self._api_result(number, self.xsrf_token)
-            except (LookupError, RuntimeError, ValueError):
-                self.xsrf_token = None
+                return self._api_result(number, self.session)
+            except _UPSSessionRejected:
+                # UPS may refresh XSRF and Akamai cookies on the tracking page.
+                # Retry that lightweight refresh before asking for a new browser.
+                try:
+                    self.session.fetch_page(tracking_url(number))
+                    return self._api_result(number, self.session)
+                except _UPSSessionRejected:
+                    self.session = None
+
+        direct_session = self.session_factory(self.direct_timeout)
+        direct_page: str | None = None
+        direct_error: Exception | None = None
+        try:
+            direct_page = direct_session.fetch_page(tracking_url(number))
+            if not direct_session.xsrf_token():
+                raise RuntimeError("UPS challenged the direct tracking session")
+            result = self._api_result(number, direct_session)
+            self.session = direct_session
+            return result
+        except (LookupError, RuntimeError, ValueError) as exc:
+            direct_error = exc
+
+        if not self.trawl_url:
+            if direct_page:
+                try:
+                    return self._rendered_result(direct_page, number)
+                except (LookupError, RuntimeError, ValueError):
+                    pass
+            raise LookupError(
+                "UPS challenged direct tracking; configure FLARESOLVERR_URL "
+                "for browser fallback"
+            ) from direct_error
 
         bootstrap = self._trawl_request(
             {
@@ -442,66 +728,49 @@ class UPSTracker:
         page = bootstrap.get("html")
         if not isinstance(page, str):
             raise RuntimeError("TRAWL returned an invalid UPS page")
+        browser_cookies = bootstrap.get("cookies")
+        if not isinstance(browser_cookies, list):
+            browser_cookies = []
 
-        token = next(
-            (
-                unquote(str(cookie.get("value") or ""))
-                for cookie in bootstrap.get("cookies") or []
-                if isinstance(cookie, dict) and cookie.get("name") == "X-XSRF-TOKEN-ST"
-            ),
-            "",
+        browser_session = self.session_factory(self.direct_timeout)
+        browser_session.seed_browser_cookies(
+            browser_cookies,
+            bootstrap.get("userAgent"),
         )
-        if token and self.session_bridge:
+        browser_error: Exception | None = None
+        if browser_session.xsrf_token():
             try:
-                copied = self.session_bridge.copy(TRAWL_WEB_SESSION_KEY, TRAWL_API_SESSION_KEY)
-                if copied:
-                    self.xsrf_token = token
-                    return self._api_result(number, token)
-            except RuntimeError:
-                pass
+                result = self._api_result(number, browser_session)
+                self.session = browser_session
+                return result
+            except _UPSSessionRejected as exc:
+                browser_error = exc
+            except (LookupError, RuntimeError, ValueError) as exc:
+                # The browser session itself may still be useful when UPS's
+                # structured endpoint has an unrelated transient failure.
+                self.session = browser_session
+                browser_error = exc
 
+        try:
+            return self._rendered_result(page, number)
+        except (LookupError, RuntimeError, ValueError) as exc:
+            if browser_error:
+                raise RuntimeError(
+                    "UPS rejected the browser-established session"
+                ) from browser_error
+            raise RuntimeError("TRAWL did not establish a usable UPS session") from exc
+
+    def _api_result(self, number: str, session: _UPSHTTPSession) -> dict[str, Any]:
+        result = parse_tracking_response(session.fetch_status(number), number)
+        result["tracking_url"] = tracking_url(number)
+        result["tracking_source"] = "structured-web-response"
+        return result
+
+    @staticmethod
+    def _rendered_result(page: str, number: str) -> dict[str, Any]:
         result = parse_tracking_html(page, number)
         result["tracking_url"] = tracking_url(number)
         result["tracking_source"] = "rendered-page"
-        return result
-
-    def _api_result(self, number: str, token: str) -> dict[str, Any]:
-        client_url = tracking_url(number)
-        post_data = json.dumps(
-            {
-                "Locale": "en_US",
-                "TrackingNumber": [number.lower()],
-                "isBarcodeScanned": False,
-                "Requester": "st/trackdetails",
-                "ClientUrl": client_url,
-                "returnToValue": "",
-                "AssociatedBcdnNumber": None,
-            },
-            separators=(",", ":"),
-        )
-        response = self._trawl_request(
-            {
-                "url": UPS_STATUS_API,
-                "skipHttp": True,
-                "maxTier": 3,
-                "maxTimeout": self.timeout * 1000,
-                "method": "POST",
-                "body": post_data,
-                "headers": {
-                    "Accept": "application/json, text/plain, */*",
-                    "Content-Type": "application/json",
-                    "Origin": "https://www.ups.com",
-                    "Referer": client_url,
-                    "X-XSRF-TOKEN": token,
-                },
-            }
-        )
-        page = response.get("html")
-        if not isinstance(page, str):
-            raise RuntimeError("TRAWL returned an invalid UPS status response")
-        result = parse_tracking_response(_json_from_browser_page(page), number)
-        result["tracking_url"] = client_url
-        result["tracking_source"] = "structured-web-response"
         return result
 
     def _trawl_request(self, payload: dict[str, Any]) -> dict[str, Any]:

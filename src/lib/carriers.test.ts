@@ -118,7 +118,7 @@ describe('carrier metadata', () => {
     expect(CARRIERS.dpd.automatic).toBe(true);
   });
 
-  it('tracks UPS deliveries automatically through the private browser', () => {
+  it('tracks UPS deliveries automatically with browser fallback', () => {
     expect(CARRIERS.ups.automatic).toBe(true);
     expect(CARRIERS.ups.trackingUrl?.('1Z999AA10123456784')).toBe(
       'https://www.ups.com/track?tracknum=1Z999AA10123456784',

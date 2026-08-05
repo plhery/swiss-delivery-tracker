@@ -77,8 +77,7 @@ environment, never in a `VITE_` variable.
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | For push | Stable Web Push key pair. |
 | `VAPID_SUBJECT` | For push | HTTPS URL or `mailto:` contact; defaults to the production Parcel Post URL. |
 | `DPD_POSTCODE` | Optional | Four-digit delivery postcode. It unlocks DPD's verified scan history and delivery window when available. |
-| `FLARESOLVERR_URL` | UPS; DPD fallback | Private TRAWL `/v1` endpoint. The legacy variable name is retained for compatibility. |
-| `TRAWL_REDIS_URL` | Recommended for UPS | Same private Redis used by TRAWL, allowing the UPS browser session to be reused for its structured status call. |
+| `FLARESOLVERR_URL` | Recommended for UPS; DPD fallback | Private TRAWL `/v1` endpoint. UPS calls it only when ordinary HTTP is challenged. The legacy variable name is retained for compatibility. |
 | `DPD_FIREBASE_API_KEY` | Advanced override | Overrides the public, app-restricted myDPD client identifier pinned in the adapter; normally leave unset. |
 | `PORT` | No | HTTP port, default `3000`. |
 | `STATIC_DIR` | No | Built frontend directory, default `/app/dist`. |
@@ -134,7 +133,7 @@ changes its site.
 | Spring GDS | Automatic | Pinned upstream adapter. |
 | PostLogistics | Automatic | Pinned upstream adapter. |
 | DPD Switzerland | Automatic | Uses the myDPD guest-client flow. `DPD_POSTCODE` enables verified details; TRAWL is only the web fallback. |
-| UPS | Automatic | Requires private TRAWL. Shared Redis is recommended for full structured scan history. |
+| UPS | Automatic | Tries direct HTTP and keeps its cookie jar in memory. Private TRAWL is the browser fallback when Akamai challenges the server; no shared Redis is needed. |
 | DHL, FedEx, International Post | Carrier link | Stored and opened in the carrier site; no scheduled adapter. |
 | Dachser, ShipUp | Manual record | Selectable for organization, but no scheduled adapter or generated carrier link. |
 
@@ -189,7 +188,6 @@ for example:
 
 ```dotenv
 FLARESOLVERR_URL=http://flaresolverr:8191
-TRAWL_REDIS_URL=redis://trawl-redis:6379/0
 ```
 
 The application appends `/v1` when needed and accepts either a final `200` or
@@ -198,13 +196,24 @@ browser and retains browser sessions. Cloudflare and Turnstile are adaptive, so
 TRAWL remains best effort; a challenge that demands interactive proof can still
 fail, and a residential proxy may be necessary for a datacenter-hosted browser.
 
-UPS uses the same private TRAWL browser to load its public tracking application,
-then reads the application's structured status response so the complete scan
-history is retained. Configure `TRAWL_REDIS_URL` in the application with the same
-private Redis URL used by TRAWL's `REDIS_URL`. This bridges UPS's `.ups.com`
-browser session between its page and API hostnames while preserving the cache
-TTL. If Redis or the structured response is temporarily unavailable, tracking
-falls back to the rendered UPS summary page.
+UPS first reproduces the carrier's lightweight web-client flow directly through
+the image's HTTP/1.1 `curl` client: it loads the tracking page into an in-memory
+cookie jar, reads the XSRF token and calls the structured status endpoint so the
+complete scan history is retained. The initial direct attempt is bounded to 20
+seconds so an Akamai timeout reaches the browser fallback promptly. The jar has
+no application-defined lifetime. It is reused until UPS rejects it; the
+application then tries an ordinary page refresh before asking TRAWL for a new
+browser session.
+
+When Akamai challenges the direct request, TRAWL executes the page once. Parcel
+Post imports the browser's complete UPS cookie jar and matching user agent, then
+returns to ordinary HTTP for the structured status calls. This makes TRAWL a
+session bootstrapper rather than the transport for every UPS request. Parcel
+Post neither connects to nor depends on TRAWL's Redis; TRAWL may still use Redis
+internally as part of its own deployment. The in-memory UPS session is naturally
+lost when Parcel Post restarts and is bootstrapped again only if direct HTTP is
+still challenged. If the structured response is temporarily unavailable,
+tracking falls back to the rendered UPS summary page.
 
 ## Testing
 
