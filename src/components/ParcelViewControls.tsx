@@ -4,6 +4,7 @@ import type { ParcelSort, ParcelStatusFilter } from '../lib/parcelView';
 import type { CarrierId } from '../types';
 
 export function ParcelViewControls({
+  id,
   query,
   status,
   carrier,
@@ -15,6 +16,7 @@ export function ParcelViewControls({
   onCarrierChange,
   onSortChange,
 }: {
+  id: string;
   query: string;
   status: ParcelStatusFilter;
   carrier: CarrierId | '';
@@ -28,7 +30,7 @@ export function ParcelViewControls({
 }) {
   const { t } = useI18n();
   return (
-    <search className="parcel-view" aria-label={t('view.search')}>
+    <search id={id} className="parcel-view" aria-label={t('view.search')}>
       <label className="parcel-view__search">
         <span>{t('view.search')}</span>
         <svg aria-hidden="true" viewBox="0 0 20 20">

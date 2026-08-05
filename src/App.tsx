@@ -24,6 +24,7 @@ import { useParcels } from './store/ParcelsContext';
 import type { CarrierId, ParcelWithEvents } from './types';
 
 const DETAIL_HISTORY_KEY = 'parcelPostDetail';
+const PARCEL_VIEW_CONTROLS_ID = 'parcel-view-controls';
 
 const ATTENTION_LABELS: Record<ParcelAttention, MessageKey> = {
   sync_error: 'attention.sync_error',
@@ -75,6 +76,7 @@ export default function App({
   const [statusFilter, setStatusFilter] = useState<ParcelStatusFilter>('all');
   const [carrierFilter, setCarrierFilter] = useState<CarrierId | ''>('');
   const [sort, setSort] = useState<ParcelSort>('priority');
+  const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [viewNow, setViewNow] = useState(() => Date.now());
   const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('parcel'),
@@ -159,6 +161,10 @@ export default function App({
       .sort((first, second) => first.localeCompare(second)),
     [parcels],
   );
+  const hasCustomView = query.trim().length > 0
+    || statusFilter !== 'all'
+    || carrierFilter !== ''
+    || sort !== 'priority';
 
   const activeParcels = useMemo(
     () => visibleParcels.filter(isActiveParcel),
@@ -327,18 +333,44 @@ export default function App({
         )}
 
         {!loading && parcels.length > 0 && (
-          <ParcelViewControls
-            query={query}
-            status={statusFilter}
-            carrier={carrierFilter}
-            sort={sort}
-            carriers={availableCarriers}
-            count={visibleParcels.length}
-            onQueryChange={setQuery}
-            onStatusChange={setStatusFilter}
-            onCarrierChange={setCarrierFilter}
-            onSortChange={setSort}
-          />
+          <div className="parcel-view-shell">
+            <button
+              type="button"
+              className={`parcel-view-toggle${hasCustomView ? ' parcel-view-toggle--active' : ''}`}
+              aria-expanded={viewControlsOpen}
+              aria-controls={PARCEL_VIEW_CONTROLS_ID}
+              onClick={() => setViewControlsOpen((open) => !open)}
+            >
+              <svg className="parcel-view-toggle__search" aria-hidden="true" viewBox="0 0 20 20">
+                <circle cx="8.5" cy="8.5" r="5.5" />
+                <path d="m13 13 4 4" />
+              </svg>
+              <span>
+                {viewControlsOpen ? t('view.hideControls') : t('view.showControls')}
+              </span>
+              {hasCustomView && (
+                <span className="parcel-view-toggle__active">{t('view.customized')}</span>
+              )}
+              <svg className="parcel-view-toggle__chevron" aria-hidden="true" viewBox="0 0 20 20">
+                <path d="m6 8 4 4 4-4" />
+              </svg>
+            </button>
+            {viewControlsOpen && (
+              <ParcelViewControls
+                id={PARCEL_VIEW_CONTROLS_ID}
+                query={query}
+                status={statusFilter}
+                carrier={carrierFilter}
+                sort={sort}
+                carriers={availableCarriers}
+                count={visibleParcels.length}
+                onQueryChange={setQuery}
+                onStatusChange={setStatusFilter}
+                onCarrierChange={setCarrierFilter}
+                onSortChange={setSort}
+              />
+            )}
+          </div>
         )}
 
         {loading && (

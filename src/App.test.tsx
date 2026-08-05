@@ -66,6 +66,12 @@ describe('App', () => {
     renderApp();
     await screen.findByText('Coffee beans ☕');
 
+    const viewToggle = screen.getByRole('button', { name: 'Search & filters' });
+    expect(viewToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('searchbox', { name: 'Search parcels' })).not.toBeInTheDocument();
+    await user.click(viewToggle);
+    expect(viewToggle).toHaveAttribute('aria-expanded', 'true');
+
     await user.type(screen.getByRole('searchbox', { name: 'Search parcels' }), 'birthday');
 
     expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
@@ -87,6 +93,8 @@ describe('App', () => {
     renderApp();
     await screen.findByText('Coffee beans ☕');
 
+    await user.click(screen.getByRole('button', { name: 'Search & filters' }));
+
     await user.selectOptions(screen.getByLabelText('Status'), 'delivered');
     expect(screen.getByText('Coffee beans ☕')).toBeInTheDocument();
     expect(screen.queryByText('Birthday gift 🎁')).not.toBeInTheDocument();
@@ -95,6 +103,9 @@ describe('App', () => {
     await user.selectOptions(screen.getByLabelText('Carrier'), 'intl-post');
     expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
     expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /hide search & filters/i }));
+    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument();
+    expect(screen.getByText('Custom view')).toBeInTheDocument();
   });
 
   it('shows current stage badges on the cards', async () => {

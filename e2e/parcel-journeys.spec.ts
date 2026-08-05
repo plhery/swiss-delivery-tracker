@@ -7,6 +7,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('finds, filters, and opens a parcel', async ({ page }) => {
+  await expect(page.getByRole('searchbox', { name: 'Search parcels' })).toBeHidden();
+  await page.getByRole('button', { name: 'Search & filters' }).click();
   const search = page.getByRole('searchbox', { name: 'Search parcels' });
   await search.fill('birthday');
   await expect(page.getByText('Birthday gift 🎁')).toBeVisible();
