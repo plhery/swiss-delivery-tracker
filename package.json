@@ -9,10 +9,12 @@
     "npm": ">=10"
   },
   "scripts": {
+    "contract:generate": "node scripts/generate-api-contract.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:contract": "node scripts/generate-api-contract.mjs --check",
     "test:coverage": "vitest run --coverage",
     "test:pwa": "node scripts/test-pwa-build.mjs",
     "test:watch": "vitest",

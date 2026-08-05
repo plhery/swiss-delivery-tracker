@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from .api_contract import CARRIER_IDS
 from .planzer_shared import (
     is_planzer_shared_tracking_number,
     validate_planzer_shared_url,
@@ -28,15 +29,17 @@ from .tracking_sync import TrackingSyncService
 
 
 DIST = Path(os.environ.get("STATIC_DIR", "/app/dist")).resolve()
+API_CONTRACT = Path(
+    os.environ.get(
+        "API_CONTRACT_PATH",
+        str(Path(__file__).resolve().parents[1] / "contracts" / "openapi.json"),
+    )
+).resolve()
 PORT = int(os.environ.get("PORT", "3000"))
 SYNC_TIMEZONE = ZoneInfo("Europe/Zurich")
 MAX_JSON_BODY = 16_384
 AUTO_ARCHIVE_DAYS = 60
-VALID_CARRIERS = {
-    "swiss-post", "quickpac", "planzer", "aliexpress", "sunyou", "hermes",
-    "spring-gds", "postlogistics", "dachser", "dhl", "ups", "fedex", "dpd",
-    "shipup", "intl-post", "unknown",
-}
+VALID_CARRIERS = CARRIER_IDS
 
 
 def build_service() -> TrackingSyncService | None:
@@ -218,6 +221,12 @@ class Handler(BaseHTTPRequestHandler):
             # this distinct URL prevents Safari from restoring the page whose
             # React state still says that authentication is required.
             self._serve_static("/")
+            return
+        if path == "/api/openapi.json":
+            try:
+                self._json(200, json.loads(API_CONTRACT.read_text(encoding="utf-8")))
+            except (OSError, json.JSONDecodeError):
+                self._json(503, {"error": "The API contract is unavailable"})
             return
         if path == "/health":
             healthy = SERVICE is not None

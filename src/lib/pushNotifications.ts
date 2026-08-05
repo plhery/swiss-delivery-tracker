@@ -2,6 +2,11 @@ import {
   cloudflareAccessRequest,
   throwIfCloudflareAccessRequiresLogin,
 } from './cloudflareAccess';
+import type {
+  ApiOkResponse,
+  ApiPushConfigResponse,
+  ApiPushSubscriptionResponse,
+} from '../generated/apiContract';
 
 export type PushState =
   | { kind: 'unsupported' }
@@ -10,7 +15,6 @@ export type PushState =
   | { kind: 'blocked' }
   | { kind: 'enabled'; publicKey: string };
 
-type PushConfig = { available: boolean; publicKey: string | null };
 type BadgeNavigator = { clearAppBadge?: () => Promise<void> };
 type VisibilityDocument = Pick<
   Document,
@@ -52,7 +56,7 @@ function supported(): boolean {
 
 export async function inspectPushState(): Promise<PushState> {
   if (!supported()) return { kind: 'unsupported' };
-  const config = await request<PushConfig>('/api/push/config');
+  const config = await request<ApiPushConfigResponse>('/api/push/config');
   if (!config.available || !config.publicKey) return { kind: 'unavailable' };
   if (Notification.permission === 'denied') return { kind: 'blocked' };
   const registration = await navigator.serviceWorker.ready;
@@ -75,7 +79,7 @@ export async function enablePushNotifications(publicKey: string): Promise<boolea
     });
   }
   try {
-    const result = await request<{ testSent: boolean }>('/api/push/subscriptions', {
+    const result = await request<ApiPushSubscriptionResponse>('/api/push/subscriptions', {
       method: 'POST',
       body: JSON.stringify(subscription.toJSON()),
     });
@@ -90,7 +94,7 @@ export async function disablePushNotifications(): Promise<void> {
   const registration = await navigator.serviceWorker.ready;
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) return;
-  await request('/api/push/subscriptions', {
+  await request<ApiOkResponse>('/api/push/subscriptions', {
     method: 'DELETE',
     body: JSON.stringify({ endpoint: subscription.endpoint }),
   });

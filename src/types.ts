@@ -1,38 +1,18 @@
-export type CarrierId =
-  | 'swiss-post'
-  | 'quickpac'
-  | 'planzer'
-  | 'aliexpress'
-  | 'sunyou'
-  | 'hermes'
-  | 'spring-gds'
-  | 'postlogistics'
-  | 'dachser'
-  | 'dhl'
-  | 'ups'
-  | 'fedex'
-  | 'dpd'
-  | 'shipup'
-  | 'intl-post'
-  | 'unknown';
+import type {
+  ApiCarrierId,
+  ApiStage,
+  ApiSyncStatus,
+} from './generated/apiContract';
 
-export type SyncStatus = 'pending' | 'syncing' | 'ok' | 'waiting' | 'error' | 'unsupported';
+export type CarrierId = ApiCarrierId;
+
+export type SyncStatus = ApiSyncStatus;
 
 /**
  * The lifecycle of a parcel. The first six are the "happy path" in order;
  * the rest are exceptions that can happen along the way.
  */
-export type Stage =
-  | 'pending'
-  | 'registered'
-  | 'accepted'
-  | 'in_transit'
-  | 'out_for_delivery'
-  | 'delivered'
-  | 'customs'
-  | 'failed_attempt'
-  | 'ready_for_pickup'
-  | 'returned';
+export type Stage = ApiStage;
 
 export interface Parcel {
   id: string;

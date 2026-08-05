@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 import server.app as app
 from server.supabase_client import SupabaseError
+from server.tests.contract import CONTRACT, assert_contract
 from server.tracking_sync import SyncSummary
 
 
@@ -152,6 +153,19 @@ class AppHttpTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(body, b"")
 
+    def test_openapi_contract_is_served_without_database_configuration(self):
+        app.SERVICE = None
+        status, headers, body = self.request("GET", "/api/openapi.json")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(json.loads(body), CONTRACT)
+
+        with patch.object(app, "API_CONTRACT", Path(self.temp.name) / "missing.json"):
+            status, _, body = self.request("GET", "/api/openapi.json")
+        self.assertEqual(status, 503)
+        assert_contract("ErrorResponse", json.loads(body))
+
     def test_static_shell_assets_spa_fallback_and_path_safety(self):
         status, headers, body = self.request("GET", "/")
         self.assertEqual(status, 200)
@@ -271,6 +285,35 @@ class AppHttpTests(unittest.TestCase):
         status, _, body = self.request("POST", f"/api/packages/{PACKAGE['id']}/restore")
         self.assertEqual(status, 200)
         app.SERVICE.client.restore_package.assert_called_once_with(PACKAGE["id"])
+
+    def test_success_responses_match_the_openapi_schemas(self):
+        status, _, body = self.request("GET", "/health")
+        self.assertEqual(status, 200)
+        assert_contract("HealthResponse", json.loads(body))
+
+        status, _, body = self.request("GET", "/api/packages?includeArchived=true")
+        self.assertEqual(status, 200)
+        assert_contract("PackageListResponse", json.loads(body))
+
+        status, _, body = self.request(
+            "POST",
+            "/api/packages",
+            payload={"trackingNumber": "1234567890", "carrier": "dhl", "label": "Shoes"},
+        )
+        self.assertEqual(status, 201)
+        assert_contract("PackageRow", json.loads(body))
+
+        status, _, body = self.request("POST", "/api/sync")
+        self.assertEqual(status, 202)
+        assert_contract("QueueResponse", json.loads(body))
+
+        status, _, body = self.request("GET", "/api/push/config")
+        self.assertEqual(status, 200)
+        assert_contract("PushConfigResponse", json.loads(body))
+
+        status, _, body = self.request("DELETE", f"/api/packages/{PACKAGE['id']}")
+        self.assertEqual(status, 200)
+        assert_contract("OkResponse", json.loads(body))
 
     def test_push_configuration_subscription_and_unsubscribe(self):
         status, _, body = self.request("GET", "/api/push/config")

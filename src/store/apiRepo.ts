@@ -4,61 +4,43 @@ import {
   throwIfCloudflareAccessRequiresLogin,
 } from '../lib/cloudflareAccess';
 import type {
-  CarrierId,
+  ApiCreatePackageRequest,
+  ApiOkResponse,
+  ApiPackageListResponse,
+  ApiPackageRow,
+  ApiQueueResponse,
+  ApiRenamePackageRequest,
+  ApiTrackingEventRow,
+} from '../generated/apiContract';
+import type {
   NewParcelInput,
   ParcelRepo,
   ParcelWithEvents,
-  Stage,
   TrackingEvent,
 } from '../types';
 
-interface PackageRow {
-  id: string;
-  tracking_number: string;
-  label: string;
-  carrier: string;
-  created_at: string;
-  expected_delivery: string | null;
-  last_status_text: string | null;
-  last_synced_at: string | null;
-  sync_status: string | null;
-  sync_error: string | null;
-  tracking_url: string | null;
-  archived_at: string | null;
-  tracking_events: EventRow[] | null;
-}
-
-interface EventRow {
-  id: string;
-  package_id: string;
-  stage: string;
-  description: string;
-  location: string | null;
-  occurred_at: string;
-}
-
-function toEvent(row: EventRow): TrackingEvent {
+function toEvent(row: ApiTrackingEventRow): TrackingEvent {
   return {
     id: row.id,
     parcelId: row.package_id,
-    stage: row.stage as Stage,
+    stage: row.stage,
     description: row.description,
     location: row.location ?? undefined,
     occurredAt: row.occurred_at,
   };
 }
 
-function toParcel(row: PackageRow): ParcelWithEvents {
+function toParcel(row: ApiPackageRow): ParcelWithEvents {
   return {
     id: row.id,
     trackingNumber: row.tracking_number,
     label: row.label,
-    carrier: (row.carrier || detectCarrier(row.tracking_number)) as CarrierId,
+    carrier: row.carrier,
     createdAt: row.created_at,
     expectedDelivery: row.expected_delivery ?? undefined,
     lastStatusText: row.last_status_text ?? undefined,
     lastSyncedAt: row.last_synced_at ?? undefined,
-    syncStatus: (row.sync_status ?? 'pending') as ParcelWithEvents['syncStatus'],
+    syncStatus: row.sync_status,
     syncError: row.sync_error ?? undefined,
     trackingUrl: row.tracking_url ?? undefined,
     archivedAt: row.archived_at ?? undefined,
@@ -86,7 +68,7 @@ export function createApiRepo(
   let hasActiveSync = false;
 
   async function list(): Promise<ParcelWithEvents[]> {
-    const payload = await request<{ packages: PackageRow[] }>(
+    const payload = await request<ApiPackageListResponse>(
       '/api/packages?includeArchived=true',
     );
     const parcels = payload.packages.map(toParcel);
@@ -103,14 +85,15 @@ export function createApiRepo(
     async add(input: NewParcelInput): Promise<ParcelWithEvents> {
       const trackingNumber = normalizeTrackingNumber(input.trackingNumber);
       const carrier = input.carrier ?? detectCarrier(trackingNumber);
-      const row = await request<PackageRow>('/api/packages', {
+      const body: ApiCreatePackageRequest = {
+        trackingNumber,
+        label: input.label,
+        carrier,
+        trackingUrl: input.trackingUrl?.trim() || undefined,
+      };
+      const row = await request<ApiPackageRow>('/api/packages', {
         method: 'POST',
-        body: JSON.stringify({
-          trackingNumber,
-          label: input.label,
-          carrier,
-          trackingUrl: input.trackingUrl?.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       const parcel = toParcel(row);
       hasActiveSync = parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing';
@@ -118,24 +101,25 @@ export function createApiRepo(
     },
 
     async rename(id: string, label: string): Promise<ParcelWithEvents> {
-      const row = await request<PackageRow>(
+      const body: ApiRenamePackageRequest = { label: label.trim() };
+      const row = await request<ApiPackageRow>(
         `/api/packages/${encodeURIComponent(id)}`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ label: label.trim() }),
+          body: JSON.stringify(body),
         },
       );
       return toParcel(row);
     },
 
     async remove(id: string): Promise<void> {
-      await request<{ ok: boolean }>(`/api/packages/${encodeURIComponent(id)}`, {
+      await request<ApiOkResponse>(`/api/packages/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
     },
 
     async restore(id: string): Promise<ParcelWithEvents> {
-      const row = await request<PackageRow>(
+      const row = await request<ApiPackageRow>(
         `/api/packages/${encodeURIComponent(id)}/restore`,
         { method: 'POST' },
       );
@@ -143,7 +127,7 @@ export function createApiRepo(
     },
 
     async refresh(): Promise<ParcelWithEvents[]> {
-      await request('/api/sync', { method: 'POST' });
+      await request<ApiQueueResponse>('/api/sync', { method: 'POST' });
       hasActiveSync = true;
       return list().then((parcels) => {
         hasActiveSync = true;
@@ -152,7 +136,9 @@ export function createApiRepo(
     },
 
     async refreshParcel(id: string): Promise<ParcelWithEvents> {
-      await request(`/api/packages/${encodeURIComponent(id)}/sync`, { method: 'POST' });
+      await request<ApiQueueResponse>(`/api/packages/${encodeURIComponent(id)}/sync`, {
+        method: 'POST',
+      });
       const parcels = await list();
       hasActiveSync = true;
       const parcel = parcels.find((candidate) => candidate.id === id);

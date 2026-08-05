@@ -89,6 +89,7 @@ environment, never in a `VITE_` variable.
 
 The backend endpoints are:
 
+- `GET /api/openapi.json`
 - `GET /api/packages`
 - `POST /api/packages`
 - `DELETE /api/packages/:id`
@@ -105,6 +106,11 @@ expose the application origin directly to the public internet.
 
 `DELETE /api/packages/:id` is a compatibility-shaped soft delete: it sets
 `archived_at` and retains the parcel plus its complete event history.
+
+`contracts/openapi.json` is the source of truth for the HTTP payloads, carrier
+IDs, tracking stages and sync states. `npm run contract:generate` updates the
+generated TypeScript wire types and Python constants; `npm run test:contract`
+fails when either generated file has drifted from the OpenAPI document.
 
 On iPhone, install Parcel Post with Safari's **Add to Home Screen**, open the
 installed app and enable notifications from the bell. Each device opts in
@@ -228,6 +234,7 @@ tracking falls back to the rendered UPS summary page.
 
 ```bash
 npm ci
+npm run test:contract
 npm run test:coverage
 npm run build
 npm run test:pwa

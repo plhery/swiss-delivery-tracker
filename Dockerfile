@@ -20,6 +20,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=web-build /app/dist ./dist
 COPY server ./server
+COPY contracts ./contracts
 RUN useradd --system --uid 10001 --create-home delivery \
     && chown -R delivery:delivery /app
 USER delivery
