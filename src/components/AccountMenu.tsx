@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useI18n } from '../i18n';
+import { LanguageControl, useI18n } from '../i18n';
 
 type AccountAction = 'export' | 'delete' | 'sign-out';
 
@@ -41,6 +41,7 @@ export function AccountMenu({
         <span>{t('account.signedIn')}</span>
         <strong>{email}</strong>
         {error && <span className="account-menu__error" role="alert">{error}</span>}
+        <LanguageControl className="language-control--account" />
 
         {confirmingDelete ? (
           <div className="account-menu__delete-confirmation">

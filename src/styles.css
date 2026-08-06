@@ -2097,6 +2097,34 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.language-control--account {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.language-control--account > span {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  color: var(--ink-soft);
+  font-weight: 750;
+}
+
+.language-control--account select {
+  width: 100%;
+  background: var(--canvas);
+}
+
 .account-menu__popover button {
   min-height: 44px;
   margin-top: 7px;

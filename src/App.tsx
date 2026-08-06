@@ -269,7 +269,9 @@ export default function App({
             </div>
           </div>
           <div className="app__header-actions">
-            <LanguageControl className="language-control--header" />
+            {(!accountEmail || !onSignOut) && (
+              <LanguageControl className="language-control--header" />
+            )}
             {mode === 'api' && <NotificationControl apiAuth={apiAuth} />}
             <button
               type="button"

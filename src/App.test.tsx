@@ -15,6 +15,14 @@ function renderApp(repo: ParcelRepo = createDemoRepo(window.localStorage)) {
   );
 }
 
+function renderSignedInApp() {
+  return render(
+    <ParcelsProvider repo={createDemoRepo(window.localStorage)}>
+      <App accountEmail="owner@example.test" onSignOut={vi.fn()} />
+    </ParcelsProvider>,
+  );
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   window.history.replaceState({}, '', '/');
@@ -62,6 +70,18 @@ describe('App', () => {
 
     const past = screen.getByRole('region', { name: 'Past deliveries' });
     expect(within(past).getByText('Coffee beans ☕')).toBeInTheDocument();
+  });
+
+  it('keeps the signed-in language selector inside the account menu', async () => {
+    const user = userEvent.setup();
+    const { container } = renderSignedInApp();
+
+    expect(container.querySelector('.language-control--header')).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText('Account options for owner@example.test'));
+    const accountMenu = container.querySelector('.account-menu');
+    expect(accountMenu).not.toBeNull();
+    expect(within(accountMenu as HTMLElement).getByRole('combobox', { name: 'Language' }))
+      .toBeInTheDocument();
   });
 
   it('searches and clears the parcel list', async () => {
