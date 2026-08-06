@@ -457,7 +457,6 @@ export default function App({
                 <ParcelCard
                   key={parcel.id}
                   parcel={parcel}
-                  notice={t('parcel.expectedToday')}
                   onOpen={(p) => openParcelDetail(p.id)}
                   onArchive={handleArchive}
                 />

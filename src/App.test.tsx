@@ -238,7 +238,7 @@ describe('App', () => {
 
     const section = await screen.findByRole('region', { name: 'Arriving today' });
     expect(within(section).getByText('Today parcel')).toBeInTheDocument();
-    expect(within(section).getByText('Expected today')).toBeInTheDocument();
+    expect(within(section).getAllByText(/^Expected today/)).toHaveLength(1);
     expect(screen.queryByRole('region', { name: 'On the way' })).not.toBeInTheDocument();
   });
 
