@@ -197,7 +197,11 @@ class SupabaseClient:
                 "dpd_postcode,last_synced_at",
             ),
             ("archived_at", "is.null"),
-            ("current_stage", "not.in.(delivered,returned)"),
+            (
+                "or",
+                "(current_stage.not.in.(delivered,returned),"
+                "last_status_text.eq.TO_BE_DELIVERED)",
+            ),
             ("carrier", f"in.({','.join(sorted(AUTOMATIC_CARRIER_IDS))})"),
             ("order", "last_synced_at.asc.nullsfirst,created_at.asc"),
         ]
@@ -223,7 +227,7 @@ class SupabaseClient:
             f"/rest/v1/tracking_events?{query}",
             method="POST",
             body=events,
-            prefer="resolution=ignore-duplicates,return=minimal",
+            prefer="resolution=merge-duplicates,return=minimal",
         )
 
     def upsert_push_subscription(

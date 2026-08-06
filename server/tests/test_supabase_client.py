@@ -197,7 +197,13 @@ class SupabaseServiceClientTests(unittest.TestCase):
         path = self.client._request.call_args.args[0]
         parsed = urllib.parse.urlsplit(path)
         query = urllib.parse.parse_qs(parsed.query)
-        self.assertEqual(query["current_stage"], ["not.in.(delivered,returned)"])
+        self.assertEqual(
+            query["or"],
+            [
+                "(current_stage.not.in.(delivered,returned),"
+                "last_status_text.eq.TO_BE_DELIVERED)"
+            ],
+        )
         self.assertNotIn("sync_status", query)
         self.assertIn("swiss-post", query["carrier"][0])
         self.assertIn("dachser", query["carrier"][0])
@@ -241,6 +247,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertIn("on_conflict=package_id,provider_event_id", call.args[0])
         self.assertEqual(call.kwargs["method"], "POST")
         self.assertEqual(call.kwargs["body"], events)
+        self.assertIn("merge-duplicates", call.kwargs["prefer"])
 
     def test_push_subscription_lifecycle_uses_server_only_tables(self):
         self.client._request = Mock(return_value=[{"id": "sub-1"}])

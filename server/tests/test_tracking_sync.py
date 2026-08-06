@@ -151,6 +151,7 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(infer_stage("Parcel not delivered"), "failed_attempt")
         self.assertEqual(infer_stage("Shipment could not be delivered"), "failed_attempt")
         self.assertEqual(infer_stage("Sendung nicht zugestellt"), "failed_attempt")
+        self.assertEqual(infer_stage("TO_BE_DELIVERED"), "in_transit")
 
     def test_stage_inference_covers_happy_path_and_fallbacks(self):
         cases = {
@@ -182,10 +183,34 @@ class TrackingSyncTests(unittest.TestCase):
             "failed_attempt",
         )
         self.assertEqual(
+            result_stage(
+                {"status": "in_transit", "last_status_text": "TO_BE_DELIVERED"}
+            ),
+            "in_transit",
+        )
+        self.assertEqual(
             result_stage({"status": "exception", "last_status_text": "Held at customs"}),
             "customs",
         )
         self.assertIsNone(result_stage({"status": "unknown"}))
+
+    def test_to_be_delivered_status_stays_in_transit(self):
+        package = self.package("swiss-post-future-delivery")
+        client = FakeClient([package])
+        adapter = FakeAdapter(
+            {
+                "status": "in_transit",
+                "last_status_text": "TO_BE_DELIVERED",
+                "last_update": "2026-08-06T08:00:00+02:00",
+                "events": [],
+            }
+        )
+
+        summary = TrackingSyncService(client, adapter).sync()
+
+        self.assertEqual(summary.updated, 1)
+        self.assertEqual(client.events[0]["stage"], "in_transit")
+        self.assertEqual(client.updates[-1][1]["current_stage"], "in_transit")
 
     def test_event_timestamps_accept_common_formats_without_inventing_a_time(self):
         self.assertEqual(

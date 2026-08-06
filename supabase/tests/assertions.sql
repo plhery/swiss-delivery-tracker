@@ -1,5 +1,35 @@
 \set ON_ERROR_STOP on
 
+-- The Swiss Post repair must move both the summary and event out of the final
+-- state, then schedule the parcel for a fresh carrier check.
+do $$
+begin
+  if not exists (
+    select 1
+    from public.packages
+    where id = '80000000-0000-0000-0000-000000000008'
+      and current_stage = 'in_transit'
+      and sync_status = 'pending'
+      and last_synced_at is null
+  ) then
+    raise exception 'TO_BE_DELIVERED package was not repaired';
+  end if;
+
+  if not exists (
+    select 1
+    from public.tracking_events
+    where package_id = '80000000-0000-0000-0000-000000000008'
+      and provider_event_id = 'swiss-post:to-be-delivered-fixture'
+      and stage = 'in_transit'
+  ) then
+    raise exception 'TO_BE_DELIVERED event was not repaired';
+  end if;
+end;
+$$;
+
+delete from public.packages
+where id = '80000000-0000-0000-0000-000000000008';
+
 -- Account-owned data and shared-backend data both survive the migration. Only
 -- the account-owned row is public through RLS; the unowned row awaits cutover.
 do $$

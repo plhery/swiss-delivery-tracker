@@ -125,7 +125,9 @@ class SyncSummary:
 
 
 def infer_stage(text: str, fallback: str = "in_transit") -> str:
-    value = text.casefold()
+    value = " ".join(text.casefold().replace("_", " ").split())
+    if "to be delivered" in value:
+        return "in_transit"
     if any(word in value for word in ("return to sender", "returned", "retour")):
         return "returned"
     if any(
