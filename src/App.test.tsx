@@ -633,6 +633,46 @@ describe('App', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows both handoff trackers and marks Swiss Post as not ready yet', async () => {
+    const user = userEvent.setup();
+    const parcel: ParcelWithEvents = {
+      id: 'parcel-handoff',
+      trackingNumber: 'LW230226618CH',
+      label: 'AliExpress parcel',
+      carrier: 'swiss-post',
+      trackingSource: 'aliexpress',
+      swissPostReady: false,
+      createdAt: '2026-08-06T08:00:00Z',
+      syncStatus: 'ok',
+      events: [{
+        id: 'event-china',
+        parcelId: 'parcel-handoff',
+        stage: 'in_transit',
+        description: 'Departed origin country',
+        occurredAt: '2026-08-06T08:00:00Z',
+      }],
+    };
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([parcel]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([parcel]),
+      refreshParcel: vi.fn().mockResolvedValue(parcel),
+    };
+
+    renderApp(repo);
+    await user.click(await screen.findByText('AliExpress parcel'));
+
+    const detail = screen.getByRole('dialog', { name: 'AliExpress parcel' });
+    const sources = within(detail).getByLabelText('Tracking sources');
+    expect(within(sources).getByRole('link', { name: /open on aliexpress.*active source/i }))
+      .toHaveAttribute('href', expect.stringContaining('global.cainiao.com'));
+    expect(within(sources).getByRole('link', { name: /open on swiss post.*not ready yet/i }))
+      .toHaveAttribute('href', expect.stringContaining('service.post.ch'));
+  });
+
   it('edits a parcel title from the detail view', async () => {
     const user = userEvent.setup();
     renderApp();

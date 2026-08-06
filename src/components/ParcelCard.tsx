@@ -1,5 +1,9 @@
 import { useRef, useState, type PointerEvent } from 'react';
-import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
+import {
+  activeTrackingCarrierId,
+  carrierInfo,
+  formatTrackingNumber,
+} from '../lib/carriers';
 import {
   localizedExpectedDelivery,
   localizedRelativeTime,
@@ -22,7 +26,7 @@ export function ParcelCard({
   notice?: string;
 }) {
   const { t } = useI18n();
-  const carrier = carrierInfo(parcel.carrier);
+  const carrier = carrierInfo(activeTrackingCarrierId(parcel));
   const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
   const expectedDelivery = parcel.expectedDelivery

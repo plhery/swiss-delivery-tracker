@@ -24,6 +24,30 @@ CARRIER_NAMES = {
 }
 
 
+def is_valid_s10_tracking_number(tracking_number: str) -> bool:
+    """Validate the UPU S10 check digit for an already-normalized identifier."""
+
+    if not re.fullmatch(r"[A-Z]{2}\d{9}[A-Z]{2}", tracking_number):
+        return False
+    weights = (8, 6, 4, 2, 3, 5, 9, 7)
+    total = sum(
+        int(tracking_number[index + 2]) * weight
+        for index, weight in enumerate(weights)
+    )
+    raw_check_digit = 11 - (total % 11)
+    expected = 0 if raw_check_digit == 10 else 5 if raw_check_digit == 11 else raw_check_digit
+    return int(tracking_number[10]) == expected
+
+
+def supports_swiss_post_handoff(tracking_number: str) -> bool:
+    """Tracked letter-post with a Swiss-issued S10 ID can hand off from Cainiao."""
+
+    return bool(
+        re.fullmatch(r"L[A-Z]\d{9}CH", tracking_number)
+        and is_valid_s10_tracking_number(tracking_number)
+    )
+
+
 def carrier_definition(carrier_id: str) -> dict[str, Any]:
     definition = _CARRIER_DEFINITIONS.get(carrier_id)
     if not isinstance(definition, dict):

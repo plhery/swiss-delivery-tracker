@@ -5,10 +5,16 @@ from server.carriers import (
     AUTOMATIC_CARRIER_IDS,
     active_requirements,
     normalize_carrier_inputs,
+    supports_swiss_post_handoff,
 )
 
 
 class CarrierCapabilitiesTests(unittest.TestCase):
+    def test_swiss_post_handoff_requires_a_valid_tracked_letter_s10(self):
+        self.assertTrue(supports_swiss_post_handoff("LW230226618CH"))
+        self.assertFalse(supports_swiss_post_handoff("LW230226619CH"))
+        self.assertFalse(supports_swiss_post_handoff("RR230226618CH"))
+
     def test_registry_covers_every_carrier_and_drives_automatic_support(self):
         self.assertEqual(set(CARRIER_CAPABILITIES), CARRIER_IDS)
         expected = {

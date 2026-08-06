@@ -2,6 +2,7 @@ import {
   CARRIER_CAPABILITIES,
   type ApiCarrierId as CarrierId,
 } from '../generated/apiContract';
+import type { Parcel } from '../types';
 
 export type CarrierTrackingMode = 'automatic' | 'link-only';
 export type CarrierInputField = 'trackingUrl' | 'dpdPostcode';
@@ -49,6 +50,14 @@ export interface TrackingInputMatch extends CarrierDetection {
   trackingNumber: string;
   trackingUrl?: string;
   source: 'number' | 'link' | 'text' | 'none';
+}
+
+export interface ParcelTrackingLink {
+  carrier: CarrierInfo;
+  url: string;
+  active: boolean;
+  ready: boolean;
+  role: 'active' | 'waiting' | 'history';
 }
 
 interface DetectionRule {
@@ -148,6 +157,54 @@ export function isValidS10TrackingNumber(raw: string): boolean {
   const rawCheckDigit = 11 - (sum % 11);
   const expected = rawCheckDigit === 10 ? 0 : rawCheckDigit === 11 ? 5 : rawCheckDigit;
   return Number(value[10]) === expected;
+}
+
+/** Swiss-issued tracked letter-post can move from Cainiao to Swiss Post. */
+export function supportsSwissPostHandoff(raw: string): boolean {
+  const value = normalizeTrackingNumber(raw);
+  return /^L[A-Z]\d{9}CH$/.test(value) && isValidS10TrackingNumber(value);
+}
+
+/** The source shown on cards and used as the primary link. */
+export function activeTrackingCarrierId(
+  parcel: Pick<Parcel, 'carrier' | 'trackingNumber' | 'trackingSource'>,
+): CarrierId {
+  if (parcel.trackingSource) return parcel.trackingSource;
+  return supportsSwissPostHandoff(parcel.trackingNumber) ? 'aliexpress' : parcel.carrier;
+}
+
+/** Build the primary and secondary links for a possible Cainiao → Swiss Post handoff. */
+export function parcelTrackingLinks(
+  parcel: Pick<
+    Parcel,
+    | 'carrier'
+    | 'trackingNumber'
+    | 'trackingUrl'
+    | 'trackingSource'
+    | 'swissPostReady'
+  >,
+): ParcelTrackingLink[] {
+  if (!supportsSwissPostHandoff(parcel.trackingNumber)) {
+    const carrier = carrierInfo(parcel.carrier);
+    const url = parcel.trackingUrl ?? carrier.trackingUrl?.(parcel.trackingNumber);
+    return url ? [{ carrier, url, active: true, ready: true, role: 'active' }] : [];
+  }
+
+  const activeCarrier = activeTrackingCarrierId(parcel);
+  const swissPostReady = parcel.swissPostReady === true || activeCarrier === 'swiss-post';
+  const links = (['aliexpress', 'swiss-post'] as const).map((carrierId) => {
+    const carrier = carrierInfo(carrierId);
+    const active = carrierId === activeCarrier;
+    const ready = carrierId !== 'swiss-post' || swissPostReady;
+    return {
+      carrier,
+      url: carrier.trackingUrl!(parcel.trackingNumber),
+      active,
+      ready,
+      role: active ? 'active' as const : ready ? 'history' as const : 'waiting' as const,
+    };
+  });
+  return links.sort((first, second) => Number(second.active) - Number(first.active));
 }
 
 export function carrierRequirements(

@@ -10,7 +10,9 @@ import {
   isPlanzerSharedTrackingNumber,
   isValidS10TrackingNumber,
   normalizeTrackingNumber,
+  parcelTrackingLinks,
   parseTrackingInput,
+  supportsSwissPostHandoff,
   tracksAutomatically,
 } from './carriers';
 
@@ -20,6 +22,38 @@ describe('normalizeTrackingNumber', () => {
       '993412345612345678',
     );
     expect(normalizeTrackingNumber(' ra 123 456-789 ch ')).toBe('RA123456789CH');
+  });
+});
+
+describe('supportsSwissPostHandoff', () => {
+  it('requires a valid Swiss-issued tracked-letter S10 identifier', () => {
+    expect(supportsSwissPostHandoff('LW230226618CH')).toBe(true);
+    expect(supportsSwissPostHandoff('LW230226619CH')).toBe(false);
+    expect(supportsSwissPostHandoff('RR230226618CH')).toBe(false);
+  });
+
+  it('orders Cainiao first until Swiss Post becomes the active source', () => {
+    const waiting = parcelTrackingLinks({
+      carrier: 'swiss-post',
+      trackingNumber: 'LW230226618CH',
+      trackingSource: 'aliexpress',
+      swissPostReady: false,
+    });
+    expect(waiting.map(({ carrier, role }) => [carrier.id, role])).toEqual([
+      ['aliexpress', 'active'],
+      ['swiss-post', 'waiting'],
+    ]);
+
+    const active = parcelTrackingLinks({
+      carrier: 'swiss-post',
+      trackingNumber: 'LW230226618CH',
+      trackingSource: 'swiss-post',
+      swissPostReady: true,
+    });
+    expect(active.map(({ carrier, role }) => [carrier.id, role])).toEqual([
+      ['swiss-post', 'active'],
+      ['aliexpress', 'history'],
+    ]);
   });
 });
 

@@ -115,6 +115,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertIn("tracking_events", query["select"][0])
         self.assertIn("tracking_url", query["select"][0])
         self.assertIn("dpd_postcode", query["select"][0])
+        self.assertIn("carrier_data", query["select"][0])
         self.assertIn("archived_at", query["select"][0])
         self.assertIn("notifications_muted", query["select"][0])
 
@@ -211,6 +212,7 @@ class SupabaseServiceClientTests(unittest.TestCase):
             query["order"], ["last_synced_at.asc.nullsfirst,created_at.asc"]
         )
         self.assertIn("dpd_postcode", query["select"][0])
+        self.assertIn("carrier_data", query["select"][0])
         self.assertNotIn("user_id", query)
 
         self.client._request.reset_mock()

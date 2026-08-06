@@ -1,6 +1,11 @@
 import { useState, useRef, type FormEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { carrierInfo, formatTrackingNumber } from '../lib/carriers';
+import {
+  activeTrackingCarrierId,
+  carrierInfo,
+  formatTrackingNumber,
+  parcelTrackingLinks,
+} from '../lib/carriers';
 import { localizedExpectedDelivery, useI18n } from '../i18n';
 import { parcelDisplayStatus, parcelDisplayStatusKey } from '../lib/parcelStatus';
 import { currentEvent } from '../lib/stages';
@@ -33,10 +38,10 @@ export function ParcelDetail({
   onDelete: (parcel: ParcelWithEvents) => Promise<unknown>;
 }) {
   const { languageTag, t } = useI18n();
-  const carrier = carrierInfo(parcel.carrier);
+  const carrier = carrierInfo(activeTrackingCarrierId(parcel));
   const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
-  const trackingUrl = parcel.trackingUrl ?? carrier.trackingUrl?.(parcel.trackingNumber);
+  const trackingLinks = parcelTrackingLinks(parcel);
   const swipeStart = useRef<TouchPoint | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(parcel.label);
@@ -303,15 +308,27 @@ export function ParcelDetail({
         {parcel.syncError && (
           <p className="detail__sync-error" role="status">{parcel.syncError}</p>
         )}
-        {trackingUrl && (
-          <a
-            className="detail__carrier-link"
-            href={trackingUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {t('detail.openCarrier', { carrier: carrier.name })}
-          </a>
+        {trackingLinks.length > 0 && (
+          <div className="detail__carrier-links" aria-label={t('detail.trackingSources')}>
+            {trackingLinks.map((link) => (
+              <a
+                key={link.carrier.id}
+                className={`detail__carrier-link detail__carrier-link--${link.role}`}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>{t('detail.openCarrier', { carrier: link.carrier.name })}</span>
+                <small>
+                  {link.role === 'active'
+                    ? t('detail.sourceActive')
+                    : link.role === 'waiting'
+                      ? t('detail.sourceWaiting')
+                      : t('detail.sourceHistory')}
+                </small>
+              </a>
+            ))}
+          </div>
         )}
         <div className="detail__notification-setting">
           <div>

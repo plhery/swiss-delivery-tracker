@@ -15,6 +15,10 @@ const packageRow = {
   sync_error: null,
   tracking_url: null,
   dpd_postcode: null,
+  carrier_data: {
+    active_tracking_carrier: 'swiss-post',
+    swiss_post_ready: true,
+  },
   archived_at: null,
   notifications_muted: false,
   tracking_events: [
@@ -64,6 +68,8 @@ describe('createApiRepo', () => {
       lastStatusText: 'Sorted',
       syncStatus: 'ok',
       notificationsMuted: false,
+      trackingSource: 'swiss-post',
+      swissPostReady: true,
     });
     expect(parcels[0].events[0]).toMatchObject({
       parcelId: packageRow.id,

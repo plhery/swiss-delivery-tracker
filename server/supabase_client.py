@@ -96,7 +96,7 @@ class SupabaseClient:
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
                 "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
-                "dpd_postcode,archived_at,notifications_muted,"
+                "dpd_postcode,carrier_data,archived_at,notifications_muted,"
                 "tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
             ("order", "created_at.desc"),
@@ -112,7 +112,7 @@ class SupabaseClient:
                 "select",
                 "id,tracking_number,label,carrier,created_at,expected_delivery,"
                 "last_status_text,last_synced_at,sync_status,sync_error,tracking_url,"
-                "dpd_postcode,archived_at,notifications_muted,"
+                "dpd_postcode,carrier_data,archived_at,notifications_muted,"
                 "tracking_events(id,package_id,stage,description,location,occurred_at)",
             ),
             ("id", f"eq.{package_id}"),
@@ -194,7 +194,7 @@ class SupabaseClient:
             (
                 "select",
                 "id,user_id,tracking_number,label,carrier,current_stage,tracking_url,"
-                "dpd_postcode,last_synced_at",
+                "dpd_postcode,last_synced_at,carrier_data",
             ),
             ("archived_at", "is.null"),
             (

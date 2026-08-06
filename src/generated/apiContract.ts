@@ -510,6 +510,10 @@ export interface ApiPackageRow {
   "sync_error": string | null;
   "tracking_url": string | null;
   "dpd_postcode": string | null;
+  "carrier_data"?: {
+  "active_tracking_carrier"?: ApiCarrierId | null;
+  "swiss_post_ready"?: boolean | null;
+};
   "archived_at": string | null;
   "notifications_muted": boolean;
   "tracking_events": Array<ApiTrackingEventRow> | null;

@@ -25,6 +25,15 @@ detection rules are defined once in `contracts/openapi.json` under
 numeric formats are treated as suggestions and require manual confirmation;
 UPU S10 identifiers must pass their check digit before automatic detection.
 
+## AliExpress handoff to Swiss Post
+
+Valid tracked letter-post S10 identifiers in the `L…CH` range are checked
+against Swiss Post before every sync. Until Swiss Post announces the shipment,
+Cainiao supplies the international tracking history. As soon as Swiss Post has
+a usable record, the switch becomes sticky and later refreshes use Swiss Post
+as the primary source. The parcel detail keeps links to both carriers and marks
+Swiss Post as not ready during the international leg.
+
 ## A note about carrier integrations
 
 Several carriers do not offer a supported public tracking API. Their websites

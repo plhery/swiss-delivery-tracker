@@ -1187,6 +1187,28 @@
             "pattern": "^[0-9]{4}$",
             "description": "Recipient postcode used only to verify this DPD parcel."
           },
+          "carrier_data": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "active_tracking_carrier": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CarrierId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "swiss_post_ready": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            }
+          },
           "archived_at": {
             "type": [
               "string",

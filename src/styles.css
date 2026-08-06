@@ -1572,15 +1572,42 @@ button:disabled {
   font-size: 12px;
 }
 
+.detail__carrier-links {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .detail__carrier-link {
-  display: inline-flex;
+  display: flex;
   min-height: 44px;
   align-items: center;
-  margin-top: 12px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #faf8f2;
   color: #9a4718;
   font-size: 12px;
   font-weight: 780;
   text-decoration: none;
+}
+
+.detail__carrier-link--active {
+  border-color: #d8894f;
+  background: var(--orange-soft);
+}
+
+.detail__carrier-link--waiting {
+  color: var(--ink-soft);
+}
+
+.detail__carrier-link small {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 680;
+  text-align: right;
 }
 
 .detail__notification-setting {

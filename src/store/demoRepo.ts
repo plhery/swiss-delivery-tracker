@@ -1,4 +1,8 @@
-import { detectCarrier, normalizeTrackingNumber } from '../lib/carriers';
+import {
+  detectCarrier,
+  normalizeTrackingNumber,
+  supportsSwissPostHandoff,
+} from '../lib/carriers';
 import { currentStage, isFinal, latestEvent } from '../lib/stages';
 import { uid } from '../lib/uid';
 import type {
@@ -194,8 +198,12 @@ export function createDemoRepo(
     // even when refreshing several times in the same instant.
     const lastTs = Date.parse(latestEvent(parcel.events)!.occurredAt);
     const occurredAt = new Date(Math.max(now(), lastTs + 1000)).toISOString();
+    const swissPostReady = supportsSwissPostHandoff(parcel.trackingNumber)
+      && ['in_transit', 'customs', 'out_for_delivery', 'delivered'].includes(next);
     return {
       ...parcel,
+      trackingSource: swissPostReady ? 'swiss-post' : parcel.trackingSource,
+      swissPostReady: swissPostReady || parcel.swissPostReady,
       events: [...parcel.events, event(parcel.id, next, occurredAt)],
     };
   };
@@ -222,6 +230,10 @@ export function createDemoRepo(
         syncStatus: 'ok',
         events: [],
       };
+      if (supportsSwissPostHandoff(trackingNumber)) {
+        parcel.trackingSource = 'aliexpress';
+        parcel.swissPostReady = false;
+      }
       parcel.events = [event(parcel.id, 'pending', createdAt)];
       save(storage, [...parcels, parcel]);
       return parcel;

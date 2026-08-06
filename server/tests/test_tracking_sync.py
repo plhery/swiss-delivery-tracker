@@ -128,6 +128,98 @@ class TrackingSyncTests(unittest.TestCase):
         )
         self.assertTrue(all(package_id == "new-package" for package_id, _ in client.updates))
 
+    def test_swiss_tracked_letter_uses_cainiao_until_swiss_post_is_ready(self):
+        package = self.package("handoff-cainiao")
+        package["tracking_number"] = "LW230226618CH"
+
+        class HandoffAdapter:
+            def __init__(self):
+                self.calls = []
+
+            def fetch(self, carrier_id, tracking_number, tracking_url, dpd_postcode=None):
+                self.calls.append((carrier_id, tracking_number, tracking_url, dpd_postcode))
+                if carrier_id == "swiss-post":
+                    return {"status": "pending", "last_status_text": "Not found yet"}
+                return {
+                    "status": "in_transit",
+                    "last_status_text": "Departed origin country",
+                    "events": [
+                        {
+                            "time": "2026-08-05T08:00:00+00:00",
+                            "description": "Departed origin country",
+                        }
+                    ],
+                }
+
+        client = FakeClient([package])
+        adapter = HandoffAdapter()
+
+        summary = TrackingSyncService(client, adapter).sync()
+
+        self.assertEqual(summary.updated, 1)
+        self.assertEqual(
+            [call[0] for call in adapter.calls],
+            ["swiss-post", "aliexpress"],
+        )
+        self.assertTrue(client.events[0]["provider_event_id"].startswith("aliexpress:"))
+        self.assertEqual(
+            client.updates[-1][1]["carrier_data"]["active_tracking_carrier"],
+            "aliexpress",
+        )
+        self.assertFalse(client.updates[-1][1]["carrier_data"]["swiss_post_ready"])
+
+    def test_swiss_tracked_letter_switches_to_swiss_post_as_soon_as_it_is_ready(self):
+        package = self.package("handoff-swiss-post")
+        package["tracking_number"] = "LW230226618CH"
+
+        class SwissPostReadyAdapter:
+            def __init__(self):
+                self.calls = []
+
+            def fetch(self, carrier_id, tracking_number, tracking_url, dpd_postcode=None):
+                self.calls.append(carrier_id)
+                return {
+                    "status": "in_transit",
+                    "last_status_text": "Arrival in destination country",
+                    "events": [
+                        {
+                            "time": "2026-08-06T14:25:00+02:00",
+                            "description": "Arrival in destination country",
+                        }
+                    ],
+                }
+
+        client = FakeClient([package])
+        adapter = SwissPostReadyAdapter()
+
+        summary = TrackingSyncService(client, adapter).sync()
+
+        self.assertEqual(summary.updated, 1)
+        self.assertEqual(adapter.calls, ["swiss-post"])
+        self.assertTrue(client.events[0]["provider_event_id"].startswith("swiss-post:"))
+        self.assertEqual(
+            client.updates[-1][1]["carrier_data"]["active_tracking_carrier"],
+            "swiss-post",
+        )
+        self.assertTrue(client.updates[-1][1]["carrier_data"]["swiss_post_ready"])
+
+    def test_swiss_post_handoff_is_sticky_after_activation(self):
+        package = self.package("handoff-sticky")
+        package["tracking_number"] = "LW230226618CH"
+        package["carrier_data"] = {"swiss_post_ready": True}
+        client = FakeClient([package])
+        adapter = FakeAdapter(result={"status": "pending", "events": []})
+
+        summary = TrackingSyncService(client, adapter).sync()
+
+        self.assertEqual(summary.updated, 1)
+        self.assertEqual(
+            adapter.calls,
+            [("swiss-post", "LW230226618CH", None, None)],
+        )
+        self.assertEqual(client.updates[-1][1]["sync_status"], "ok")
+        self.assertNotIn("current_stage", client.updates[-1][1])
+
     def test_unsupported_carrier_is_explicit(self):
         client = FakeClient(
             [

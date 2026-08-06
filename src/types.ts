@@ -27,6 +27,10 @@ export interface Parcel {
   syncError?: string;
   trackingUrl?: string;
   dpdPostcode?: string;
+  /** Carrier currently supplying automatic updates for a multi-carrier journey. */
+  trackingSource?: CarrierId;
+  /** Whether Swiss Post has announced a Swiss-issued inbound shipment. */
+  swissPostReady?: boolean;
   archivedAt?: string;
   notificationsMuted?: boolean;
 }

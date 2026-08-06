@@ -20,6 +20,7 @@ from .carriers import (
     CARRIER_NAMES,
     carrier_adapter,
     carrier_timezone,
+    supports_swiss_post_handoff,
 )
 from .dachser import DachserTracker
 from .dpd import DPDTracker
@@ -203,6 +204,22 @@ def result_stage(result: CarrierResult) -> str | None:
     return mapping.get(status)
 
 
+def result_has_update(result: CarrierResult) -> bool:
+    """Return whether a carrier has announced a usable shipment state."""
+
+    stage = result_stage(result)
+    if stage and stage != "pending":
+        return True
+    for raw in result.get("events") or []:
+        declared_stage = str(raw.get("stage") or "")
+        if declared_stage in STAGES and declared_stage != "pending":
+            return True
+        description = str(raw.get("description") or "")
+        if description and infer_stage(description, "pending") != "pending":
+            return True
+    return False
+
+
 def result_timezone(carrier_id: str, result: CarrierResult) -> tzinfo:
     declared = result.get("timezone")
     if isinstance(declared, str) and 1 <= len(declared) <= 64:
@@ -258,10 +275,14 @@ def provider_event_id(carrier_id: str, raw_time: Any, location: str, description
 
 
 def build_events(
-    package: dict[str, Any], result: CarrierResult, _now: datetime
+    package: dict[str, Any],
+    result: CarrierResult,
+    _now: datetime,
+    source_carrier_id: str | None = None,
 ) -> list[dict[str, Any]]:
     current = result_stage(result) or "in_transit"
-    assumed_timezone = result_timezone(str(package.get("carrier") or ""), result)
+    carrier_id = source_carrier_id or str(package.get("carrier") or "")
+    assumed_timezone = result_timezone(carrier_id, result)
     rows: list[dict[str, Any]] = []
     for raw in result.get("events") or []:
         description = str(raw.get("description") or "Tracking update").strip()
@@ -283,7 +304,7 @@ def build_events(
                 "location": location or None,
                 "occurred_at": occurred_at,
                 "provider_event_id": provider_event_id(
-                    package["carrier"], raw_time, location, description
+                    carrier_id, raw_time, location, description
                 ),
                 "raw_data": raw,
             }
@@ -303,7 +324,7 @@ def build_events(
                 "location": None,
                 "occurred_at": occurred_at,
                 "provider_event_id": provider_event_id(
-                    package["carrier"], raw_time, "", description
+                    carrier_id, raw_time, "", description
                 ),
                 "raw_data": {},
             }
@@ -373,13 +394,10 @@ class TrackingSyncService:
         self.client.update_package(package["id"], {"sync_status": "syncing", "sync_error": None})
         try:
             carrier_id = str(package["carrier"])
-            result = normalize_carrier_result(self.adapter.fetch(
-                carrier_id,
-                package["tracking_number"],
-                package.get("tracking_url"),
-                package.get("dpd_postcode"),
-            ))
-            events = build_events(package, result, now)
+            result, source_carrier_id, swiss_post_ready = self._fetch_result(
+                package, carrier_id
+            )
+            events = build_events(package, result, now, source_carrier_id)
             self.client.insert_events(events)
             reported_stage = result_stage(result)
             latest_event = (
@@ -393,24 +411,36 @@ class TrackingSyncService:
                 (stage and stage != "pending")
                 or any(event["stage"] != "pending" for event in events)
             )
+            handoff = supports_swiss_post_handoff(str(package["tracking_number"]))
+            # Once Swiss Post has accepted the identifier, a temporarily sparse
+            # response must not send the parcel back to Cainiao or to "waiting".
+            known_update = has_update or bool(handoff and swiss_post_ready)
+            carrier_data = {
+                key: value
+                for key, value in result.items()
+                if key not in {"events"} and value is not None
+            }
+            if handoff:
+                carrier_data.update(
+                    {
+                        "active_tracking_carrier": source_carrier_id,
+                        "swiss_post_ready": swiss_post_ready,
+                    }
+                )
             values: dict[str, Any] = {
                 "last_synced_at": now.isoformat(),
-                "sync_status": "ok" if has_update else "waiting",
+                "sync_status": "ok" if known_update else "waiting",
                 "sync_error": None,
                 "last_status_text": result.get("last_status_text") or None,
                 "expected_delivery": str(result["expected_delivery"])
                 if result.get("expected_delivery")
                 else None,
-                "carrier_data": {
-                    key: value
-                    for key, value in result.items()
-                    if key not in {"events"} and value is not None
-                },
+                "carrier_data": carrier_data,
             }
-            if stage:
+            if stage and (has_update or not swiss_post_ready):
                 values["current_stage"] = stage
             self.client.update_package(package["id"], values)
-            return "updated" if has_update else "waiting"
+            return "updated" if known_update else "waiting"
         except Exception as exc:  # carrier sites fail independently; keep polling the rest
             message = str(exc).strip() or exc.__class__.__name__
             if exc.__class__.__name__ == "JSONDecodeError":
@@ -424,6 +454,46 @@ class TrackingSyncService:
                 },
             )
             return "errors"
+
+    def _fetch_result(
+        self,
+        package: dict[str, Any],
+        carrier_id: str,
+    ) -> tuple[CarrierResult, str, bool | None]:
+        """Select Cainiao until Swiss Post announces a Swiss-issued tracked letter."""
+
+        tracking_number = str(package["tracking_number"])
+        if not supports_swiss_post_handoff(tracking_number):
+            result = self.adapter.fetch(
+                carrier_id,
+                tracking_number,
+                package.get("tracking_url"),
+                package.get("dpd_postcode"),
+            )
+            return normalize_carrier_result(result), carrier_id, None
+
+        carrier_data = package.get("carrier_data")
+        swiss_post_was_ready = bool(
+            isinstance(carrier_data, dict)
+            and carrier_data.get("swiss_post_ready") is True
+        )
+        if swiss_post_was_ready:
+            result = self.adapter.fetch("swiss-post", tracking_number, None, None)
+            return normalize_carrier_result(result), "swiss-post", True
+
+        try:
+            swiss_post_result = normalize_carrier_result(
+                self.adapter.fetch("swiss-post", tracking_number, None, None)
+            )
+            if result_has_update(swiss_post_result):
+                return swiss_post_result, "swiss-post", True
+        except Exception:
+            # Cainiao can still cover the international leg while Swiss Post is
+            # unavailable. If Cainiao also fails, its error is persisted below.
+            pass
+
+        cainiao_result = self.adapter.fetch("aliexpress", tracking_number, None, None)
+        return normalize_carrier_result(cainiao_result), "aliexpress", False
 
 
 def fair_sync_packages(
