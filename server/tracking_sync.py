@@ -27,6 +27,7 @@ from .dpd import DPDTracker
 from .hermes import HermesTracker
 from .planzer_shared import PlanzerSharedTracker
 from .supabase_client import SupabaseServiceClient
+from .swiss_post import SwissPostTracker
 from .ups import UPSTracker
 
 MAX_PACKAGES_PER_OWNER_PER_SYNC = 5
@@ -55,6 +56,7 @@ class UpstreamTrackerAdapter:
         dachser_tracker: DachserTracker | None = None,
         hermes_tracker: HermesTracker | None = None,
         planzer_shared_tracker: PlanzerSharedTracker | None = None,
+        swiss_post_tracker: SwissPostTracker | None = None,
         ups_tracker: UPSTracker | None = None,
     ) -> None:
         from swiss_delivery_tracker import carriers as carrier_package
@@ -68,6 +70,7 @@ class UpstreamTrackerAdapter:
         self.dachser_tracker = dachser_tracker or DachserTracker()
         self.hermes_tracker = hermes_tracker or HermesTracker()
         self.planzer_shared_tracker = planzer_shared_tracker or PlanzerSharedTracker()
+        self.swiss_post_tracker = swiss_post_tracker or SwissPostTracker()
         self.ups_tracker = ups_tracker or UPSTracker()
 
     def fetch(
@@ -78,7 +81,10 @@ class UpstreamTrackerAdapter:
         dpd_postcode: str | None = None,
     ) -> CarrierResult:
         adapter = carrier_adapter(carrier_id)
-        if adapter == "dpd":
+        result: Any
+        if carrier_id == "swiss-post":
+            result = self.swiss_post_tracker.fetch(tracking_number)
+        elif adapter == "dpd":
             result = self.dpd_tracker.fetch(tracking_number, dpd_postcode)
         elif adapter == "dachser":
             if not tracking_url:
@@ -129,6 +135,15 @@ def infer_stage(text: str, fallback: str = "in_transit") -> str:
     value = " ".join(text.casefold().replace("_", " ").split())
     if "to be delivered" in value:
         return "in_transit"
+    if any(
+        phrase in value
+        for phrase in (
+            "will shortly be handed over",
+            "shipment information received",
+            "electronic shipment information",
+        )
+    ):
+        return "registered"
     if any(word in value for word in ("return to sender", "returned", "retour")):
         return "returned"
     if any(
@@ -150,11 +165,28 @@ def infer_stage(text: str, fallback: str = "in_transit") -> str:
         )
     ):
         return "failed_attempt"
-    if any(word in value for word in ("delivered", "deposited", "zugestellt")):
+    if any(
+        word in value
+        for word in (
+            "delivered",
+            "deposited",
+            "zugestellt",
+            "confirmation of receipt",
+        )
+    ):
         return "delivered"
     if any(word in value for word in ("ready for pickup", "ready for collection", "abholbereit")):
         return "ready_for_pickup"
-    if any(word in value for word in ("out for delivery", "in delivery", "zustellung")):
+    if any(
+        word in value
+        for word in (
+            "out for delivery",
+            "in delivery",
+            "loading into delivery vehicle",
+            "loaded into delivery vehicle",
+            "zustellung",
+        )
+    ):
         return "out_for_delivery"
     if any(word in value for word in ("customs", "custom clearance", "zoll")):
         return "customs"
@@ -399,6 +431,21 @@ class TrackingSyncService:
             )
             events = build_events(package, result, now, source_carrier_id)
             self.client.insert_events(events)
+            if source_carrier_id == "swiss-post" and result.get("events"):
+                self.client.delete_events_by_descriptions(
+                    package["id"],
+                    {
+                        "TO_BE_DELIVERED",
+                        "REPORTED",
+                        "IN_DELIVERY",
+                        "DELIVERED",
+                        "MISSED_DELIVERY",
+                        "NOT_DELIVERED",
+                        "RETURNED",
+                        "CUSTOMS",
+                        "REGISTERED",
+                    },
+                )
             reported_stage = result_stage(result)
             latest_event = (
                 max(events, key=lambda event: str(event["occurred_at"])) if events else None

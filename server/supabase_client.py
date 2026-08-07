@@ -230,6 +230,26 @@ class SupabaseClient:
             prefer="resolution=merge-duplicates,return=minimal",
         )
 
+    def delete_events_by_descriptions(
+        self,
+        package_id: str,
+        descriptions: set[str],
+    ) -> None:
+        """Remove adapter-generated summary rows after real carrier events arrive."""
+
+        if not descriptions:
+            return
+        params = [
+            ("package_id", f"eq.{package_id}"),
+            ("description", f"in.({','.join(sorted(descriptions))})"),
+        ]
+        query = urllib.parse.urlencode(params, safe="().,*")
+        self._request(
+            f"/rest/v1/tracking_events?{query}",
+            method="DELETE",
+            prefer="return=minimal",
+        )
+
     def upsert_push_subscription(
         self,
         user_id: str,

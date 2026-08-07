@@ -251,6 +251,19 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertEqual(call.kwargs["body"], events)
         self.assertIn("merge-duplicates", call.kwargs["prefer"])
 
+        self.client._request.reset_mock()
+        self.client.delete_events_by_descriptions(
+            "pkg/1", {"TO_BE_DELIVERED", "REPORTED"}
+        )
+        delete = self.client._request.call_args
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(delete.args[0]).query)
+        self.assertEqual(query["package_id"], ["eq.pkg/1"])
+        self.assertEqual(
+            query["description"],
+            ["in.(REPORTED,TO_BE_DELIVERED)"],
+        )
+        self.assertEqual(delete.kwargs["method"], "DELETE")
+
     def test_push_subscription_lifecycle_uses_server_only_tables(self):
         self.client._request = Mock(return_value=[{"id": "sub-1"}])
         result = self.client.upsert_push_subscription(

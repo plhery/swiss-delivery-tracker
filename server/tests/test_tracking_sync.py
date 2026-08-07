@@ -35,6 +35,14 @@ class FakeClient:
     def insert_events(self, events):
         self.events.extend(events)
 
+    def delete_events_by_descriptions(self, package_id, descriptions):
+        self.events = [
+            event
+            for event in self.events
+            if event.get("package_id") != package_id
+            or event.get("description") not in descriptions
+        ]
+
 
 class FakeAdapter:
     def __init__(self, result=None, error=None):
@@ -244,6 +252,14 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(infer_stage("Shipment could not be delivered"), "failed_attempt")
         self.assertEqual(infer_stage("Sendung nicht zugestellt"), "failed_attempt")
         self.assertEqual(infer_stage("TO_BE_DELIVERED"), "in_transit")
+        self.assertEqual(
+            infer_stage("Loading into delivery vehicle"),
+            "out_for_delivery",
+        )
+        self.assertEqual(
+            infer_stage("Your shipment will shortly be handed over to Swiss Post"),
+            "registered",
+        )
 
     def test_stage_inference_covers_happy_path_and_fallbacks(self):
         cases = {
@@ -303,6 +319,48 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(summary.updated, 1)
         self.assertEqual(client.events[0]["stage"], "in_transit")
         self.assertEqual(client.updates[-1][1]["current_stage"], "in_transit")
+
+    def test_real_swiss_post_events_replace_repeated_global_status_artifacts(self):
+        package = self.package("swiss-post-real-events")
+        client = FakeClient([package])
+        client.events = [
+            {
+                "package_id": package["id"],
+                "stage": "in_transit",
+                "description": "TO_BE_DELIVERED",
+            },
+            {
+                "package_id": package["id"],
+                "stage": "registered",
+                "description": "Tracking added",
+            },
+        ]
+        adapter = FakeAdapter(
+            {
+                "status": "out_for_delivery",
+                "last_status_text": "Loading into delivery vehicle",
+                "events": [
+                    {
+                        "time": "2026-08-07T06:55:43+02:00",
+                        "description": "Loading into delivery vehicle",
+                        "stage": "out_for_delivery",
+                    }
+                ],
+            }
+        )
+
+        summary = TrackingSyncService(client, adapter).sync()
+
+        self.assertEqual(summary.updated, 1)
+        self.assertNotIn(
+            "TO_BE_DELIVERED",
+            {event["description"] for event in client.events},
+        )
+        self.assertIn(
+            "Loading into delivery vehicle",
+            {event["description"] for event in client.events},
+        )
+        self.assertIn("Tracking added", {event["description"] for event in client.events})
 
     def test_event_timestamps_accept_common_formats_without_inventing_a_time(self):
         self.assertEqual(
@@ -573,17 +631,21 @@ class TrackingSyncTests(unittest.TestCase):
             hermes_tracker.fetch.return_value = {"status": "exception"}
             ups_tracker = unittest.mock.Mock()
             ups_tracker.fetch.return_value = {"status": "delivered"}
+            swiss_post_tracker = unittest.mock.Mock()
+            swiss_post_tracker.fetch.return_value = {"number": "123"}
             adapter = UpstreamTrackerAdapter(
                 dpd_tracker=dpd_tracker,
                 dachser_tracker=dachser_tracker,
                 hermes_tracker=hermes_tracker,
                 planzer_shared_tracker=planzer_shared_tracker,
+                swiss_post_tracker=swiss_post_tracker,
                 ups_tracker=ups_tracker,
             )
         self.assertEqual(
             adapter.fetch("swiss-post", "123", None),
             {"number": "123", "status": "unknown", "events": []},
         )
+        swiss_post_tracker.fetch.assert_called_once_with("123")
         self.assertEqual(
             adapter.fetch("dpd", "06086514587082", None),
             {"status": "in_transit", "events": []},

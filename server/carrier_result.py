@@ -19,6 +19,7 @@ class CarrierEvent(TypedDict, total=False):
     location: str
     description: str
     stage: str
+    provider_code: str
 
 
 class CarrierResult(TypedDict, total=False):
@@ -28,6 +29,9 @@ class CarrierResult(TypedDict, total=False):
     expected_delivery: str | None
     timezone: str
     events: list[CarrierEvent]
+    global_status: str
+    delivery_range: Any
+    delivery_time_interval: Any
 
 
 _STATUSES = frozenset(
