@@ -183,11 +183,18 @@ export function parcelTrackingLinks(
     | 'trackingSource'
     | 'swissPostReady'
   >,
+  locale?: string,
 ): ParcelTrackingLink[] {
   if (!supportsSwissPostHandoff(parcel.trackingNumber)) {
     const carrier = carrierInfo(parcel.carrier);
     const url = parcel.trackingUrl ?? carrier.trackingUrl?.(parcel.trackingNumber);
-    return url ? [{ carrier, url, active: true, ready: true, role: 'active' }] : [];
+    return url ? [{
+      carrier,
+      url: localizedCarrierUrl(carrier.id, url, locale),
+      active: true,
+      ready: true,
+      role: 'active',
+    }] : [];
   }
 
   const activeCarrier = activeTrackingCarrierId(parcel);
@@ -198,13 +205,32 @@ export function parcelTrackingLinks(
     const ready = carrierId !== 'swiss-post' || swissPostReady;
     return {
       carrier,
-      url: carrier.trackingUrl!(parcel.trackingNumber),
+      url: localizedCarrierUrl(
+        carrier.id,
+        carrier.trackingUrl!(parcel.trackingNumber),
+        locale,
+      ),
       active,
       ready,
       role: active ? 'active' as const : ready ? 'history' as const : 'waiting' as const,
     };
   });
   return links.sort((first, second) => Number(second.active) - Number(first.active));
+}
+
+function localizedCarrierUrl(
+  carrierId: CarrierId,
+  url: string,
+  locale?: string,
+): string {
+  if (carrierId !== 'swiss-post' || !locale) return url;
+  try {
+    const localizedUrl = new URL(url);
+    localizedUrl.searchParams.set('lang', locale);
+    return localizedUrl.toString();
+  } catch {
+    return url;
+  }
 }
 
 export function carrierRequirements(

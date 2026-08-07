@@ -667,8 +667,9 @@ describe('App', () => {
 
     const detail = screen.getByRole('dialog', { name: 'AliExpress parcel' });
     const sources = within(detail).getByLabelText('Tracking sources');
-    expect(within(sources).getByRole('link', { name: /open on aliexpress.*active source/i }))
+    expect(within(sources).getByRole('link', { name: /open on aliexpress/i }))
       .toHaveAttribute('href', expect.stringContaining('global.cainiao.com'));
+    expect(within(sources).queryByText('Active source')).not.toBeInTheDocument();
     expect(within(sources).getByRole('link', { name: /open on swiss post.*not ready yet/i }))
       .toHaveAttribute('href', expect.stringContaining('service.post.ch'));
   });
@@ -719,6 +720,8 @@ describe('App', () => {
       .toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('switch', { name: 'Parcel alerts' }))
       .toHaveTextContent('Muted');
+    expect(screen.getByRole('dialog', { name: 'New sneakers 👟' }).lastElementChild)
+      .toHaveClass('detail__notification-footer');
   });
 
   it('opens notification deep links and clears the parcel query on back', async () => {

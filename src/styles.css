@@ -1610,16 +1610,17 @@ button:disabled {
   text-align: right;
 }
 
+.detail__notification-footer {
+  margin: 20px 16px 0;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+
 .detail__notification-setting {
   display: flex;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
-  margin-top: 13px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #faf8f2;
   text-align: left;
 }
 
@@ -1629,6 +1630,7 @@ button:disabled {
 }
 
 .detail__notification-setting strong {
+  color: var(--ink-soft);
   font-size: 12px;
 }
 
@@ -1642,19 +1644,21 @@ button:disabled {
   min-width: 76px;
   min-height: 44px;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line));
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--green-soft);
-  color: var(--green);
+  background: transparent;
+  color: var(--ink-soft);
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
 }
 
 .detail__notification-toggle--muted {
-  border-color: var(--line);
   background: var(--canvas);
-  color: var(--ink-soft);
+}
+
+.detail__notification-footer .detail__check-error {
+  margin-top: 8px;
 }
 
 .detail__timeline {
@@ -2256,6 +2260,11 @@ button:disabled {
 
   .detail__footer {
     padding: 0 24px;
+  }
+
+  .detail__notification-footer {
+    margin-right: 24px;
+    margin-left: 24px;
   }
 }
 

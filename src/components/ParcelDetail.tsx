@@ -37,11 +37,11 @@ export function ParcelDetail({
   onArchive: (parcel: ParcelWithEvents) => Promise<unknown>;
   onDelete: (parcel: ParcelWithEvents) => Promise<unknown>;
 }) {
-  const { languageTag, t } = useI18n();
+  const { locale, languageTag, t } = useI18n();
   const carrier = carrierInfo(activeTrackingCarrierId(parcel));
   const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
-  const trackingLinks = parcelTrackingLinks(parcel);
+  const trackingLinks = parcelTrackingLinks(parcel, locale);
   const swipeStart = useRef<TouchPoint | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(parcel.label);
@@ -319,38 +319,16 @@ export function ParcelDetail({
                 rel="noreferrer"
               >
                 <span>{t('detail.openCarrier', { carrier: link.carrier.name })}</span>
-                <small>
-                  {link.role === 'active'
-                    ? t('detail.sourceActive')
-                    : link.role === 'waiting'
+                {link.role !== 'active' && (
+                  <small>
+                    {link.role === 'waiting'
                       ? t('detail.sourceWaiting')
                       : t('detail.sourceHistory')}
-                </small>
+                  </small>
+                )}
               </a>
             ))}
           </div>
-        )}
-        <div className="detail__notification-setting">
-          <div>
-            <strong>{t('detail.mute')}</strong>
-            <span>{t('detail.muteDescription')}</span>
-          </div>
-          <button
-            type="button"
-            className={`detail__notification-toggle${parcel.notificationsMuted
-              ? ' detail__notification-toggle--muted'
-              : ''}`}
-            role="switch"
-            aria-checked={Boolean(parcel.notificationsMuted)}
-            aria-label={t('detail.notifications')}
-            disabled={savingNotifications}
-            onClick={() => void toggleNotifications()}
-          >
-            {parcel.notificationsMuted ? t('detail.muted') : t('detail.alertsOn')}
-          </button>
-        </div>
-        {notificationError && (
-          <p className="detail__check-error" role="alert">{notificationError}</p>
         )}
       </div>
 
@@ -441,6 +419,31 @@ export function ParcelDetail({
           </>
         )}
       </footer>
+
+      <section className="detail__notification-footer">
+        <div className="detail__notification-setting">
+          <div>
+            <strong>{t('detail.mute')}</strong>
+            <span>{t('detail.muteDescription')}</span>
+          </div>
+          <button
+            type="button"
+            className={`detail__notification-toggle${parcel.notificationsMuted
+              ? ' detail__notification-toggle--muted'
+              : ''}`}
+            role="switch"
+            aria-checked={Boolean(parcel.notificationsMuted)}
+            aria-label={t('detail.notifications')}
+            disabled={savingNotifications}
+            onClick={() => void toggleNotifications()}
+          >
+            {parcel.notificationsMuted ? t('detail.muted') : t('detail.alertsOn')}
+          </button>
+        </div>
+        {notificationError && (
+          <p className="detail__check-error" role="alert">{notificationError}</p>
+        )}
+      </section>
     </div>,
     document.body,
   );

@@ -55,6 +55,18 @@ describe('supportsSwissPostHandoff', () => {
       ['aliexpress', 'history'],
     ]);
   });
+
+  it('opens Swiss Post links in the selected app language', () => {
+    const [link] = parcelTrackingLinks({
+      carrier: 'swiss-post',
+      trackingNumber: '993412345612345678',
+      trackingUrl: 'https://service.post.ch/ekp-web/ui/entry/search/993412345612345678?lang=de',
+    }, 'fr');
+
+    expect(link.url).toBe(
+      'https://service.post.ch/ekp-web/ui/entry/search/993412345612345678?lang=fr',
+    );
+  });
 });
 
 describe('detectCarrier', () => {
