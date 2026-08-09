@@ -182,16 +182,31 @@ const languages = Object.fromEntries(
 );
 
 const resources = path.join(root, 'ios', 'SwissDeliveryTracker', 'Resources');
-fs.mkdirSync(resources, { recursive: true });
-fs.writeFileSync(
-  path.join(resources, 'Localization.json'),
-  `${JSON.stringify(languages, null, 2)}\n`,
-);
-
 const contract = JSON.parse(fs.readFileSync(path.join(root, 'contracts', 'openapi.json'), 'utf8'));
-fs.writeFileSync(
-  path.join(resources, 'CarrierCatalog.json'),
-  `${JSON.stringify({ 'x-carriers': contract['x-carriers'] }, null, 2)}\n`,
-);
+const apiFixture = JSON.parse(fs.readFileSync(
+  path.join(root, 'contracts', 'fixtures', 'delivery-api.json'),
+  'utf8',
+));
+const outputs = new Map([
+  ['Localization.json', `${JSON.stringify(languages, null, 2)}\n`],
+  ['CarrierCatalog.json', `${JSON.stringify({ 'x-carriers': contract['x-carriers'] }, null, 2)}\n`],
+  ['ContractFixtures.json', `${JSON.stringify(apiFixture, null, 2)}\n`],
+]);
 
-console.log(`Generated iOS resources for ${Object.keys(languages).length} languages and ${Object.keys(contract['x-carriers']).length} carriers.`);
+if (process.argv.includes('--check')) {
+  const stale = [...outputs].flatMap(([name, expected]) => {
+    const target = path.join(resources, name);
+    const current = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : '';
+    return current === expected ? [] : [path.relative(root, target)];
+  });
+  if (stale.length) {
+    throw new Error(`Generated iOS resources are stale: ${stale.join(', ')}. Run npm run ios:resources.`);
+  }
+  console.log('Generated iOS resources are current.');
+} else {
+  fs.mkdirSync(resources, { recursive: true });
+  for (const [name, contents] of outputs) {
+    fs.writeFileSync(path.join(resources, name), contents);
+  }
+  console.log(`Generated iOS resources for ${Object.keys(languages).length} languages and ${Object.keys(contract['x-carriers']).length} carriers.`);
+}

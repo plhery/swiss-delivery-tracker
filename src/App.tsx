@@ -18,7 +18,11 @@ import {
   type ParcelSort,
   type ParcelStatusFilter,
 } from './lib/parcelView';
-import { clearSharedParcelInput, readSharedParcelInput } from './lib/shareTarget';
+import {
+  clearSharedParcelInput,
+  readSharedParcelInput,
+  type SharedParcelInput,
+} from './lib/shareTarget';
 import { currentStage, isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { CarrierId, ParcelWithEvents } from './types';
@@ -67,8 +71,8 @@ export default function App({
     refreshParcel,
     retryLoad,
   } = useParcels();
-  const [sharedParcelInput] = useState(() => readSharedParcelInput());
-  const [adding, setAdding] = useState(() => Boolean(sharedParcelInput));
+  const [sharedParcelInput, setSharedParcelInput] = useState<SharedParcelInput | null>(null);
+  const [adding, setAdding] = useState(false);
   const [undoParcel, setUndoParcel] = useState<ParcelWithEvents | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
@@ -84,8 +88,18 @@ export default function App({
   );
 
   useEffect(() => {
-    if (sharedParcelInput) clearSharedParcelInput();
-  }, [sharedParcelInput]);
+    let active = true;
+    if (new URLSearchParams(window.location.search).get('share-target') !== '1') return;
+    void readSharedParcelInput().then((input) => {
+      if (active && input) {
+        setSharedParcelInput(input);
+        setAdding(true);
+      }
+    }).finally(() => clearSharedParcelInput());
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!undoParcel || undoing || undoError) return;

@@ -430,6 +430,118 @@ class SupabaseServiceClient(SupabaseClient):
     def __init__(self, url: str, service_role_key: str, timeout: int = 20):
         super().__init__(url, service_role_key, timeout=timeout)
 
+    def enqueue_sync_job(
+        self,
+        *,
+        user_id: str | None = None,
+        package_id: str | None = None,
+        scheduled: bool = False,
+    ) -> tuple[dict[str, Any], bool]:
+        if scheduled:
+            if user_id is not None or package_id is not None:
+                raise ValueError("Scheduled sync jobs cannot target an account")
+            kind = "scheduled"
+            dedupe_key = "scheduled"
+            priority = -10
+        else:
+            if not user_id or not package_id:
+                raise ValueError("Package sync jobs require an owner and package")
+            kind = "package"
+            dedupe_key = f"package:{package_id}"
+            priority = 10
+
+        rows = self._request(
+            "/rest/v1/sync_jobs?on_conflict=dedupe_key",
+            method="POST",
+            body={
+                "user_id": user_id,
+                "package_id": package_id,
+                "kind": kind,
+                "dedupe_key": dedupe_key,
+                "priority": priority,
+            },
+            prefer="resolution=ignore-duplicates,return=representation",
+        ) or []
+        if rows:
+            return rows[0], True
+
+        query = urllib.parse.urlencode(
+            {
+                "select": "id,user_id,package_id,kind,state,requested_at",
+                "dedupe_key": f"eq.{dedupe_key}",
+                "limit": "1",
+            },
+            safe=",:",
+        )
+        existing = self._request(f"/rest/v1/sync_jobs?{query}") or []
+        if not existing:
+            raise SupabaseError("The durable sync job could not be queued")
+        return existing[0], False
+
+    def claim_sync_job(
+        self, worker_id: str, *, lease_seconds: int = 900
+    ) -> dict[str, Any] | None:
+        rows = self._request(
+            "/rest/v1/rpc/claim_sync_job",
+            method="POST",
+            body={"p_worker_id": worker_id, "p_lease_seconds": lease_seconds},
+        ) or []
+        return rows[0] if rows else None
+
+    def finish_sync_job(
+        self,
+        job_id: str,
+        worker_id: str,
+        *,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
+        query = urllib.parse.urlencode(
+            {"id": f"eq.{job_id}", "locked_by": f"eq.{worker_id}"}
+        )
+        self._request(
+            f"/rest/v1/sync_jobs?{query}",
+            method="PATCH",
+            body={
+                "state": "failed" if error else "succeeded",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "lease_until": None,
+                "locked_by": None,
+                "dedupe_key": None,
+                "result": result,
+                "last_error": error[:500] if error else None,
+            },
+            prefer="return=minimal",
+        )
+
+    def get_sync_job(self, job_id: str, user_id: str) -> dict[str, Any] | None:
+        query = urllib.parse.urlencode(
+            {
+                "select": (
+                    "id,user_id,package_id,state,requested_at,started_at,"
+                    "completed_at,result,last_error"
+                ),
+                "id": f"eq.{job_id}",
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+            safe=",",
+        )
+        rows = self._request(f"/rest/v1/sync_jobs?{query}") or []
+        return rows[0] if rows else None
+
+    def pending_sync_job_count(self, user_id: str | None = None) -> int:
+        params = {
+            "select": "id",
+            "state": "in.(queued,running)",
+            "limit": "1000",
+        }
+        if user_id:
+            params["user_id"] = f"eq.{user_id}"
+        query = urllib.parse.urlencode(params, safe="(),")
+        rows = self._request(f"/rest/v1/sync_jobs?{query}") or []
+        return len(rows)
+
 
 class SupabaseUserClient(SupabaseClient):
     """PostgREST client scoped by a signed-in user's access token and RLS."""

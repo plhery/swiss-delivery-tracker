@@ -278,6 +278,11 @@ struct PackageListResponse: Codable, Sendable {
     let packages: [Parcel]
 }
 
+struct CreatePackageResponse: Codable, Sendable {
+    let package: Parcel
+    let jobIds: [UUID]
+}
+
 struct NewParcelRequest: Codable, Sendable {
     let trackingNumber: String
     let label: String
@@ -301,6 +306,33 @@ struct NotificationPreferences: Codable, Equatable, Sendable {
 struct QueueResponse: Codable, Sendable {
     let queued: Bool
     let pending: Int
+    let jobIds: [UUID]
+}
+
+enum SyncJobStatus: String, Codable, Sendable {
+    case queued, running, succeeded, failed
+}
+
+struct SyncJobSummary: Codable, Equatable, Sendable {
+    let checked: Int?
+    let updated: Int?
+    let waiting: Int?
+    let errors: Int?
+    let unsupported: Int?
+    let notificationsSent: Int?
+    let notificationErrors: Int?
+    let subscriptionsExpired: Int?
+}
+
+struct SyncJobResponse: Codable, Sendable {
+    let id: UUID
+    let status: SyncJobStatus
+    let packageId: UUID?
+    let requestedAt: String
+    let startedAt: String?
+    let completedAt: String?
+    let result: SyncJobSummary?
+    let error: String?
 }
 
 struct OKResponse: Codable, Sendable {

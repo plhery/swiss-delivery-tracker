@@ -1,37 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import contractFixture from '../../contracts/fixtures/delivery-api.json';
 import { ApiAuthenticationError } from '../lib/apiClient';
 import { API_CACHE_KEY, clearApiCache, createApiRepo } from './apiRepo';
 
-const packageRow = {
-  id: '40000000-0000-0000-0000-000000000004',
-  tracking_number: '993412345612345678',
-  label: 'Coffee beans',
-  carrier: 'swiss-post',
-  created_at: '2026-07-15T00:00:00Z',
-  expected_delivery: '2026-07-16',
-  last_status_text: 'Sorted',
-  last_synced_at: '2026-07-15T01:00:00Z',
-  sync_status: 'ok',
-  sync_error: null,
-  tracking_url: null,
-  dpd_postcode: null,
-  carrier_data: {
-    active_tracking_carrier: 'swiss-post',
-    swiss_post_ready: true,
-  },
-  archived_at: null,
-  notifications_muted: false,
-  tracking_events: [
-    {
-      id: 'event-1',
-      package_id: '40000000-0000-0000-0000-000000000004',
-      stage: 'in_transit',
-      description: 'Sorted at the parcel center',
-      location: 'Härkingen',
-      occurred_at: '2026-07-15T01:00:00Z',
-    },
-  ],
-};
+const packageRow = contractFixture.packageList.packages[0];
 
 function response(body: unknown, ok = true, status = 200) {
   return { ok, status, json: vi.fn().mockResolvedValue(body) };
@@ -98,7 +70,7 @@ describe('createApiRepo', () => {
   });
 
   it('normalises additions and keeps explicit carrier choices', async () => {
-    const fetch = vi.fn().mockResolvedValue(response(packageRow));
+    const fetch = vi.fn().mockResolvedValue(response({ package: packageRow, jobIds: [] }));
     vi.stubGlobal('fetch', fetch);
 
     await createApiRepo().add({
@@ -181,9 +153,9 @@ describe('createApiRepo', () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(response({ ok: true }))
-      .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
+      .mockResolvedValueOnce(response({ queued: true, pending: 1, jobIds: [] }, true, 202))
       .mockResolvedValueOnce(response({ packages: [packageRow] }))
-      .mockResolvedValueOnce(response({ queued: true, pending: 1 }, true, 202))
+      .mockResolvedValueOnce(response({ queued: true, pending: 1, jobIds: [] }, true, 202))
       .mockResolvedValueOnce(response({ packages: [packageRow] }))
       .mockResolvedValueOnce(response(packageRow));
     vi.stubGlobal('fetch', fetch);
@@ -367,7 +339,7 @@ describe('createApiRepo', () => {
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 
-  it('polls quickly until a newly added parcel finishes its first sync', async () => {
+  it('polls only the lightweight job endpoint before reloading a newly added parcel', async () => {
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
     const pendingRow = {
       ...packageRow,
@@ -381,11 +353,15 @@ describe('createApiRepo', () => {
         },
       ],
     };
-    const waitingRow = { ...pendingRow, sync_status: 'waiting' };
     const fetch = vi
       .fn()
-      .mockResolvedValueOnce(response(pendingRow))
-      .mockResolvedValueOnce(response({ packages: [waitingRow] }));
+      .mockResolvedValueOnce(response({
+        package: pendingRow,
+        jobIds: [contractFixture.job.id],
+      }))
+      .mockResolvedValueOnce(response({ ...contractFixture.job, status: 'queued' }))
+      .mockResolvedValueOnce(response(contractFixture.job))
+      .mockResolvedValueOnce(response({ packages: [packageRow] }));
     vi.stubGlobal('fetch', fetch);
     const repo = createApiRepo(30_000, 1_000);
     const onChange = vi.fn(async () => {
@@ -394,12 +370,16 @@ describe('createApiRepo', () => {
     const unsubscribe = repo.subscribe?.(onChange);
 
     await repo.add({ trackingNumber: packageRow.tracking_number, label: 'Coffee' });
+    await Promise.resolve();
+    expect(fetch.mock.calls[1][0]).toBe(`/api/sync/jobs/${contractFixture.job.id}`);
     await vi.advanceTimersByTimeAsync(999);
     expect(onChange).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
     expect(onChange).toHaveBeenCalledOnce();
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(fetch.mock.calls[2][0]).toBe(`/api/sync/jobs/${contractFixture.job.id}`);
+    expect(fetch.mock.calls[3][0]).toBe('/api/packages?includeArchived=true');
 
     await vi.advanceTimersByTimeAsync(1_000);
     expect(onChange).toHaveBeenCalledOnce();

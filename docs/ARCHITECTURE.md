@@ -27,13 +27,17 @@ Python API -------- user token -----------> PostgREST + Postgres RLS
   per-account rate limits, and implements the OpenAPI contract.
 - `server/supabase_auth.py` validates bearer tokens with Supabase Auth and
   creates a PostgREST client carrying that user's JWT.
-- `server/tracking_sync.py` schedules and deduplicates carrier checks. It is the
-  only workflow that needs cross-account database access.
+- `server/tracking_sync.py` performs carrier checks. `public.sync_jobs` is the
+  durable, deduplicated queue; the Python worker claims jobs with database
+  leases so deploys, crashes, and multiple replicas do not lose or double-run
+  active work. This is the only workflow that needs cross-account access.
 - `server/push.py` delivers Web Push and APNs notifications only to devices
   owned by the package's account.
 - `supabase/migrations/` is the append-only database history;
   `supabase/tests/assertions.sql` exercises the RLS boundary in PostgreSQL.
-- `contracts/openapi.json` generates the frontend and backend contract enums.
+- `contracts/openapi.json` generates the frontend and backend contract types.
+  `contracts/fixtures/delivery-api.json` is decoded in TypeScript, Python, and
+  Swift tests to catch cross-platform payload drift.
 
 ## Trust boundaries
 
@@ -60,14 +64,27 @@ Python API -------- user token -----------> PostgREST + Postgres RLS
   production or sandbox APNs hosts over HTTP/2.
 - Cloudflare may provide TLS, proxying, and abuse protection, but Cloudflare
   Access is not part of the public application's identity model.
+- Forwarded client addresses are trusted only when the direct socket peer is in
+  `TRUSTED_PROXY_NETWORKS`. Pre-authentication buckets combine that client
+  address with a one-way token hash when available, and authenticated limits
+  remain account-scoped.
+- HTTP and worker logs contain request/job identifiers, normalized routes,
+  status, timing, and exception class only. Query strings, tokens, tracking
+  data, carrier payloads, and user identifiers are excluded.
 
 ## Data lifecycle
 
 Adding a parcel writes an account-owned package through the user's RLS-scoped
-client. Carrier events are written by the background worker and inherit privacy
-through their package. Archiving retains the parcel and history. Account
-deletion removes the Supabase Auth user; foreign-key cascades remove packages,
-events, browser subscriptions, native devices, and delivery acknowledgements.
+client and queues durable work with the service role. Web and iPhone clients
+poll the small owner-checked job resource, then reload the parcel collection
+once at completion. Carrier events inherit privacy through their package.
+Archiving retains the parcel and history. Account deletion removes the Supabase
+Auth user; foreign-key cascades remove packages, jobs, events, browser
+subscriptions, native devices, and delivery acknowledgements.
+
+The PWA Web Share Target submits with `POST`. Its service worker places the
+bounded draft in a private, one-time Cache Storage entry and redirects using
+only a marker, so tracking text never appears in a URL or routine HTTP log.
 
 Rows left by the former shared deployment intentionally remain ownerless and
 invisible until an operator completes the explicit cutover in

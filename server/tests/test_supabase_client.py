@@ -221,6 +221,71 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertIn("id=eq.pkg%2F1", update.args[0])
         self.assertEqual(update.kwargs["method"], "PATCH")
 
+    def test_durable_sync_jobs_are_enqueued_and_deduplicated(self):
+        self.client._request = Mock(return_value=[{"id": "job-1"}])
+
+        job, queued = self.client.enqueue_sync_job(
+            user_id="user-1",
+            package_id="package-1",
+        )
+
+        self.assertEqual(job["id"], "job-1")
+        self.assertTrue(queued)
+        create = self.client._request.call_args
+        self.assertIn("on_conflict=dedupe_key", create.args[0])
+        self.assertEqual(create.kwargs["method"], "POST")
+        self.assertEqual(create.kwargs["body"]["dedupe_key"], "package:package-1")
+        self.assertIn("ignore-duplicates", create.kwargs["prefer"])
+
+        self.client._request = Mock(side_effect=[[], [{"id": "existing-job"}]])
+        job, queued = self.client.enqueue_sync_job(scheduled=True)
+        self.assertEqual(job["id"], "existing-job")
+        self.assertFalse(queued)
+        self.assertIn("dedupe_key=eq.scheduled", self.client._request.call_args.args[0])
+
+        with self.assertRaisesRegex(ValueError, "owner and package"):
+            self.client.enqueue_sync_job()
+        with self.assertRaisesRegex(ValueError, "cannot target"):
+            self.client.enqueue_sync_job(
+                user_id="user-1",
+                package_id="package-1",
+                scheduled=True,
+            )
+
+    def test_durable_sync_jobs_are_claimed_completed_and_owner_scoped(self):
+        self.client._request = Mock(return_value=[{"id": "job-1", "state": "running"}])
+        claimed = self.client.claim_sync_job("worker-1", lease_seconds=300)
+        self.assertEqual(claimed["id"], "job-1")
+        claim = self.client._request.call_args
+        self.assertEqual(claim.args[0], "/rest/v1/rpc/claim_sync_job")
+        self.assertEqual(
+            claim.kwargs["body"],
+            {"p_worker_id": "worker-1", "p_lease_seconds": 300},
+        )
+
+        self.client._request = Mock()
+        self.client.finish_sync_job(
+            "job/1",
+            "worker/1",
+            result={"checked": 1},
+        )
+        finish = self.client._request.call_args
+        self.assertIn("id=eq.job%2F1", finish.args[0])
+        self.assertIn("locked_by=eq.worker%2F1", finish.args[0])
+        self.assertEqual(finish.kwargs["body"]["state"], "succeeded")
+        self.assertIsNone(finish.kwargs["body"]["dedupe_key"])
+
+        self.client._request = Mock(return_value=[{"id": "job-1"}])
+        self.assertEqual(self.client.get_sync_job("job-1", "user-1")["id"], "job-1")
+        job_query = urllib.parse.parse_qs(
+            urllib.parse.urlsplit(self.client._request.call_args.args[0]).query
+        )
+        self.assertEqual(job_query["user_id"], ["eq.user-1"])
+
+        self.client._request = Mock(return_value=[{"id": "a"}, {"id": "b"}])
+        self.assertEqual(self.client.pending_sync_job_count("user-1"), 2)
+        self.assertIn("state=in.(queued,running)", self.client._request.call_args.args[0])
+
     def test_old_deliveries_are_archived_in_one_update(self):
         self.client._request = Mock(return_value=[{"id": "old-1"}, {"id": "old-2"}])
         cutoff = datetime(2026, 6, 1, tzinfo=timezone.utc)

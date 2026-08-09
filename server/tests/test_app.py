@@ -33,6 +33,8 @@ PACKAGE = {
     "notifications_muted": False,
     "tracking_events": [],
 }
+USER_ID = "10000000-0000-0000-0000-000000000001"
+JOB_ID = "42000000-0000-0000-0000-000000000004"
 PUSH_ENDPOINT = "https://fcm.googleapis.com/fcm/send/device-token"
 PUSH_PUBLIC_KEY = base64.urlsafe_b64encode(b"\x04" + b"\x01" * 64).rstrip(b"=").decode()
 PUSH_AUTH_KEY = base64.urlsafe_b64encode(b"\x02" * 16).rstrip(b"=").decode()
@@ -140,7 +142,7 @@ class AppHttpTests(unittest.TestCase):
         app.SYNC_JOBS = Mock(service=app.SERVICE)
         app.AUTHENTICATOR = Mock()
         app.AUTHENTICATOR.validate.return_value = SupabaseUser(
-            "10000000-0000-0000-0000-000000000001",
+            USER_ID,
             "owner@example.test",
             datetime.now(timezone.utc),
             "30000000-0000-0000-0000-000000000003",
@@ -149,9 +151,20 @@ class AppHttpTests(unittest.TestCase):
             app.SERVICE.client if app.SERVICE else Mock()
         )
         app.RATE_LIMITER = RateLimiter()
-        app.SYNC_JOBS.enqueue_all.return_value = True
-        app.SYNC_JOBS.enqueue_package.return_value = True
+        app.SYNC_JOBS.enqueue_all.return_value = app.QueuedSyncJob(JOB_ID, True)
+        app.SYNC_JOBS.enqueue_package.return_value = app.QueuedSyncJob(JOB_ID, True)
         app.SYNC_JOBS.pending_count.return_value = 1
+        app.SERVICE.client.get_sync_job.return_value = {
+            "id": JOB_ID,
+            "user_id": USER_ID,
+            "package_id": PACKAGE["id"],
+            "state": "succeeded",
+            "requested_at": "2026-08-09T12:00:00Z",
+            "started_at": "2026-08-09T12:00:01Z",
+            "completed_at": "2026-08-09T12:00:02Z",
+            "result": {"checked": 1},
+            "last_error": None,
+        }
         app.STATE.clear()
         app.STATE.update(last_scheduled_sync=123, last_summary={"checked": 1}, last_error=None)
         self.server = app.ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
@@ -199,6 +212,7 @@ class AppHttpTests(unittest.TestCase):
         status, headers, body = self.request("GET", "/health")
         self.assertEqual(status, 200)
         self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertRegex(headers["X-Request-ID"], r"^[0-9a-f]{32}$")
         self.assertEqual(json.loads(body), {"ok": True})
 
         app.SERVICE = None
@@ -353,7 +367,11 @@ class AppHttpTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 201)
-        self.assertEqual(json.loads(body)["tracking_number"], "993412345612345678")
+        self.assertEqual(
+            json.loads(body)["package"]["tracking_number"],
+            "993412345612345678",
+        )
+        self.assertEqual(json.loads(body)["jobIds"], [JOB_ID])
         app.SERVICE.client.create_package.assert_called_once_with(
             "993412345612345678", "Coffee beans", "swiss-post", None, None
         )
@@ -369,7 +387,10 @@ class AppHttpTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 201)
-        self.assertEqual(json.loads(body)["tracking_number"], "440012345612345678")
+        self.assertEqual(
+            json.loads(body)["package"]["tracking_number"],
+            "440012345612345678",
+        )
         app.SERVICE.client.create_package.assert_called_with(
             "440012345612345678", "Quickpac parcel", "quickpac", None, None
         )
@@ -389,7 +410,7 @@ class AppHttpTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 201)
-        self.assertEqual(json.loads(body)["tracking_url"], tracking_url)
+        self.assertEqual(json.loads(body)["package"]["tracking_url"], tracking_url)
         app.SERVICE.client.create_package.assert_called_with(
             "9999003316119", "Plants", "planzer", tracking_url, None
         )
@@ -410,7 +431,7 @@ class AppHttpTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 201)
-        self.assertEqual(json.loads(body)["tracking_url"], dachser_url)
+        self.assertEqual(json.loads(body)["package"]["tracking_url"], dachser_url)
         app.SERVICE.client.create_package.assert_called_with(
             "9010000001234", "Furniture", "dachser", dachser_url, None
         )
@@ -426,7 +447,7 @@ class AppHttpTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 201)
-        self.assertEqual(json.loads(body)["dpd_postcode"], "8004")
+        self.assertEqual(json.loads(body)["package"]["dpd_postcode"], "8004")
         app.SERVICE.client.create_package.assert_called_with(
             "06086514587082", "DPD parcel", "dpd", None, "8004"
         )
@@ -592,7 +613,11 @@ class AppHttpTests(unittest.TestCase):
             payload={"trackingNumber": "1234567890", "carrier": "dhl", "label": "Shoes"},
         )
         self.assertEqual(status, 201)
-        assert_contract("PackageRow", json.loads(body))
+        assert_contract("CreatePackageResponse", json.loads(body))
+
+        status, _, body = self.request("GET", f"/api/sync/jobs/{JOB_ID}")
+        self.assertEqual(status, 200)
+        assert_contract("SyncJobResponse", json.loads(body))
 
         status, _, body = self.request("POST", "/api/sync")
         self.assertEqual(status, 202)
@@ -946,14 +971,31 @@ class AppHttpTests(unittest.TestCase):
     def test_sync_requests_are_queued_for_the_current_user_and_package(self):
         status, _, body = self.request("POST", "/api/sync")
         self.assertEqual(status, 202)
-        self.assertEqual(json.loads(body), {"queued": True, "pending": 1})
+        self.assertEqual(
+            json.loads(body),
+            {"queued": True, "pending": 1, "jobIds": [JOB_ID]},
+        )
         app.SERVICE.client.list_active_packages.assert_called_once_with()
-        app.SYNC_JOBS.enqueue_package.assert_called_with(PACKAGE)
+        app.SYNC_JOBS.enqueue_package.assert_called_with(PACKAGE, USER_ID)
 
         status, _, body = self.request("POST", f"/api/packages/{PACKAGE['id']}/sync")
         self.assertEqual(status, 202)
-        self.assertEqual(json.loads(body), {"queued": True, "pending": 1})
+        self.assertEqual(
+            json.loads(body),
+            {"queued": True, "pending": 1, "jobIds": [JOB_ID]},
+        )
         self.assertEqual(app.SYNC_JOBS.enqueue_package.call_count, 2)
+
+        status, _, body = self.request("GET", f"/api/sync/jobs/{JOB_ID}")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["status"], "succeeded")
+        app.SERVICE.client.get_sync_job.assert_called_with(JOB_ID, USER_ID)
+
+        app.SERVICE.client.get_sync_job.return_value = None
+        status, _, _ = self.request("GET", f"/api/sync/jobs/{JOB_ID}")
+        self.assertEqual(status, 404)
+        status, _, _ = self.request("GET", "/api/sync/jobs/not-a-uuid")
+        self.assertEqual(status, 400)
 
         app.SERVICE.client.get_package.return_value = None
         status, _, body = self.request("POST", f"/api/packages/{PACKAGE['id']}/sync")
@@ -962,10 +1004,10 @@ class AppHttpTests(unittest.TestCase):
         status, _, body = self.request("POST", "/api/packages/not-a-uuid/sync")
         self.assertEqual(status, 400)
 
-        app.SYNC_JOBS.enqueue_package.side_effect = app.SyncQueueFull("queue busy")
+        app.SYNC_JOBS.enqueue_package.side_effect = SupabaseError("queue busy")
         status, _, body = self.request("POST", "/api/sync")
-        self.assertEqual(status, 429)
-        self.assertEqual(json.loads(body), {"error": "queue busy"})
+        self.assertEqual(status, 502)
+        self.assertNotIn("queue busy", json.loads(body)["error"])
 
     def test_bulk_sync_queues_at_most_five_packages_for_one_user(self):
         packages = [{**PACKAGE, "id": f"package-{number}"} for number in range(7)]
@@ -1165,47 +1207,116 @@ class AppLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "timezone"):
             app.seconds_until_next_sync(datetime(2026, 7, 15, 9))
 
+    def test_forwarded_addresses_are_used_only_for_configured_proxies(self):
+        handler = object.__new__(app.Handler)
+        handler.client_address = ("127.0.0.1", 1234)
+        handler.headers = {
+            "CF-Connecting-IP": "203.0.113.20",
+            "X-Forwarded-For": "198.51.100.10, 127.0.0.1",
+        }
+
+        with patch.object(app, "TRUSTED_PROXY_NETWORKS", ()):
+            self.assertEqual(handler._client_ip(), "127.0.0.1")
+        with patch.object(
+            app,
+            "TRUSTED_PROXY_NETWORKS",
+            app.parse_trusted_proxy_networks("127.0.0.0/8"),
+        ):
+            self.assertEqual(handler._client_ip(), "203.0.113.20")
+
+        with self.assertRaises(ValueError):
+            app.parse_trusted_proxy_networks("not-a-network")
+
+    def test_structured_http_logs_drop_queries_and_normalize_identifiers(self):
+        handler = object.__new__(app.Handler)
+        handler.path = f"/api/packages/{PACKAGE['id']}?trackingNumber=PRIVATE123"
+        handler.command = "GET"
+        handler.request_id = "request-1"
+        handler.request_started_at = app.time.monotonic()
+
+        with patch("server.app.log_event") as emit:
+            handler.log_message('"%s" %s %s', "ignored", "200", "-")
+
+        fields = emit.call_args.kwargs
+        self.assertEqual(fields["route"], "/api/packages/:id")
+        self.assertEqual(fields["status"], "200")
+        self.assertNotIn("PRIVATE123", repr(fields))
+
     def test_new_packages_start_syncing_in_the_background(self):
         service = FakeService()
         jobs = Mock(service=service)
+        jobs.enqueue_package.return_value = app.QueuedSyncJob(JOB_ID, True)
         app.SYNC_JOBS = jobs
 
-        app.start_immediate_sync(service, PACKAGE)
+        queued = app.start_immediate_sync(service, PACKAGE, USER_ID)
 
-        jobs.enqueue_package.assert_called_once_with(PACKAGE)
+        self.assertEqual(queued.id, JOB_ID)
+        jobs.enqueue_package.assert_called_once_with(PACKAGE, USER_ID)
 
-    def test_sync_queue_is_bounded_deduplicated_and_starts_once(self):
+    def test_sync_queue_persists_and_reuses_deduplicated_jobs(self):
         service = FakeService()
-        jobs = app.SyncJobQueue(service, max_pending=1)
+        service.client.enqueue_sync_job.side_effect = [
+            ({"id": "scheduled-job"}, True),
+            ({"id": "scheduled-job"}, False),
+            ({"id": JOB_ID}, True),
+        ]
+        service.client.pending_sync_job_count.return_value = 2
+        jobs = app.SyncJobQueue(service)
         with patch.object(jobs, "start") as start:
-            self.assertTrue(jobs.enqueue_all())
-            self.assertFalse(jobs.enqueue_all())
-            with self.assertRaises(app.SyncQueueFull):
-                jobs.enqueue_package(PACKAGE)
-        self.assertEqual(jobs.pending_count(), 1)
-        start.assert_called_once_with()
+            self.assertTrue(jobs.enqueue_all().queued)
+            self.assertFalse(jobs.enqueue_all().queued)
+            self.assertEqual(jobs.enqueue_package(PACKAGE, USER_ID).id, JOB_ID)
+        self.assertEqual(jobs.pending_count(USER_ID), 2)
+        self.assertEqual(start.call_count, 3)
+        service.client.enqueue_sync_job.assert_any_call(scheduled=True)
+        service.client.enqueue_sync_job.assert_called_with(
+            user_id=USER_ID,
+            package_id=PACKAGE["id"],
+        )
 
-    def test_scheduler_records_success_and_top_level_failures(self):
+    def test_sync_worker_claims_and_completes_a_durable_job(self):
         app.STATE.clear()
         service = FakeService(summary=SyncSummary(checked=2, waiting=2))
+        service.client.claim_sync_job.return_value = {
+            "id": JOB_ID,
+            "kind": "package",
+            "package_id": PACKAGE["id"],
+        }
+        service.client.get_package.return_value = PACKAGE
+        jobs = app.SyncJobQueue(service)
+
+        self.assertTrue(jobs._process_next())
+
+        service.sync_package.assert_called_once_with(PACKAGE)
+        completed = service.client.finish_sync_job.call_args
+        self.assertEqual(completed.args, (JOB_ID, jobs.worker_id))
+        self.assertEqual(completed.kwargs["result"]["waiting"], 2)
+        self.assertEqual(app.STATE["last_summary"]["waiting"], 2)
+
+    def test_scheduler_enqueues_durable_work_and_records_failures(self):
+        app.STATE.clear()
+        service = FakeService()
         app.SERVICE = service
+        app.SYNC_JOBS = Mock(service=service)
+        app.SYNC_JOBS.enqueue_all.return_value = app.QueuedSyncJob(JOB_ID, True)
         with patch("server.app.time.sleep", side_effect=[None, StopIteration]):
             with self.assertRaises(StopIteration):
                 app.scheduler()
-        self.assertEqual(app.STATE["last_summary"]["waiting"], 2)
         self.assertIsNone(app.STATE["last_error"])
-        service.client.archive_delivered_before.assert_called_once()
+        app.SYNC_JOBS.enqueue_all.assert_called_once_with()
 
         app.STATE.clear()
-        app.SERVICE = FakeService(error=RuntimeError("database unavailable"))
+        app.SYNC_JOBS.enqueue_all.side_effect = RuntimeError("database unavailable")
         with patch("server.app.time.sleep", side_effect=[None, StopIteration]):
             with self.assertRaises(StopIteration):
                 app.scheduler()
-        self.assertEqual(app.STATE["last_error"], "database unavailable")
+        self.assertEqual(app.STATE["last_error"], "RuntimeError")
 
     def test_main_starts_scheduler_and_serves_forever(self):
         fake_server = Mock()
         app.SERVICE = FakeService()
+        jobs = Mock(service=app.SERVICE)
+        app.SYNC_JOBS = jobs
         with (
             patch(
                 "server.app.BoundedThreadingHTTPServer", return_value=fake_server
@@ -1215,6 +1326,7 @@ class AppLifecycleTests(unittest.TestCase):
         ):
             app.main()
         server_class.assert_called_once_with(("0.0.0.0", app.PORT), app.Handler)
+        jobs.start.assert_called_once_with()
         thread_class.return_value.start.assert_called_once()
         fake_server.serve_forever.assert_called_once()
         output.assert_called_once()

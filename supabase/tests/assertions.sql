@@ -117,6 +117,16 @@ begin
       or has_table_privilege('anon', 'public.native_push_devices', 'SELECT') then
     raise exception 'public database roles can access native push credentials';
   end if;
+  if has_table_privilege('authenticated', 'public.sync_jobs', 'SELECT')
+      or has_table_privilege('authenticated', 'public.sync_jobs', 'INSERT')
+      or has_table_privilege('anon', 'public.sync_jobs', 'SELECT')
+      or has_function_privilege(
+        'authenticated',
+        'public.claim_sync_job(text,integer)',
+        'EXECUTE'
+      ) then
+    raise exception 'public database roles can access the durable worker queue';
+  end if;
   if not has_function_privilege(
     'authenticated',
     'public.create_owned_package(text,text,text,text,text)',
@@ -941,5 +951,74 @@ $$;
 
 reset role;
 delete from auth.users where id = '90000000-0000-0000-0000-000000000009';
+
+-- Durable jobs deduplicate while active, are claimed atomically by the service
+-- role, and release their key when complete so a later refresh can be queued.
+set role service_role;
+
+insert into public.sync_jobs (
+  id, user_id, package_id, kind, dedupe_key, priority
+) values (
+  '42000000-0000-0000-0000-000000000004',
+  '10000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000004',
+  'package',
+  'package:40000000-0000-0000-0000-000000000004',
+  10
+);
+
+insert into public.sync_jobs (user_id, package_id, kind, dedupe_key, priority)
+values (
+  '10000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000004',
+  'package',
+  'package:40000000-0000-0000-0000-000000000004',
+  10
+)
+on conflict (dedupe_key) do nothing;
+
+do $$
+declare
+  claimed public.sync_jobs;
+begin
+  if (
+    select count(*) from public.sync_jobs
+    where dedupe_key = 'package:40000000-0000-0000-0000-000000000004'
+  ) <> 1 then
+    raise exception 'active sync jobs were not deduplicated';
+  end if;
+
+  select * into claimed from public.claim_sync_job('migration-test-worker', 300);
+  if claimed.id <> '42000000-0000-0000-0000-000000000004'::uuid
+      or claimed.state <> 'running'
+      or claimed.locked_by <> 'migration-test-worker'
+      or claimed.attempts <> 1
+      or claimed.lease_until is null then
+    raise exception 'durable sync job was not leased correctly';
+  end if;
+
+  update public.sync_jobs
+  set
+    state = 'succeeded',
+    completed_at = now(),
+    locked_by = null,
+    lease_until = null,
+    dedupe_key = null,
+    result = '{"checked":1}'::jsonb
+  where id = claimed.id and locked_by = 'migration-test-worker';
+
+  if not exists (
+    select 1 from public.sync_jobs
+    where id = claimed.id
+      and state = 'succeeded'
+      and dedupe_key is null
+      and result = '{"checked":1}'::jsonb
+  ) then
+    raise exception 'completed sync job did not retain its safe result';
+  end if;
+end;
+$$;
+
+reset role;
 
 select 'per-user ownership and RLS assertions passed' as result;

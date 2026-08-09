@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
+import ipaddress
 import json
 import mimetypes
 import os
-import queue
 import re
+import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -18,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, unquote, urlparse
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .api_contract import CARRIER_IDS
@@ -76,12 +78,49 @@ PUSH_ENDPOINT_HOSTS = frozenset(
 PUSH_ENDPOINT_HOST_SUFFIXES = (".notify.windows.com",)
 
 
+def parse_trusted_proxy_networks(
+    value: str | None = None,
+) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    raw = os.environ.get("TRUSTED_PROXY_NETWORKS", "") if value is None else value
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for item in raw.split(","):
+        if item := item.strip():
+            networks.append(ipaddress.ip_network(item, strict=False))
+    return tuple(networks)
+
+
+TRUSTED_PROXY_NETWORKS = parse_trusted_proxy_networks()
+
+
+def log_event(event: str, **fields: object) -> None:
+    """Write one privacy-safe structured event for container log collectors."""
+    payload = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": event,
+        **fields,
+    }
+    print(json.dumps(payload, separators=(",", ":"), default=str), flush=True)
+
+
 def api_rate_policy(method: str, path: str) -> tuple[str, int, float]:
     if path == "/api/sync" or path.endswith("/sync"):
         return "sync", 12, 300
     if method in {"GET", "HEAD"}:
         return "read", 240, 60
     return "write", 60, 60
+
+
+def sync_job_response(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "status": row.get("state"),
+        "packageId": row.get("package_id"),
+        "requestedAt": row.get("requested_at"),
+        "startedAt": row.get("started_at"),
+        "completedAt": row.get("completed_at"),
+        "result": row.get("result"),
+        "error": row.get("last_error"),
+    }
 
 
 def public_supabase_origin() -> str | None:
@@ -188,27 +227,25 @@ STATE: dict[str, object] = {
     "last_summary": None,
     "last_error": None,
     "last_auto_archived": 0,
+    "worker_heartbeat": None,
 }
 
 
-class SyncQueueFull(RuntimeError):
-    """Raised when the bounded background queue cannot accept more work."""
-
-
 @dataclass(frozen=True)
-class SyncJob:
-    key: str
-    package: dict[str, object] | None = None
+class QueuedSyncJob:
+    id: str
+    queued: bool
 
 
 class SyncJobQueue:
-    """Run deduplicated sync requests away from HTTP request threads."""
+    """Claim and run durable, leased sync work away from request threads."""
 
-    def __init__(self, service: TrackingSyncService, max_pending: int = 64) -> None:
+    def __init__(self, service: TrackingSyncService, poll_interval: float = 1.0) -> None:
         self.service = service
-        self._queue: queue.Queue[SyncJob] = queue.Queue(maxsize=max_pending)
-        self._queued: set[str] = set()
+        self.poll_interval = poll_interval
+        self.worker_id = f"{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:12]}"
         self._lock = threading.Lock()
+        self._wake = threading.Event()
         self._started = False
 
     def start(self) -> None:
@@ -222,44 +259,91 @@ class SyncJobQueue:
                 daemon=True,
             ).start()
 
-    def enqueue_all(self) -> bool:
-        return self._enqueue(SyncJob("all"))
-
-    def enqueue_package(self, package: dict[str, object]) -> bool:
-        return self._enqueue(SyncJob(f"package:{package['id']}", package))
-
-    def pending_count(self) -> int:
-        with self._lock:
-            return len(self._queued)
-
-    def _enqueue(self, job: SyncJob) -> bool:
-        with self._lock:
-            if job.key in self._queued:
-                return False
-            try:
-                self._queue.put_nowait(job)
-            except queue.Full as exc:
-                raise SyncQueueFull("Too many tracking checks are already queued") from exc
-            self._queued.add(job.key)
+    def enqueue_all(self) -> QueuedSyncJob:
+        row, queued = self.service.client.enqueue_sync_job(scheduled=True)
         self.start()
-        return True
+        self._wake.set()
+        return QueuedSyncJob(str(row["id"]), queued)
+
+    def enqueue_package(
+        self, package: dict[str, object], user_id: str
+    ) -> QueuedSyncJob:
+        row, queued = self.service.client.enqueue_sync_job(
+            user_id=user_id,
+            package_id=str(package["id"]),
+        )
+        self.start()
+        self._wake.set()
+        return QueuedSyncJob(str(row["id"]), queued)
+
+    def pending_count(self, user_id: str | None = None) -> int:
+        return self.service.client.pending_sync_job_count(user_id)
 
     def _run(self) -> None:
         while True:
-            job = self._queue.get()
-            try:
-                summary = (
-                    self.service.sync_package(job.package)
-                    if job.package is not None
-                    else self.service.sync()
+            STATE["worker_heartbeat"] = time.time()
+            if not self._process_next():
+                self._wake.wait(self.poll_interval)
+                self._wake.clear()
+
+    def _process_next(self) -> bool:
+        try:
+            job = self.service.client.claim_sync_job(self.worker_id)
+        except Exception as exc:
+            STATE["last_error"] = exc.__class__.__name__
+            log_event("sync_claim_failed", error_type=exc.__class__.__name__)
+            return False
+        if not job:
+            return False
+
+        job_id = str(job["id"])
+        kind = str(job["kind"])
+        try:
+            if kind == "package":
+                package = self.service.client.get_package(str(job["package_id"]))
+                if not package:
+                    raise RuntimeError("Package no longer exists")
+                summary = self.service.sync_package(package)
+                archived = 0
+            else:
+                summary = self.service.sync()
+                archived = self.service.client.archive_delivered_before(
+                    datetime.now(timezone.utc) - timedelta(days=AUTO_ARCHIVE_DAYS)
                 )
-                STATE.update(last_summary=summary.to_dict(), last_error=None)
-            except Exception as exc:
-                STATE["last_error"] = str(exc)[:500]
-            finally:
-                with self._lock:
-                    self._queued.discard(job.key)
-                self._queue.task_done()
+                STATE.update(
+                    last_scheduled_sync=time.time(),
+                    last_auto_archived=archived,
+                )
+            result = {**summary.to_dict(), "auto_archived": archived}
+            self.service.client.finish_sync_job(
+                job_id,
+                self.worker_id,
+                result=result,
+            )
+            STATE.update(last_summary=result, last_error=None)
+            log_event("sync_job_completed", job_id=job_id, kind=kind)
+        except Exception as exc:
+            error_type = exc.__class__.__name__
+            STATE["last_error"] = error_type
+            log_event(
+                "sync_job_failed",
+                job_id=job_id,
+                kind=kind,
+                error_type=error_type,
+            )
+            try:
+                self.service.client.finish_sync_job(
+                    job_id,
+                    self.worker_id,
+                    error="Tracking refresh failed. Try again.",
+                )
+            except Exception as finish_exc:
+                log_event(
+                    "sync_job_finish_failed",
+                    job_id=job_id,
+                    error_type=finish_exc.__class__.__name__,
+                )
+        return True
 
 
 SERVICE = build_service()
@@ -296,26 +380,23 @@ def scheduler() -> None:
     time.sleep(8)
     while SERVICE:
         try:
-            summary = SERVICE.sync()
-            archived = SERVICE.client.archive_delivered_before(
-                datetime.now(timezone.utc) - timedelta(days=AUTO_ARCHIVE_DAYS)
-            )
-            STATE.update(
-                last_scheduled_sync=time.time(),
-                last_summary=summary.to_dict(),
-                last_error=None,
-                last_auto_archived=archived,
-            )
+            sync_jobs(SERVICE).enqueue_all()
+            STATE["last_error"] = None
         except Exception as exc:
-            STATE.update(last_scheduled_sync=time.time(), last_error=str(exc)[:500])
+            STATE["last_error"] = exc.__class__.__name__
+            log_event("scheduled_sync_enqueue_failed", error_type=exc.__class__.__name__)
         delay = seconds_until_next_sync()
         STATE["next_scheduled_sync"] = time.time() + delay
         time.sleep(delay)
 
 
-def start_immediate_sync(service: TrackingSyncService, package: dict[str, object]) -> None:
+def start_immediate_sync(
+    service: TrackingSyncService,
+    package: dict[str, object],
+    user_id: str,
+) -> QueuedSyncJob:
     """Queue the first carrier lookup without delaying the create response."""
-    sync_jobs(service).enqueue_package(package)
+    return sync_jobs(service).enqueue_package(package, user_id)
 
 
 class BoundedThreadingHTTPServer(ThreadingHTTPServer):
@@ -367,6 +448,35 @@ class Handler(BaseHTTPRequestHandler):
     auth_user: SupabaseUser | None = None
     user_client: SupabaseUserClient | None = None
     access_token: str | None = None
+    request_id = "unassigned"
+
+    def handle_one_request(self) -> None:
+        self.request_id = uuid4().hex
+        self.request_started_at = time.monotonic()
+        super().handle_one_request()
+
+    def log_message(self, format: str, *args: object) -> None:
+        del format
+        status = str(args[1]) if len(args) > 1 else None
+        route = urlparse(getattr(self, "path", "")).path
+        route = re.sub(
+            r"/[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}",
+            "/:id",
+            route,
+        )
+        duration_ms = round(
+            (time.monotonic() - getattr(self, "request_started_at", time.monotonic()))
+            * 1000,
+            1,
+        )
+        log_event(
+            "http_request",
+            request_id=self.request_id,
+            method=getattr(self, "command", None),
+            route=route or None,
+            status=status,
+            duration_ms=duration_ms,
+        )
 
     def _json(
         self,
@@ -387,6 +497,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _security_headers(self) -> None:
+        self.send_header("X-Request-ID", self.request_id)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         self.send_header("X-Frame-Options", "DENY")
@@ -411,12 +522,22 @@ class Handler(BaseHTTPRequestHandler):
     def _authorize_api(self, path: str) -> bool:
         if not path.startswith("/api/") or path == "/api/openapi.json":
             return True
-        peer = str(self.client_address[0]) if self.client_address else "unknown"
+        authorization = self.headers.get("Authorization", "")
+        scheme, separator, raw_token = authorization.partition(" ")
+        token = raw_token.strip() if scheme.lower() == "bearer" and separator else ""
+        client_ip = self._client_ip()
+        credential = hashlib.sha256(token.encode()).hexdigest()[:24] if token else None
         retry_after = RATE_LIMITER.retry_after(
-            f"preauth:{peer}",
-            limit=PREAUTH_REQUEST_LIMIT,
+            f"preauth-client:{client_ip}",
+            limit=PREAUTH_REQUEST_LIMIT * 3,
             window=PREAUTH_REQUEST_WINDOW,
         )
+        if not retry_after and credential:
+            retry_after = RATE_LIMITER.retry_after(
+                f"preauth-credential:{credential}",
+                limit=PREAUTH_REQUEST_LIMIT,
+                window=PREAUTH_REQUEST_WINDOW,
+            )
         if retry_after:
             self._json(
                 HTTPStatus.TOO_MANY_REQUESTS,
@@ -430,13 +551,10 @@ class Handler(BaseHTTPRequestHandler):
                 {"error": "Supabase authentication is not configured"},
             )
             return False
-        authorization = self.headers.get("Authorization", "")
-        scheme, separator, token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not separator or not token.strip():
+        if not token:
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Authentication is required"})
             return False
         try:
-            token = token.strip()
             self.auth_user = AUTHENTICATOR.validate(token)
             bucket, limit, window = api_rate_policy(self.command, path)
             retry_after = RATE_LIMITER.retry_after(
@@ -457,6 +575,22 @@ class Handler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "Authentication is required"})
             return False
         return True
+
+    def _client_ip(self) -> str:
+        peer = str(self.client_address[0]) if self.client_address else "unknown"
+        try:
+            peer_address = ipaddress.ip_address(peer)
+        except ValueError:
+            return peer
+        if not any(peer_address in network for network in TRUSTED_PROXY_NETWORKS):
+            return peer
+        forwarded = self.headers.get("CF-Connecting-IP", "").strip()
+        if not forwarded:
+            forwarded = self.headers.get("X-Forwarded-For", "").partition(",")[0].strip()
+        try:
+            return str(ipaddress.ip_address(forwarded))
+        except ValueError:
+            return peer
 
     def _user_database(self) -> SupabaseUserClient:
         if self.user_client is None:
@@ -529,6 +663,23 @@ class Handler(BaseHTTPRequestHandler):
             except SupabaseError as exc:
                 self._database_failure(exc)
             return
+        sync_job_match = re.fullmatch(r"/api/sync/jobs/([^/]+)", path)
+        if sync_job_match:
+            if not SERVICE:
+                self._json(503, {"error": "The delivery database is not configured"})
+                return
+            try:
+                job_id = str(UUID(sync_job_match.group(1)))
+                row = SERVICE.client.get_sync_job(job_id, self._current_user().id)
+                if not row:
+                    self._json(404, {"error": "Sync job not found"})
+                    return
+                self._json(200, sync_job_response(row))
+            except ValueError:
+                self._json(400, {"error": "Invalid sync job id"})
+            except SupabaseError as exc:
+                self._database_failure(exc)
+            return
         if path == "/api/push/config":
             notifier = web_push_notifier()
             self._json(
@@ -557,6 +708,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/health":
             self.send_response(200 if SERVICE else 503)
+            self._security_headers()
             self.end_headers()
             return
         self._serve_static(path, head_only=True)
@@ -573,16 +725,23 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 jobs = sync_jobs(SERVICE)
                 queued = False
+                job_ids: list[str] = []
+                user_id = self._current_user().id
                 for owned_package in self._user_database().list_active_packages()[
                     :MAX_USER_SYNC_JOBS
                 ]:
-                    queued = jobs.enqueue_package(owned_package) or queued
+                    job = jobs.enqueue_package(owned_package, user_id)
+                    queued = job.queued or queued
+                    if job.id not in job_ids:
+                        job_ids.append(job.id)
                 self._json(
                     HTTPStatus.ACCEPTED,
-                    {"queued": queued, "pending": jobs.pending_count()},
+                    {
+                        "queued": queued,
+                        "pending": jobs.pending_count(user_id),
+                        "jobIds": job_ids,
+                    },
                 )
-            except SyncQueueFull as exc:
-                self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": str(exc)})
             except SupabaseError as exc:
                 self._database_failure(exc)
             return
@@ -596,15 +755,18 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(404, {"error": "Package not found"})
                     return
                 jobs = sync_jobs(SERVICE)
-                queued = jobs.enqueue_package(sync_package_row)
+                user_id = self._current_user().id
+                job = jobs.enqueue_package(sync_package_row, user_id)
                 self._json(
                     HTTPStatus.ACCEPTED,
-                    {"queued": queued, "pending": jobs.pending_count()},
+                    {
+                        "queued": job.queued,
+                        "pending": jobs.pending_count(user_id),
+                        "jobIds": [job.id],
+                    },
                 )
             except ValueError:
                 self._json(400, {"error": "Invalid package id"})
-            except SyncQueueFull as exc:
-                self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": str(exc)})
             except SupabaseError as exc:
                 self._database_failure(exc)
             return
@@ -740,9 +902,15 @@ class Handler(BaseHTTPRequestHandler):
                 tracking_url,
                 dpd_postcode,
             )
+            created_job_ids: list[str] = []
             try:
-                start_immediate_sync(SERVICE, created_package)
-            except SyncQueueFull:
+                job = start_immediate_sync(
+                    SERVICE,
+                    created_package,
+                    self._current_user().id,
+                )
+                created_job_ids.append(job.id)
+            except SupabaseError:
                 SERVICE.client.update_package(
                     str(created_package["id"]),
                     {
@@ -750,7 +918,10 @@ class Handler(BaseHTTPRequestHandler):
                         "sync_error": "The first tracking check could not be queued. Try again shortly.",
                     },
                 )
-            self._json(HTTPStatus.CREATED, created_package)
+            self._json(
+                HTTPStatus.CREATED,
+                {"package": created_package, "jobIds": created_job_ids},
+            )
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
         except SupabaseError as exc:
@@ -1148,11 +1319,14 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     if SERVICE:
+        sync_jobs(SERVICE).start()
         threading.Thread(target=scheduler, name="delivery-sync", daemon=True).start()
     server = BoundedThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(
-        f"Delivery Tracker listening on :{PORT}; sync={'enabled' if SERVICE else 'disabled'}",
-        flush=True,
+    log_event(
+        "server_started",
+        port=PORT,
+        sync_enabled=SERVICE is not None,
+        trusted_proxy_networks=len(TRUSTED_PROXY_NETWORKS),
     )
     server.serve_forever()
 

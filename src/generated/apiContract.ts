@@ -531,6 +531,11 @@ export interface ApiPackageListResponse {
   "packages": Array<ApiPackageRow>;
 }
 
+export interface ApiCreatePackageResponse {
+  "package": ApiPackageRow;
+  "jobIds": Array<string>;
+}
+
 export interface ApiCreatePackageRequest {
   "trackingNumber": string;
   "label"?: string;
@@ -550,6 +555,7 @@ export interface ApiPackageNotificationRequest {
 export interface ApiQueueResponse {
   "queued": boolean;
   "pending": number;
+  "jobIds": Array<string>;
 }
 
 export interface ApiOkResponse {
@@ -603,6 +609,19 @@ export interface ApiNativePushDeviceRequest {
 
 export interface ApiDeleteNativePushDeviceRequest {
   "token": string;
+}
+
+export type ApiSyncJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export interface ApiSyncJobResponse {
+  "id": string;
+  "status": ApiSyncJobStatus;
+  "packageId": string | null;
+  "requestedAt": string;
+  "startedAt": string | null;
+  "completedAt": string | null;
+  "result": ApiSyncSummary | null;
+  "error": string | null;
 }
 
 export interface ApiSyncSummary {

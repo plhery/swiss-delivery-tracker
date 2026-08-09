@@ -30,11 +30,11 @@ beforeEach(() => {
 
 describe('App', () => {
   it('opens a prefilled add sheet for content shared to the installed PWA', async () => {
-    window.history.replaceState(
-      {},
-      '',
-      '/?share-target=1&title=Coffee%20delivery&text=Track%20993412345612345678',
-    );
+    window.history.replaceState({}, '', '/?share-target=1');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      label: 'Coffee delivery',
+      trackingInput: 'Track 993412345612345678',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
 
     renderApp();
 

@@ -2,6 +2,25 @@ import XCTest
 @testable import SwissDeliveryTracker
 
 final class ParcelLogicTests: XCTestCase {
+    func testDecodesSharedAPIContractFixture() throws {
+        struct Fixture: Decodable {
+            let packageList: PackageListResponse
+            let queue: QueueResponse
+            let job: SyncJobResponse
+        }
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "ContractFixtures", withExtension: "json"))
+        let fixture = try JSONDecoder.deliveryTracker.decode(
+            Fixture.self,
+            from: Data(contentsOf: url)
+        )
+
+        XCTAssertEqual(fixture.packageList.packages.first?.carrier, .swissPost)
+        XCTAssertEqual(fixture.packageList.packages.first?.trackingEvents.first?.stage, .inTransit)
+        XCTAssertEqual(fixture.queue.jobIds.count, 1)
+        XCTAssertEqual(fixture.job.status, .succeeded)
+        XCTAssertEqual(fixture.job.result?.checked, 1)
+    }
+
     func testDecodesProductionPackagePayload() throws {
         let packageID = UUID()
         let eventID = UUID()

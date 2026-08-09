@@ -32,6 +32,8 @@ assert.match(
 assert.match(pushWorker, /addEventListener\(['"]push['"]/, 'push events must be handled');
 assert.match(pushWorker, /showNotification\(/, 'push events must display a notification');
 assert.match(pushWorker, /addEventListener\(['"]notificationclick['"]/, 'notification clicks must be handled');
+assert.match(pushWorker, /\/share-target/, 'private POST share targets must be handled');
+assert.match(pushWorker, /formData\(\)/, 'shared content must be read from a POST body');
 
 const manifest = JSON.parse(manifestText);
 assert.equal(manifest.start_url, '/');
@@ -39,8 +41,9 @@ assert.equal(manifest.scope, '/');
 assert.equal(manifest.display, 'standalone');
 assert.equal(manifest.id, '/');
 assert.deepEqual(manifest.share_target, {
-  action: '/?share-target=1',
-  method: 'GET',
+  action: '/share-target',
+  method: 'POST',
+  enctype: 'multipart/form-data',
   params: { title: 'title', text: 'text', url: 'url' },
 });
 assert.match(privacy, /Download my data/, 'the public build must include the privacy notice');

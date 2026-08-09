@@ -30,7 +30,7 @@ final class DeliveryAPIClient {
         return response.packages
     }
 
-    func add(_ input: NewParcelRequest) async throws -> Parcel {
+    func add(_ input: NewParcelRequest) async throws -> CreatePackageResponse {
         try await request("/api/packages", method: "POST", body: input)
     }
 
@@ -66,11 +66,39 @@ final class DeliveryAPIClient {
     }
 
     func refreshAll() async throws {
-        let _: QueueResponse = try await request("/api/sync", method: "POST")
+        let queued: QueueResponse = try await request("/api/sync", method: "POST")
+        try await waitForJobs(queued.jobIds)
     }
 
     func refresh(id: UUID) async throws {
-        let _: QueueResponse = try await request("/api/packages/\(id.uuidString)/sync", method: "POST")
+        let queued: QueueResponse = try await request(
+            "/api/packages/\(id.uuidString)/sync",
+            method: "POST"
+        )
+        try await waitForJobs(queued.jobIds)
+    }
+
+    func waitForJobs(_ jobIds: [UUID]) async throws {
+        guard !jobIds.isEmpty else { return }
+        for attempt in 0..<120 {
+            var allSucceeded = true
+            for jobID in jobIds {
+                let job: SyncJobResponse = try await request(
+                    "/api/sync/jobs/\(jobID.uuidString)"
+                )
+                if job.status == .failed {
+                    throw DeliveryAPIError.service(
+                        job.error ?? "Tracking refresh failed. Try again."
+                    )
+                }
+                if job.status != .succeeded { allSucceeded = false }
+            }
+            if allSucceeded { return }
+            if attempt < 119 { try await Task.sleep(for: .seconds(1)) }
+        }
+        throw DeliveryAPIError.service(
+            "The tracking refresh is taking longer than expected."
+        )
     }
 
     func notificationPreferences() async throws -> NotificationPreferences {

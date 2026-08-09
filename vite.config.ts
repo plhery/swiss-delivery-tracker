@@ -21,8 +21,9 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         share_target: {
-          action: '/?share-target=1',
-          method: 'GET',
+          action: '/share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
           params: {
             title: 'title',
             text: 'text',

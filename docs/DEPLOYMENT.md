@@ -106,6 +106,11 @@ enabled. For native push, set `APNS_TEAM_ID`, `APNS_KEY_ID`, the complete
 `APNS_PRIVATE_KEY` `.p8` value, and `APNS_BUNDLE_ID`; partial APNs configuration
 is rejected at startup. See `.env.example` for the complete inventory.
 
+If a reverse proxy connects directly to the container, set
+`TRUSTED_PROXY_NETWORKS` to its exact comma-separated CIDRs. Leave it empty when
+there is no trusted proxy. Never add broad internet ranges: `CF-Connecting-IP`
+and `X-Forwarded-For` are ignored unless the socket peer matches this allowlist.
+
 Expose container port `3000`, use `GET /health` as the health check, and keep the
 container behind HTTPS. The public health response intentionally contains only
 `{"ok": true}`. Authenticated API responses use `Cache-Control: no-store`.
@@ -133,15 +138,23 @@ repository secrets when they are no longer used.
 
 - Monitor `401`, `429`, database gateway failures, carrier failures, SMTP
   bounces, and push disablement without logging tracking numbers or tokens.
+- Application logs are one-line JSON. Alert on `sync_claim_failed`,
+  `sync_job_failed`, and `sync_job_finish_failed`; use `request_id` and `job_id`
+  for correlation without adding user or parcel data to logs.
 - The API allows 12 sync requests per account per five minutes, 240 reads per
   minute, and 60 other writes per minute. Edge and Auth-level abuse controls are
   still required for unauthenticated OTP traffic.
 - Database functions cap each account at 50 active and 500 total parcels, and a
   scheduled synchronization processes at most five parcels per account in
   round-robin order. Treat changes to these limits as security-sensitive.
-- The HTTP service admits a bounded number of concurrent requests and applies a
-  pre-authentication peer limit. Keep the origin behind an edge rate limiter as
-  an independent layer.
+- The HTTP service admits a bounded number of concurrent requests. Its
+  pre-authentication limits combine a proxy-validated client address with a
+  hashed bearer credential when supplied; authenticated limits are per account.
+  Keep the origin behind an edge rate limiter as an independent layer.
+- Carrier refreshes live in `public.sync_jobs`. Running jobs use leases and can
+  be reclaimed after a worker crash; active package and scheduled jobs are
+  deduplicated, and terminal job records are retained for 30 days. Back up this
+  table with the rest of Postgres.
 - Back up Postgres independently. Regularly test restoring Auth, parcel, event,
   and push tables together.
 - Rotate service-role, SMTP, VAPID, APNs, and carrier credentials if exposed.

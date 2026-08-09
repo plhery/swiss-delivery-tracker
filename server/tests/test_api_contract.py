@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 
 import server.app as app
 from server.api_contract import CARRIER_IDS, STAGES, SYNC_STATUSES
@@ -15,7 +17,14 @@ class ApiContractTests(unittest.TestCase):
 
     def test_representative_payloads_match_their_schemas(self):
         assert_contract("PackageListResponse", {"packages": [PACKAGE]})
-        assert_contract("QueueResponse", {"queued": True, "pending": 1})
+        assert_contract(
+            "QueueResponse",
+            {
+                "queued": True,
+                "pending": 1,
+                "jobIds": ["42000000-0000-0000-0000-000000000004"],
+            },
+        )
         assert_contract("OkResponse", {"ok": True})
         assert_contract("ErrorResponse", {"error": "Package not found"})
         assert_contract("PushConfigResponse", {"available": False, "publicKey": None})
@@ -69,6 +78,18 @@ class ApiContractTests(unittest.TestCase):
             {"ok": True},
         )
 
+    def test_shared_cross_platform_fixture_matches_the_contract(self):
+        fixture_path = (
+            Path(__file__).resolve().parents[2]
+            / "contracts"
+            / "fixtures"
+            / "delivery-api.json"
+        )
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        assert_contract("PackageListResponse", fixture["packageList"])
+        assert_contract("QueueResponse", fixture["queue"])
+        assert_contract("SyncJobResponse", fixture["job"])
+
     def test_all_supported_http_operations_are_documented(self):
         operations = {
             (method.upper(), path)
@@ -91,6 +112,7 @@ class ApiContractTests(unittest.TestCase):
                 ("PATCH", "/api/packages/{packageId}/notifications"),
                 ("POST", "/api/packages/{packageId}/sync"),
                 ("POST", "/api/sync"),
+                ("GET", "/api/sync/jobs/{jobId}"),
                 ("GET", "/api/push/config"),
                 ("GET", "/api/push/preferences"),
                 ("PATCH", "/api/push/preferences"),

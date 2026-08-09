@@ -1,0 +1,62 @@
+{
+  "packageList": {
+    "packages": [
+      {
+        "id": "40000000-0000-0000-0000-000000000004",
+        "tracking_number": "993412345612345678",
+        "label": "Coffee beans",
+        "carrier": "swiss-post",
+        "created_at": "2026-07-15T00:00:00Z",
+        "expected_delivery": "2026-07-16",
+        "last_status_text": "Sorted",
+        "last_synced_at": "2026-07-15T01:00:00Z",
+        "sync_status": "ok",
+        "sync_error": null,
+        "tracking_url": null,
+        "dpd_postcode": null,
+        "carrier_data": {
+          "active_tracking_carrier": "swiss-post",
+          "swiss_post_ready": true
+        },
+        "archived_at": null,
+        "notifications_muted": false,
+        "tracking_events": [
+          {
+            "id": "41000000-0000-0000-0000-000000000004",
+            "package_id": "40000000-0000-0000-0000-000000000004",
+            "stage": "in_transit",
+            "description": "Sorted at the parcel center",
+            "location": "Härkingen",
+            "occurred_at": "2026-07-15T01:00:00Z"
+          }
+        ]
+      }
+    ]
+  },
+  "queue": {
+    "queued": true,
+    "pending": 1,
+    "jobIds": [
+      "42000000-0000-0000-0000-000000000004"
+    ]
+  },
+  "job": {
+    "id": "42000000-0000-0000-0000-000000000004",
+    "status": "succeeded",
+    "packageId": "40000000-0000-0000-0000-000000000004",
+    "requestedAt": "2026-07-15T01:00:00Z",
+    "startedAt": "2026-07-15T01:00:01Z",
+    "completedAt": "2026-07-15T01:00:02Z",
+    "result": {
+      "checked": 1,
+      "updated": 1,
+      "waiting": 0,
+      "errors": 0,
+      "unsupported": 0,
+      "notifications_sent": 1,
+      "notification_errors": 0,
+      "subscriptions_expired": 0
+    },
+    "error": null
+  }
+}

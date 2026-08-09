@@ -1,6 +1,7 @@
 import { detectCarrier, normalizeTrackingNumber } from '../lib/carriers';
 import { authenticatedFetch, type ApiAuth } from '../lib/apiClient';
 import type {
+  ApiCreatePackageResponse,
   ApiCreatePackageRequest,
   ApiOkResponse,
   ApiPackageListResponse,
@@ -9,6 +10,7 @@ import type {
   ApiRenamePackageRequest,
   ApiPackageNotificationRequest,
   ApiTrackingEventRow,
+  ApiSyncJobResponse,
 } from '../generated/apiContract';
 import type {
   NewParcelInput,
@@ -109,18 +111,56 @@ async function request<T>(path: string, auth: ApiAuth | undefined, init?: Reques
 
 export function createApiRepo(
   pollIntervalMs = 30_000,
-  activePollIntervalMs = 1_000,
+  jobPollIntervalMs = 1_000,
   storage: Storage | null = typeof window === 'undefined' ? null : window.localStorage,
   auth?: ApiAuth,
 ): ParcelRepo {
-  let hasActiveSync = false;
-  let pollingModeChanged: (() => void) | null = null;
+  let notifySubscriber: (() => void) | null = null;
+  const monitoredJobIds = new Set<string>();
+  let monitorTask: Promise<void> | null = null;
   const cacheKey = auth ? `${API_CACHE_KEY}.${auth.userId}` : API_CACHE_KEY;
 
-  function setHasActiveSync(next: boolean) {
-    if (hasActiveSync === next) return;
-    hasActiveSync = next;
-    pollingModeChanged?.();
+  const wait = (milliseconds: number) => new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+
+  async function waitForJobs(jobIds: string[]): Promise<void> {
+    if (jobIds.length === 0) return;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const jobs = await Promise.all(jobIds.map((jobId) => request<ApiSyncJobResponse>(
+        `/api/sync/jobs/${encodeURIComponent(jobId)}`,
+        auth,
+      )));
+      const failed = jobs.find((job) => job.status === 'failed');
+      if (failed) throw new Error(failed.error ?? 'Tracking refresh failed. Try again.');
+      if (jobs.every((job) => job.status === 'succeeded')) return;
+      await wait(jobPollIntervalMs);
+    }
+    throw new Error('The tracking refresh is taking longer than expected.');
+  }
+
+  function monitorJobs(jobIds: string[]) {
+    jobIds.forEach((jobId) => monitoredJobIds.add(jobId));
+    if (monitorTask || monitoredJobIds.size === 0) return;
+    monitorTask = (async () => {
+      try {
+        while (monitoredJobIds.size > 0) {
+          const ids = [...monitoredJobIds];
+          try {
+            await waitForJobs(ids);
+          } finally {
+            ids.forEach((jobId) => monitoredJobIds.delete(jobId));
+          }
+        }
+        notifySubscriber?.();
+      } catch {
+        // The normal collection poll remains the recovery path for a transient
+        // status request failure or a job that outlives the foreground page.
+      } finally {
+        monitorTask = null;
+        if (monitoredJobIds.size > 0) monitorJobs([]);
+      }
+    })();
   }
 
   async function list(): Promise<ParcelWithEvents[]> {
@@ -129,9 +169,6 @@ export function createApiRepo(
       auth,
     );
     const parcels = payload.packages.map(toParcel);
-    setHasActiveSync(parcels.some(
-      (parcel) => parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing',
-    ));
     saveCachedParcels(storage, cacheKey, parcels);
     return parcels;
   }
@@ -151,12 +188,12 @@ export function createApiRepo(
         trackingUrl: input.trackingUrl?.trim() || undefined,
         dpdPostcode: input.dpdPostcode?.trim() || undefined,
       };
-      const row = await request<ApiPackageRow>('/api/packages', auth, {
+      const payload = await request<ApiCreatePackageResponse>('/api/packages', auth, {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      const parcel = toParcel(row);
-      setHasActiveSync(parcel.syncStatus === 'pending' || parcel.syncStatus === 'syncing');
+      const parcel = toParcel(payload.package);
+      monitorJobs(payload.jobIds);
       return parcel;
     },
 
@@ -218,20 +255,19 @@ export function createApiRepo(
     },
 
     async refresh(): Promise<ParcelWithEvents[]> {
-      await request<ApiQueueResponse>('/api/sync', auth, { method: 'POST' });
-      setHasActiveSync(true);
-      return list().then((parcels) => {
-        setHasActiveSync(true);
-        return parcels;
-      });
+      const queued = await request<ApiQueueResponse>('/api/sync', auth, { method: 'POST' });
+      await waitForJobs(queued.jobIds);
+      return list();
     },
 
     async refreshParcel(id: string): Promise<ParcelWithEvents> {
-      await request<ApiQueueResponse>(`/api/packages/${encodeURIComponent(id)}/sync`, auth, {
-        method: 'POST',
-      });
+      const queued = await request<ApiQueueResponse>(
+        `/api/packages/${encodeURIComponent(id)}/sync`,
+        auth,
+        { method: 'POST' },
+      );
+      await waitForJobs(queued.jobIds);
       const parcels = await list();
-      setHasActiveSync(true);
       const parcel = parcels.find((candidate) => candidate.id === id);
       if (!parcel) throw new Error('Package not found after queueing its tracking check');
       return parcel;
@@ -245,7 +281,6 @@ export function createApiRepo(
       const schedule = () => {
         if (timer !== null) window.clearTimeout(timer);
         if (stopped) return;
-        const delay = hasActiveSync ? activePollIntervalMs : pollIntervalMs;
         timer = window.setTimeout(() => {
           timer = null;
           if (document.visibilityState !== 'visible') {
@@ -253,7 +288,7 @@ export function createApiRepo(
             return;
           }
           void trigger();
-        }, delay);
+        }, pollIntervalMs);
       };
 
       const trigger = async () => {
@@ -273,15 +308,13 @@ export function createApiRepo(
         timer = null;
         void trigger();
       };
-      pollingModeChanged = () => {
-        if (!pollInFlight) schedule();
-      };
+      notifySubscriber = () => { void trigger(); };
       document.addEventListener('visibilitychange', onVisible);
       schedule();
       return () => {
         stopped = true;
         if (timer !== null) window.clearTimeout(timer);
-        if (pollingModeChanged) pollingModeChanged = null;
+        notifySubscriber = null;
         document.removeEventListener('visibilitychange', onVisible);
       };
     },

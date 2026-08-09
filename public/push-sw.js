@@ -1,3 +1,37 @@
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (event.request.method === 'POST' && url.pathname === '/share-target') {
+    event.respondWith((async () => {
+      const form = await event.request.formData();
+      const title = String(form.get('title') || '').trim().slice(0, 80);
+      const parts = [form.get('url'), form.get('text')]
+        .map((value) => String(value || '').trim())
+        .filter((value, index, values) => value && values.indexOf(value) === index);
+      const trackingInput = parts.join('\n').slice(0, 10_000);
+      if (trackingInput) {
+        const cache = await caches.open('sdt-private-share-target-v1');
+        await cache.put('/share-target/draft', new Response(
+          JSON.stringify({ label: title, trackingInput }),
+          { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } },
+        ));
+      }
+      return Response.redirect(new URL('/?share-target=1', self.location.origin), 303);
+    })());
+    return;
+  }
+
+  if (event.request.method === 'GET' && url.pathname === '/share-target/draft') {
+    event.respondWith((async () => {
+      const cache = await caches.open('sdt-private-share-target-v1');
+      const draft = await cache.match('/share-target/draft');
+      await cache.delete('/share-target/draft');
+      return draft || new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+    })());
+  }
+});
+
 self.addEventListener('push', (event) => {
   let payload = {};
   try {

@@ -60,7 +60,7 @@ builds register against APNs sandbox and Release builds use production.
 | Paste number, carrier URL, or shipping text | Native add sheet with the shared carrier parser |
 | All 16 carriers and special Planzer, Dachser, DPD, S10, and handoff rules | Catalog generated from `contracts/openapi.json` |
 | Search, status/carrier filters, priority/date sorting | Searchable native list, pickers, and sections |
-| Refresh all or one parcel and live updates | Pull to refresh, toolbar/detail actions, foreground polling |
+| Refresh all or one parcel and live updates | Pull to refresh, toolbar/detail actions, lightweight sync-job polling |
 | Rename, archive/undo, restore, permanent delete | Menus, swipe action, toast, native confirmation alerts |
 | Carrier progress, expected date, history, source links | SwiftUI detail hero, progress track, timeline, external links |
 | Global presets, quiet hours, per-parcel mute | Native notification settings and parcel toggle |

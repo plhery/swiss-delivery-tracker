@@ -22,6 +22,8 @@ final class ParcelStore: ObservableObject {
     private let demo: DemoRepository
     private let cache = ParcelCache()
     private var pollingTask: Task<Void, Never>?
+    private var jobMonitoringTask: Task<Void, Never>?
+    private var pendingJobIDs = Set<UUID>()
     private var isActive = true
     private var lastStartedAsDemo: Bool?
     private var notificationEnableInProgress = false
@@ -45,6 +47,9 @@ final class ParcelStore: ObservableObject {
 
     func start() async {
         pollingTask?.cancel()
+        jobMonitoringTask?.cancel()
+        jobMonitoringTask = nil
+        pendingJobIDs.removeAll()
         if let lastStartedAsDemo, lastStartedAsDemo != isDemo {
             parcels = []
         }
@@ -115,10 +120,14 @@ final class ParcelStore: ObservableObject {
             dpdPostcode: dpdPostcode?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         )
         let parcel: Parcel
-        if isDemo { parcel = try demo.add(request) }
-        else { parcel = try await api.add(request) }
+        if isDemo {
+            parcel = try demo.add(request)
+        } else {
+            let response = try await api.add(request)
+            parcel = response.package
+            monitorJobs(response.jobIds)
+        }
         upsert(parcel)
-        if !isDemo { await load(showSpinner: false) }
     }
 
     func rename(_ parcel: Parcel, label: String) async throws {
@@ -206,6 +215,8 @@ final class ParcelStore: ObservableObject {
             return
         }
         nativePushGeneration += 1
+        jobMonitoringTask?.cancel()
+        pendingJobIDs.removeAll()
         try await api.deleteAccount(confirmation: confirmation)
         UIApplication.shared.unregisterForRemoteNotifications()
         AppDelegate.clearDeviceToken()
@@ -221,6 +232,8 @@ final class ParcelStore: ObservableObject {
 
     func signOut() async throws {
         nativePushGeneration += 1
+        jobMonitoringTask?.cancel()
+        pendingJobIDs.removeAll()
         if let token = AppDelegate.currentDeviceToken, !isDemo {
             try? await api.unregisterNativePushToken(token)
         }
@@ -372,11 +385,32 @@ final class ParcelStore: ObservableObject {
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                let seconds = self.isSynchronizing ? 1 : 30
-                try? await Task.sleep(for: .seconds(seconds))
+                try? await Task.sleep(for: .seconds(30))
                 if Task.isCancelled { return }
                 if self.isActive { await self.load(showSpinner: false) }
             }
+        }
+    }
+
+    private func monitorJobs(_ jobIDs: [UUID]) {
+        pendingJobIDs.formUnion(jobIDs)
+        guard jobMonitoringTask == nil, !pendingJobIDs.isEmpty else { return }
+        jobMonitoringTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled, !self.pendingJobIDs.isEmpty {
+                let current = Array(self.pendingJobIDs)
+                do {
+                    try await self.api.waitForJobs(current)
+                    self.pendingJobIDs.subtract(current)
+                    await self.load(showSpinner: false)
+                } catch {
+                    if Task.isCancelled { break }
+                    self.pendingJobIDs.subtract(current)
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+            self.jobMonitoringTask = nil
+            if !self.pendingJobIDs.isEmpty { self.monitorJobs([]) }
         }
     }
 

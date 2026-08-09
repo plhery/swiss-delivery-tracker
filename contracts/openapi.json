@@ -524,7 +524,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PackageRow"
+                  "$ref": "#/components/schemas/CreatePackageResponse"
                 }
               }
             }
@@ -764,6 +764,37 @@
             "$ref": "#/components/responses/ApiError"
           },
           "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/sync/jobs/{jobId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/JobId"
+        }
+      ],
+      "get": {
+        "operationId": "getSyncJob",
+        "responses": {
+          "200": {
+            "description": "Owned synchronization job status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncJobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
             "$ref": "#/components/responses/ApiError"
           }
         }
@@ -1012,6 +1043,15 @@
     "parameters": {
       "PackageId": {
         "name": "packageId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "JobId": {
+        "name": "jobId",
         "in": "path",
         "required": true,
         "schema": {
@@ -1320,6 +1360,26 @@
           }
         }
       },
+      "CreatePackageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "package",
+          "jobIds"
+        ],
+        "properties": {
+          "package": {
+            "$ref": "#/components/schemas/PackageRow"
+          },
+          "jobIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "CreatePackageRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -1382,7 +1442,8 @@
         "additionalProperties": false,
         "required": [
           "queued",
-          "pending"
+          "pending",
+          "jobIds"
         ],
         "properties": {
           "queued": {
@@ -1391,6 +1452,13 @@
           "pending": {
             "type": "integer",
             "minimum": 0
+          },
+          "jobIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -1613,6 +1681,79 @@
             "minLength": 32,
             "maxLength": 512,
             "pattern": "^[0-9A-Fa-f]+$"
+          }
+        }
+      },
+      "SyncJobStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed"
+        ]
+      },
+      "SyncJobResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "packageId",
+          "requestedAt",
+          "startedAt",
+          "completedAt",
+          "result",
+          "error"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncJobStatus"
+          },
+          "packageId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

@@ -82,6 +82,32 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
 
+  ios:
+    name: Native iPhone app
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:contract
+      - run: npm run ios:resources -- --check
+      - name: Build app and Share Extension
+        run: >-
+          xcodebuild -project ios/SwissDeliveryTracker.xcodeproj
+          -scheme SwissDeliveryTracker -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Run native tests
+        run: >-
+          xcodebuild -project ios/SwissDeliveryTracker.xcodeproj
+          -scheme SwissDeliveryTracker
+          -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest'
+          CODE_SIGNING_ALLOWED=NO test
+
   container:
     name: Production container smoke
     runs-on: ubuntu-latest
