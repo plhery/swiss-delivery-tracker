@@ -13,3 +13,8 @@ coverage/
 htmlcov/
 playwright-report/
 test-results/
+ios/Configuration/Local.xcconfig
+ios/build/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/

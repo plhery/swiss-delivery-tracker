@@ -1,0 +1,11 @@
+// Safe checked-in defaults. Copy Local.xcconfig.example to Local.xcconfig to
+// connect the app to a Supabase-backed production deployment.
+SDT_USE_API = NO
+SDT_API_BASE_URL = https:/$()/delivery.plhery.com
+SDT_SUPABASE_URL =
+SDT_SUPABASE_PUBLISHABLE_KEY =
+SDT_GOOGLE_AUTH_ENABLED = NO
+SDT_EMAIL_OTP_ENABLED = YES
+SDT_APP_GROUP_IDENTIFIER = group.com.plhery.SwissDeliveryTracker
+
+#include? "Local.xcconfig"

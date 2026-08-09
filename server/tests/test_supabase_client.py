@@ -308,6 +308,47 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertIn("id=eq.sub%2F1", update.args[0])
         self.assertEqual(update.kwargs["method"], "PATCH")
 
+    def test_native_push_device_lifecycle_and_acknowledgements(self):
+        self.client._request = Mock(return_value=[{"id": "device-1"}])
+        result = self.client.upsert_native_push_device(
+            "user-1", "ab" * 32, "development", "de", "iPhone"
+        )
+        self.assertEqual(result, {"id": "device-1"})
+        create = self.client._request.call_args
+        self.assertIn("on_conflict=environment,token", create.args[0])
+        self.assertEqual(create.kwargs["body"]["user_id"], "user-1")
+        self.assertEqual(create.kwargs["body"]["locale"], "de")
+        self.assertIn("merge-duplicates", create.kwargs["prefer"])
+
+        self.client._request = Mock(return_value=[{"event_id": "event-1"}])
+        self.assertEqual(
+            self.client.list_pending_native_push_notifications(),
+            [{"event_id": "event-1"}],
+        )
+        self.assertIn(
+            "pending_native_push_notifications", self.client._request.call_args.args[0]
+        )
+
+        self.client._request = Mock()
+        self.client.record_native_push_deliveries("device-1", [])
+        self.client._request.assert_not_called()
+        self.client.record_native_push_deliveries(
+            "device-1", ["event-1", "event-2"]
+        )
+        delivery = self.client._request.call_args
+        self.assertEqual(delivery.kwargs["method"], "POST")
+        self.assertEqual(len(delivery.kwargs["body"]), 2)
+
+        self.client.update_native_push_device("device/1", {"last_error": None})
+        update = self.client._request.call_args
+        self.assertIn("id=eq.device%2F1", update.args[0])
+        self.assertEqual(update.kwargs["method"], "PATCH")
+
+        self.client.delete_native_push_device("user-1", "ab" * 32)
+        delete = self.client._request.call_args
+        self.assertIn("user_id=eq.user-1", delete.args[0])
+        self.assertEqual(delete.kwargs["method"], "DELETE")
+
     def test_account_deletion_uses_the_server_only_auth_admin_endpoint(self):
         self.client._request = Mock()
 

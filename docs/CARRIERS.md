@@ -5,7 +5,7 @@ Swiss Delivery Tracker can refresh these carriers automatically:
 | Carrier | Notes |
 | --- | --- |
 | Swiss Post | Automatic tracking through the pinned upstream adapter. A contracted business API is preferable for long-term production use. |
-| Quickpac | Automatic. |
+| Quickpac | Automatic through Planzer's current tracking API. Existing Quickpac numbers keep their carrier label. |
 | Planzer | Automatic. Shared `999.90.########` shipments need the complete shared tracking URL. |
 | Cainiao / AliExpress | Automatic. |
 | SunYou | Automatic. |
@@ -48,6 +48,11 @@ package.
 Shared Planzer shipments use a capability URL containing an `accessKey`. Paste
 the complete `trackandtrace.planzergroup.com/shared/sendungen/...` URL. Treat it
 like a tracking secret: keep it out of logs, screenshots and public issues.
+
+Quickpac's 18-digit `44…` identifiers now use the same Planzer API and public
+tracking page as ordinary Planzer deliveries. The separate Quickpac carrier ID
+is retained for number detection and display only; it no longer selects the
+legacy Quickpac adapter.
 
 ## Dachser Customer Iberia links
 

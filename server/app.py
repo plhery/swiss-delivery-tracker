@@ -23,7 +23,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .api_contract import CARRIER_IDS
 from .carriers import normalize_carrier_inputs
-from .push import PushNotificationService
+from .push import (
+    CompositePushNotificationService,
+    NativePushNotificationService,
+    PushNotificationService,
+)
 from .rate_limit import RateLimiter
 from .supabase_auth import SupabaseAuthenticator, SupabaseAuthError, SupabaseUser
 from .supabase_client import SupabaseError, SupabaseServiceClient, SupabaseUserClient
@@ -115,15 +119,67 @@ def build_service() -> TrackingSyncService | None:
     client = SupabaseServiceClient(url, service_key)
     public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
     private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
-    notifier = None
+    web_notifier = None
     if public_key and private_key:
-        notifier = PushNotificationService(
+        web_notifier = PushNotificationService(
             client,
             public_key,
             private_key,
             os.environ.get("VAPID_SUBJECT", "https://delivery.plhery.com"),
         )
+    apns_values = {
+        "team_id": os.environ.get("APNS_TEAM_ID", "").strip(),
+        "key_id": os.environ.get("APNS_KEY_ID", "").strip(),
+        "private_key": os.environ.get("APNS_PRIVATE_KEY", "").strip(),
+        "bundle_id": os.environ.get("APNS_BUNDLE_ID", "").strip(),
+    }
+    if any(apns_values.values()) and not all(apns_values.values()):
+        raise RuntimeError(
+            "APNS_TEAM_ID, APNS_KEY_ID, APNS_PRIVATE_KEY and APNS_BUNDLE_ID are all required"
+        )
+    native_notifier = (
+        NativePushNotificationService(
+            client,
+            apns_values["team_id"],
+            apns_values["key_id"],
+            apns_values["private_key"],
+            apns_values["bundle_id"],
+        )
+        if all(apns_values.values())
+        else None
+    )
+    notifier: (
+        PushNotificationService
+        | NativePushNotificationService
+        | CompositePushNotificationService
+        | None
+    )
+    if web_notifier and native_notifier:
+        notifier = CompositePushNotificationService(web_notifier, native_notifier)
+    else:
+        notifier = web_notifier or native_notifier
     return TrackingSyncService(client, notifier=notifier)
+
+
+def web_push_notifier() -> PushNotificationService | Any | None:
+    notifier = SERVICE.notifier if SERVICE else None
+    if isinstance(notifier, CompositePushNotificationService):
+        return notifier.web
+    if isinstance(notifier, PushNotificationService):
+        return notifier
+    # Keep test doubles and older injected service objects compatible.
+    if notifier is not None and isinstance(getattr(notifier, "public_key", None), str):
+        return notifier
+    return None
+
+
+def native_push_notifier() -> NativePushNotificationService | None:
+    notifier = SERVICE.notifier if SERVICE else None
+    if isinstance(notifier, CompositePushNotificationService):
+        return notifier.native
+    if isinstance(notifier, NativePushNotificationService):
+        return notifier
+    return None
 
 
 STATE: dict[str, object] = {
@@ -474,10 +530,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._database_failure(exc)
             return
         if path == "/api/push/config":
-            notifier = cast(
-                PushNotificationService | None,
-                SERVICE.notifier if SERVICE else None,
-            )
+            notifier = web_push_notifier()
             self._json(
                 200,
                 {
@@ -578,7 +631,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/push/subscriptions":
-            notifier = cast(PushNotificationService | None, SERVICE.notifier)
+            notifier = web_push_notifier()
             if not notifier:
                 self._json(503, {"error": "Push notifications are not configured"})
                 return
@@ -596,6 +649,36 @@ class Handler(BaseHTTPRequestHandler):
                     notifier.send_test(subscription)
                 except Exception:
                     test_sent = False
+                self._json(HTTPStatus.CREATED, {"ok": True, "testSent": test_sent})
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except SupabaseError as exc:
+                self._database_failure(exc)
+            return
+
+        if path == "/api/push/devices":
+            notifier = native_push_notifier()
+            if not notifier:
+                self._json(503, {"error": "Native push notifications are not configured"})
+                return
+            try:
+                token, environment, locale, device_name, send_test = self._native_push_device(
+                    self._read_json()
+                )
+                device = SERVICE.client.upsert_native_push_device(
+                    self._current_user().id,
+                    token,
+                    environment,
+                    locale,
+                    device_name,
+                )
+                test_sent = False
+                if send_test:
+                    try:
+                        notifier.send_test(device)
+                        test_sent = True
+                    except Exception:
+                        pass
                 self._json(HTTPStatus.CREATED, {"ok": True, "testSent": test_sent})
             except ValueError as exc:
                 self._json(400, {"error": str(exc)})
@@ -745,6 +828,23 @@ class Handler(BaseHTTPRequestHandler):
                 SERVICE.client.delete_push_subscription(
                     self._current_user().id,
                     endpoint,
+                )
+                self._json(200, {"ok": True})
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except SupabaseError as exc:
+                self._database_failure(exc)
+            return
+        if path == "/api/push/devices":
+            try:
+                token, _environment, _locale, _device_name, _send_test = (
+                    self._native_push_device(
+                        self._read_json(), registration=False
+                    )
+                )
+                SERVICE.client.delete_native_push_device(
+                    self._current_user().id,
+                    token,
                 )
                 self._json(200, {"ok": True})
             except ValueError as exc:
@@ -903,6 +1003,40 @@ class Handler(BaseHTTPRequestHandler):
         if len(public_key) != 65 or public_key[0] != 4 or len(auth_secret) != 16:
             raise ValueError("Send valid push encryption keys")
         return endpoint, p256dh, auth
+
+    @staticmethod
+    def _native_push_device(
+        payload: dict[str, object], *, registration: bool = True
+    ) -> tuple[str, str, str, str | None, bool]:
+        token = payload.get("token")
+        if not isinstance(token, str):
+            raise ValueError("Send a valid APNs device token")
+        token = token.strip().casefold()
+        if (
+            not 32 <= len(token) <= 512
+            or len(token) % 2 != 0
+            or not re.fullmatch(r"[0-9a-f]+", token)
+        ):
+            raise ValueError("Send a valid APNs device token")
+        if not registration:
+            return token, "production", "en", None, False
+
+        environment = payload.get("environment")
+        locale = payload.get("locale")
+        device_name = payload.get("deviceName")
+        send_test = payload.get("sendTest")
+        if environment not in {"development", "production"}:
+            raise ValueError("Choose a valid APNs environment")
+        if locale not in {"en", "de", "fr", "it"}:
+            raise ValueError("Choose a supported notification locale")
+        if not isinstance(send_test, bool):
+            raise ValueError("SendTest must be true or false")
+        if device_name is not None and not isinstance(device_name, str):
+            raise ValueError("Device name must be text")
+        cleaned_name = device_name.strip() if isinstance(device_name, str) else None
+        if cleaned_name and len(cleaned_name) > 100:
+            raise ValueError("Device name can be at most 100 characters")
+        return token, environment, locale, cleaned_name or None, send_test
 
     @staticmethod
     def _notification_preferences(

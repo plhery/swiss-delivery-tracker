@@ -63,6 +63,12 @@ class FakeService:
             "p256dh": PUSH_PUBLIC_KEY,
             "auth": PUSH_AUTH_KEY,
         }
+        self.client.upsert_native_push_device.return_value = {
+            "id": "native-device-1",
+            "token": "ab" * 32,
+            "environment": "development",
+            "locale": "fr",
+        }
         self.client.get_notification_preferences.return_value = {
             "enabled_stages": ["out_for_delivery", "delivered"],
             "quiet_hours_start": "22:00:00",
@@ -699,6 +705,74 @@ class AppHttpTests(unittest.TestCase):
         )
         self.assertEqual(status, 400)
 
+    def test_native_push_device_registration_and_removal(self):
+        native = Mock()
+        app.SERVICE.notifier = app.CompositePushNotificationService(None, native)
+        payload = {
+            "token": "AB" * 32,
+            "environment": "development",
+            "locale": "fr",
+            "deviceName": "Paul’s iPhone",
+            "sendTest": True,
+        }
+
+        status, _, body = self.request("POST", "/api/push/devices", payload=payload)
+
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body), {"ok": True, "testSent": True})
+        app.SERVICE.client.upsert_native_push_device.assert_called_once_with(
+            "10000000-0000-0000-0000-000000000001",
+            "ab" * 32,
+            "development",
+            "fr",
+            "Paul’s iPhone",
+        )
+        native.send_test.assert_called_once_with(
+            app.SERVICE.client.upsert_native_push_device.return_value
+        )
+
+        status, _, body = self.request(
+            "POST", "/api/push/devices", payload={**payload, "sendTest": False}
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body), {"ok": True, "testSent": False})
+        native.send_test.assert_called_once()
+
+        status, _, body = self.request(
+            "DELETE", "/api/push/devices", payload={"token": "AB" * 32}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"ok": True})
+        app.SERVICE.client.delete_native_push_device.assert_called_once_with(
+            "10000000-0000-0000-0000-000000000001", "ab" * 32
+        )
+
+    def test_native_push_device_validation_and_configuration(self):
+        native = Mock()
+        app.SERVICE.notifier = app.CompositePushNotificationService(None, native)
+        valid = {
+            "token": "ab" * 32,
+            "environment": "development",
+            "locale": "en",
+            "deviceName": "iPhone",
+            "sendTest": True,
+        }
+        for invalid in (
+            {},
+            {**valid, "token": "short"},
+            {**valid, "environment": "staging"},
+            {**valid, "locale": "es"},
+            {**valid, "deviceName": "x" * 101},
+            {**valid, "sendTest": "yes"},
+        ):
+            status, _, _ = self.request("POST", "/api/push/devices", payload=invalid)
+            self.assertEqual(status, 400)
+
+        app.SERVICE.notifier = None
+        status, _, body = self.request("POST", "/api/push/devices", payload=valid)
+        self.assertEqual(status, 503)
+        self.assertIn("not configured", json.loads(body)["error"])
+
     def test_push_routes_validate_credentials_and_handle_test_failure(self):
         app.SERVICE.notifier = Mock(public_key="public")
         invalid = [
@@ -996,6 +1070,47 @@ class AppLifecycleTests(unittest.TestCase):
             )
             service_class.assert_called_once_with(
                 client_class.return_value, notifier=push_class.return_value
+            )
+
+        with patch.dict(
+            os.environ,
+            {
+                "SUPABASE_URL": "http://supabase",
+                "SUPABASE_SERVICE_ROLE_KEY": "service",
+                "APNS_TEAM_ID": "TEAM",
+            },
+            clear=True,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "APNS_KEY_ID"):
+                app.build_service()
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SUPABASE_URL": "http://supabase",
+                    "SUPABASE_SERVICE_ROLE_KEY": "service",
+                    "APNS_TEAM_ID": "TEAM",
+                    "APNS_KEY_ID": "KEY",
+                    "APNS_PRIVATE_KEY": "private-key",
+                    "APNS_BUNDLE_ID": "com.example.DeliveryTracker",
+                },
+                clear=True,
+            ),
+            patch("server.app.SupabaseServiceClient") as client_class,
+            patch("server.app.NativePushNotificationService") as native_class,
+            patch("server.app.TrackingSyncService") as service_class,
+        ):
+            app.build_service()
+            native_class.assert_called_once_with(
+                client_class.return_value,
+                "TEAM",
+                "KEY",
+                "private-key",
+                "com.example.DeliveryTracker",
+            )
+            service_class.assert_called_once_with(
+                client_class.return_value, notifier=native_class.return_value
             )
 
     def test_authenticator_requires_complete_public_configuration(self):

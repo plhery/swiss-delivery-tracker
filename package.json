@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "An open-source, iPhone-first PWA for following parcel deliveries.",
+  "description": "An open-source native iPhone app and PWA for following parcel deliveries.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -29,6 +29,7 @@
     "test:pwa": "node scripts/test-pwa-build.mjs",
     "test:watch": "vitest",
     "icons": "node scripts/generate-icons.mjs",
+    "ios:resources": "node scripts/generate-ios-resources.mjs",
     "lint:frontend": "eslint src --max-warnings=0"
   },
   "dependencies": {

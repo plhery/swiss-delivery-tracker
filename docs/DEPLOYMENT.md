@@ -12,6 +12,7 @@ Supabase Auth.
 - A public HTTPS hostname. The official deployment uses
   `https://delivery.plhery.com`.
 - Stable VAPID keys if Web Push is enabled.
+- An Apple App ID, APNs key, and signing team if native iPhone notifications are enabled.
 - Database backups and a tested restore path.
 
 Review [AUTHENTICATION.md](AUTHENTICATION.md) before configuring Auth. Never put
@@ -100,8 +101,10 @@ docker build \
 ```
 
 Set the matching server variables plus `SUPABASE_SERVICE_ROLE_KEY` at runtime.
-Add the stable VAPID key pair and `VAPID_SUBJECT` only when push is enabled. See
-`.env.example` for the complete inventory.
+Add the stable VAPID key pair and `VAPID_SUBJECT` only when browser push is
+enabled. For native push, set `APNS_TEAM_ID`, `APNS_KEY_ID`, the complete
+`APNS_PRIVATE_KEY` `.p8` value, and `APNS_BUNDLE_ID`; partial APNs configuration
+is rejected at startup. See `.env.example` for the complete inventory.
 
 Expose container port `3000`, use `GET /health` as the health check, and keep the
 container behind HTTPS. The public health response intentionally contains only
@@ -113,8 +116,9 @@ container behind HTTPS. The public health response intentionally contains only
 2. Sign in through the new OTP screen and verify the intended Auth user ID.
 3. Claim legacy parcels using step 2 and confirm they appear only for that user.
 4. Test with a second disposable account and verify cross-account isolation.
-5. Exercise add, sync, archive, restore, push opt-in, export, sign-out, and account
-   deletion. Confirm API rate limits return `429` and `Retry-After` when exceeded.
+5. Exercise add, sync, archive, restore, browser and native push opt-in, export,
+   sign-out, and account deletion. Confirm API rate limits return `429` and
+   `Retry-After` when exceeded.
 6. Remove the Cloudflare Access application/policy for the app hostname, but
    retain Cloudflare proxying, TLS, WAF, and origin restrictions as desired.
 7. Run `scripts/smoke-url.sh https://your-hostname` from outside the origin.
@@ -140,7 +144,8 @@ repository secrets when they are no longer used.
   an independent layer.
 - Back up Postgres independently. Regularly test restoring Auth, parcel, event,
   and push tables together.
-- Rotate service-role, SMTP, VAPID, and carrier credentials if exposed. Rotating
-  VAPID keys invalidates existing browser subscriptions.
+- Rotate service-role, SMTP, VAPID, APNs, and carrier credentials if exposed.
+  Rotating VAPID keys invalidates existing browser subscriptions; revoke an
+  exposed APNs key in the Apple Developer portal before replacing it.
 - If auth or ownership verification fails during cutover, re-enable Cloudflare
   Access immediately. Do not undo ownership by setting `user_id` back to null.

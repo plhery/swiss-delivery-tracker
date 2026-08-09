@@ -30,11 +30,24 @@ notifications, and keep every tracking number private to your account.
 - Checks active deliveries every 10 minutes from 08:00 to 22:00, and hourly overnight.
 - Understands tracking numbers, carrier URLs and text pasted from shipping emails.
 - Keeps delivery history in sync across your devices.
-- Sends optional Web Push notifications without putting tracking numbers in them.
-- Works as an iPhone-friendly PWA with a useful offline shell.
+- Sends optional browser and native iPhone notifications without putting tracking numbers in them.
+- Includes a real SwiftUI iPhone app and Share extension, plus the installable PWA.
 - Uses Supabase Auth and Postgres row-level security to isolate every account.
 
 The full [carrier list and caveats](docs/CARRIERS.md) are documented separately.
+
+## Native iPhone app
+
+The native SwiftUI target lives in [`ios/`](ios/README.md). It mirrors the web
+app’s authentication, carrier parsing, parcel actions, search/filter/sort,
+tracking timeline, notification preferences, archive, account export/deletion,
+offline snapshot, demo mode, and four languages. It uses standard iOS lists,
+forms, menus, sheets, swipe actions and sharing, with a restrained Liquid Glass
+treatment on iOS 26 and a material fallback on iOS 18–25.
+
+Open `ios/SwissDeliveryTracker.xcodeproj` in Xcode to run the self-contained
+demo. See the [native setup guide](ios/README.md) to connect it to this service,
+configure Supabase Auth, the App Group, signing, and APNs.
 
 ## Try it locally
 
@@ -88,8 +101,9 @@ data, HTTPS, Auth and production verification in detail.
 - [Privacy](PRIVACY.md) and [security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 
-The frontend is React and TypeScript; the small Python service handles carrier
-sync, Supabase-backed storage and Web Push. CI tests both sides, the production
+The web frontend is React and TypeScript, the iPhone app is SwiftUI, and the
+small Python service handles carrier sync, Supabase-backed storage, Web Push,
+and APNs. CI tests both sides, the production
 container, database migrations and cross-account RLS isolation.
 
 Licensed under [Apache 2.0](LICENSE).

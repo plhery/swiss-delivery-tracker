@@ -40,11 +40,11 @@ CARRIER_CAPABILITIES = {
         "timezone": "Europe/Zurich",
         "tracking": {
             "mode": "automatic",
-            "adapter": "upstream",
-            "upstreamName": "Quickpac",
+            "adapter": "planzer",
+            "upstreamName": "Planzer",
         },
-        "canaryUrl": "https://quickpac.ch/",
-        "trackingUrlTemplate": "https://quickpac.ch/en/tracking?parcel={trackingNumber}",
+        "canaryUrl": "https://tracking.app.planzer.ch/",
+        "trackingUrlTemplate": "https://tracking.app.planzer.ch/delivery/info?deliveryNumber={trackingNumber}",
         "linkRules": (
             {
                 "domains": (
@@ -52,6 +52,14 @@ CARRIER_CAPABILITIES = {
                 ),
                 "params": (
                     "parcel",
+                ),
+            },
+            {
+                "domains": (
+                    "tracking.app.planzer.ch",
+                ),
+                "params": (
+                    "deliveryNumber",
                 ),
             },
         ),

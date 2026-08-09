@@ -50,7 +50,7 @@ export function parcelAttention(
 
   const created = new Date(parcel.createdAt).getTime();
   if (
-    (!current || current.stage === 'pending')
+    !current
     && Number.isFinite(created)
     && now - created >= 2 * DAY
   ) {

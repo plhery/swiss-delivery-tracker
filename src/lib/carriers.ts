@@ -354,7 +354,7 @@ function trackingMatch(
 
 /**
  * Pull a tracking number and carrier out of a number, carrier URL, or pasted
- * shipping message. Known carrier links win over number-shape heuristics.
+ * shipping message. Number shape disambiguates links shared by multiple brands.
  */
 export function parseTrackingInput(raw: string): TrackingInputMatch {
   const input = raw.trim();
@@ -373,12 +373,16 @@ export function parseTrackingInput(raw: string): TrackingInputMatch {
     const trackingUrl = trimPastedUrl(pastedUrl);
     try {
       const url = new URL(trackingUrl);
-      const rule = TRACKING_LINK_RULES.find((candidate) =>
+      const rules = TRACKING_LINK_RULES.filter((candidate) =>
         candidate.domains.some((domain) => matchesDomain(url.hostname.toLowerCase(), domain)),
       );
-      if (rule) {
-        const trackingNumber = numberFromRule(url, rule);
+      for (const firstRule of rules) {
+        const trackingNumber = numberFromRule(url, firstRule);
         if (trackingNumber) {
+          const detected = detectCarrierMatch(trackingNumber);
+          const rule = detected.confidence === 'high'
+            ? rules.find((candidate) => candidate.carrier === detected.carrier) ?? firstRule
+            : firstRule;
           return {
             trackingNumber,
             carrier: rule.carrier,

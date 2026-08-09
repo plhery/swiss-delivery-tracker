@@ -3,7 +3,9 @@ import unittest
 from server.api_contract import CARRIER_CAPABILITIES, CARRIER_IDS
 from server.carriers import (
     AUTOMATIC_CARRIER_IDS,
+    CARRIER_NAMES,
     active_requirements,
+    carrier_adapter,
     normalize_carrier_inputs,
     supports_swiss_post_handoff,
 )
@@ -23,6 +25,10 @@ class CarrierCapabilitiesTests(unittest.TestCase):
             if definition["tracking"]["mode"] == "automatic"
         }
         self.assertEqual(AUTOMATIC_CARRIER_IDS, expected)
+
+    def test_quickpac_uses_the_planzer_adapter_without_losing_its_identity(self):
+        self.assertEqual(carrier_adapter("quickpac"), "planzer")
+        self.assertEqual(CARRIER_NAMES["quickpac"], "Planzer")
 
     def test_requirements_are_conditional_and_reject_unrelated_inputs(self):
         self.assertEqual(active_requirements("planzer", "91346097020038089282"), ())

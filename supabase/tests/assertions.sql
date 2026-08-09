@@ -111,6 +111,12 @@ begin
       or has_table_privilege('authenticated', 'public.packages', 'DELETE') then
     raise exception 'authenticated retained direct package mutation privileges';
   end if;
+  if has_table_privilege('authenticated', 'public.native_push_devices', 'SELECT')
+      or has_table_privilege('authenticated', 'public.native_push_devices', 'INSERT')
+      or has_table_privilege('authenticated', 'public.native_push_deliveries', 'SELECT')
+      or has_table_privilege('anon', 'public.native_push_devices', 'SELECT') then
+    raise exception 'public database roles can access native push credentials';
+  end if;
   if not has_function_privilege(
     'authenticated',
     'public.create_owned_package(text,text,text,text,text)',
@@ -572,6 +578,51 @@ insert into public.push_subscriptions (
   '2000-01-01T00:00:00Z'
 );
 
+insert into public.native_push_devices (
+  id, user_id, token, environment, locale, device_name, subscribed_at
+) values (
+  'a0000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000002',
+  repeat('ab', 32),
+  'development',
+  'de',
+  'Test iPhone',
+  '2000-01-01T00:00:00Z'
+), (
+  'a0000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000001',
+  repeat('cd', 32),
+  'production',
+  'fr',
+  null,
+  '2000-01-01T00:00:00Z'
+);
+
+-- Routine app launches update device metadata without advancing the delivery
+-- cursor.
+update public.native_push_devices
+set locale = 'it', subscribed_at = now()
+where id = 'a0000000-0000-0000-0000-000000000001';
+
+do $$
+begin
+  if (
+    select subscribed_at
+    from public.native_push_devices
+    where id = 'a0000000-0000-0000-0000-000000000001'
+  ) <> '2000-01-01T00:00:00Z'::timestamptz then
+    raise exception 'routine APNs token refresh advanced its delivery cursor';
+  end if;
+  if (
+    select locale
+    from public.native_push_devices
+    where id = 'a0000000-0000-0000-0000-000000000001'
+  ) <> 'it' then
+    raise exception 'routine APNs metadata refresh was not applied';
+  end if;
+end;
+$$;
+
 insert into public.push_subscriptions (
   id, user_id, endpoint, p256dh, auth, subscribed_at
 ) values (
@@ -603,6 +654,45 @@ begin
   ) then
     raise exception 'first user received a second-user push event';
   end if;
+
+  select count(*) into pending
+  from public.pending_native_push_notifications
+  where device_id = 'a0000000-0000-0000-0000-000000000001';
+  if pending <> 1 then
+    raise exception 'expected one pending native event, found %', pending;
+  end if;
+
+  if exists (
+    select 1
+    from public.pending_native_push_notifications
+    where device_id = 'a0000000-0000-0000-0000-000000000002'
+      and package_id = '70000000-0000-0000-0000-000000000007'
+  ) then
+    raise exception 'first user received a second-user native push event';
+  end if;
+end;
+$$;
+
+-- A genuinely disabled device starts a fresh cursor when it returns. This is
+-- checked only after the cross-account assertion above has exercised the old
+-- cursor against the second owner's event.
+update public.native_push_devices
+set disabled_at = now()
+where id = 'a0000000-0000-0000-0000-000000000002';
+
+update public.native_push_devices
+set disabled_at = null, subscribed_at = '2000-01-01T00:00:00Z'
+where id = 'a0000000-0000-0000-0000-000000000002';
+
+do $$
+begin
+  if (
+    select subscribed_at
+    from public.native_push_devices
+    where id = 'a0000000-0000-0000-0000-000000000002'
+  ) < now() - interval '1 minute' then
+    raise exception 're-enabled APNs token retained a stale delivery cursor';
+  end if;
 end;
 $$;
 
@@ -621,6 +711,12 @@ begin
     where subscription_id = '60000000-0000-0000-0000-000000000006'
   ) then
     raise exception 'disabled notification stage remained pending';
+  end if;
+  if exists (
+    select 1 from public.pending_native_push_notifications
+    where device_id = 'a0000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'disabled notification stage remained pending for APNs';
   end if;
 end;
 $$;
@@ -644,6 +740,12 @@ begin
   ) then
     raise exception 'muted parcel event remained pending';
   end if;
+  if exists (
+    select 1 from public.pending_native_push_notifications
+    where device_id = 'a0000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'muted parcel event remained pending for APNs';
+  end if;
 end;
 $$;
 
@@ -659,6 +761,14 @@ from public.tracking_events
 where package_id = '70000000-0000-0000-0000-000000000007'
   and provider_event_id = 'provider:event-1';
 
+insert into public.native_push_deliveries (device_id, event_id)
+select
+  'a0000000-0000-0000-0000-000000000001',
+  id
+from public.tracking_events
+where package_id = '70000000-0000-0000-0000-000000000007'
+  and provider_event_id = 'provider:event-1';
+
 do $$
 begin
   if exists (
@@ -666,6 +776,12 @@ begin
     where subscription_id = '60000000-0000-0000-0000-000000000006'
   ) then
     raise exception 'acknowledged push event remained pending';
+  end if;
+  if exists (
+    select 1 from public.pending_native_push_notifications
+    where device_id = 'a0000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'acknowledged native push event remained pending';
   end if;
 end;
 $$;

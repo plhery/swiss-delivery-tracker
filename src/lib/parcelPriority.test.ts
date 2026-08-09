@@ -37,6 +37,12 @@ describe('parcel priority', () => {
     expect(parcelAttention({ ...parcel('error'), syncStatus: 'error' }, NOW)).toBe('sync_error');
   });
 
+  it('keeps an announced parcel waiting when its only carrier event is pending', () => {
+    expect(
+      parcelAttention(parcel('announced', 'pending', '2026-08-01T08:00:00Z'), NOW),
+    ).toBeNull();
+  });
+
   it('creates disjoint attention, today, and ordinary groups', () => {
     const attention = parcel('attention', 'customs');
     attention.expectedDelivery = '2026-08-05';

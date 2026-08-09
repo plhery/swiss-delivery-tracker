@@ -1,0 +1,8 @@
+// This file contains only public client configuration. Never put a Supabase
+// service-role key, APNs private key, or other server secret in the iOS app.
+SDT_USE_API = YES
+SDT_API_BASE_URL = https:/$()/delivery.example.com
+SDT_SUPABASE_URL = https:/$()/your-project-ref.supabase.co
+SDT_SUPABASE_PUBLISHABLE_KEY = your-publishable-key
+SDT_GOOGLE_AUTH_ENABLED = YES
+SDT_EMAIL_OTP_ENABLED = YES

@@ -21,6 +21,26 @@ class ApiContractTests(unittest.TestCase):
         assert_contract("PushConfigResponse", {"available": False, "publicKey": None})
         assert_contract("PushSubscriptionResponse", {"ok": True, "testSent": False})
         assert_contract(
+            "NativePushDeviceRequest",
+            {
+                "token": "ab" * 32,
+                "environment": "development",
+                "locale": "de",
+                "deviceName": "iPhone",
+                "sendTest": True,
+            },
+        )
+        assert_contract(
+            "NativePushDeviceRequest",
+            {
+                "token": "cd" * 32,
+                "environment": "production",
+                "locale": "fr",
+                "sendTest": False,
+            },
+        )
+        assert_contract("DeleteNativePushDeviceRequest", {"token": "ab" * 32})
+        assert_contract(
             "NotificationPreferences",
             {
                 "enabledStages": ["out_for_delivery", "delivered"],
@@ -76,6 +96,8 @@ class ApiContractTests(unittest.TestCase):
                 ("PATCH", "/api/push/preferences"),
                 ("POST", "/api/push/subscriptions"),
                 ("DELETE", "/api/push/subscriptions"),
+                ("POST", "/api/push/devices"),
+                ("DELETE", "/api/push/devices"),
                 ("GET", "/health"),
             },
         )

@@ -609,7 +609,15 @@ class TrackingSyncTests(unittest.TestCase):
         swiss_module = type(
             "SwissModule", (), {"fetch": staticmethod(lambda number: {"number": number})}
         )
-        tracker.CARRIER_MODULES = {"Swiss Post": swiss_module}
+        planzer_module = unittest.mock.Mock()
+        planzer_module.fetch.return_value = {
+            "status": "in_transit",
+            "last_status_text": "Shipment registered",
+        }
+        tracker.CARRIER_MODULES = {
+            "Swiss Post": swiss_module,
+            "Planzer": planzer_module,
+        }
         package = ModuleType("swiss_delivery_tracker")
         carriers = ModuleType("swiss_delivery_tracker.carriers")
         package.carriers = carriers
@@ -646,6 +654,15 @@ class TrackingSyncTests(unittest.TestCase):
             {"number": "123", "status": "unknown", "events": []},
         )
         swiss_post_tracker.fetch.assert_called_once_with("123")
+        self.assertEqual(
+            adapter.fetch("quickpac", "440012345612345678", None),
+            {
+                "status": "in_transit",
+                "last_status_text": "Shipment registered",
+                "events": [],
+            },
+        )
+        planzer_module.fetch.assert_called_once_with("440012345612345678")
         self.assertEqual(
             adapter.fetch("dpd", "06086514587082", None),
             {"status": "in_transit", "events": []},

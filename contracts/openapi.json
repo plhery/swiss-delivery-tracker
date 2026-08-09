@@ -43,15 +43,19 @@
       "timezone": "Europe/Zurich",
       "tracking": {
         "mode": "automatic",
-        "adapter": "upstream",
-        "upstreamName": "Quickpac"
+        "adapter": "planzer",
+        "upstreamName": "Planzer"
       },
-      "canaryUrl": "https://quickpac.ch/",
-      "trackingUrlTemplate": "https://quickpac.ch/en/tracking?parcel={trackingNumber}",
+      "canaryUrl": "https://tracking.app.planzer.ch/",
+      "trackingUrlTemplate": "https://tracking.app.planzer.ch/delivery/info?deliveryNumber={trackingNumber}",
       "linkRules": [
         {
           "domains": ["quickpac.ch"],
           "params": ["parcel"]
+        },
+        {
+          "domains": ["tracking.app.planzer.ch"],
+          "params": ["deliveryNumber"]
         }
       ],
       "detectionRules": [
@@ -900,6 +904,73 @@
         }
       }
     },
+    "/api/push/devices": {
+      "post": {
+        "operationId": "upsertNativePushDevice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativePushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Native push device stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushSubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteNativePushDevice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteNativePushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Native push device removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "operationId": "getHealth",
@@ -1486,6 +1557,62 @@
           },
           "testSent": {
             "type": "boolean"
+          }
+        }
+      },
+      "NativePushDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token",
+          "environment",
+          "locale",
+          "sendTest"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 512,
+            "pattern": "^[0-9A-Fa-f]+$"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "development",
+              "production"
+            ]
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "de",
+              "fr",
+              "it"
+            ]
+          },
+          "deviceName": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "sendTest": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DeleteNativePushDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 512,
+            "pattern": "^[0-9A-Fa-f]+$"
           }
         }
       },

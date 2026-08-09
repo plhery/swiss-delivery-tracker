@@ -205,6 +205,17 @@ describe('parseTrackingInput', () => {
     });
   });
 
+  it('uses the number shape to distinguish Quickpac on Planzer links', () => {
+    expect(parseTrackingInput(
+      'https://tracking.app.planzer.ch/delivery/info?deliveryNumber=440012345612345678',
+    )).toMatchObject({
+      trackingNumber: '440012345612345678',
+      carrier: 'quickpac',
+      confidence: 'high',
+      source: 'link',
+    });
+  });
+
   it('captures a complete Dachser capability link', () => {
     const link =
       'https://customeriberia.dachser.com/customerarea/utilidades/seguimiento-publico/detalle?cliente=generico&numeroUnico=9010000001234&fecha=20260513&clave=TESTKEY9';
@@ -275,6 +286,12 @@ describe('carrier metadata', () => {
   it('links Planzer deliveries to the current tracking app', () => {
     expect(CARRIERS.planzer.trackingUrl?.('91346097020038089282')).toBe(
       'https://tracking.app.planzer.ch/delivery/info?deliveryNumber=91346097020038089282',
+    );
+  });
+
+  it('links Quickpac deliveries to the current Planzer tracking app', () => {
+    expect(CARRIERS.quickpac.trackingUrl?.('440012345612345678')).toBe(
+      'https://tracking.app.planzer.ch/delivery/info?deliveryNumber=440012345612345678',
     );
   });
 

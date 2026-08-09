@@ -40,11 +40,11 @@ export const CARRIER_CAPABILITIES = {
     "timezone": "Europe/Zurich",
     "tracking": {
       "mode": "automatic",
-      "adapter": "upstream",
-      "upstreamName": "Quickpac"
+      "adapter": "planzer",
+      "upstreamName": "Planzer"
     },
-    "canaryUrl": "https://quickpac.ch/",
-    "trackingUrlTemplate": "https://quickpac.ch/en/tracking?parcel={trackingNumber}",
+    "canaryUrl": "https://tracking.app.planzer.ch/",
+    "trackingUrlTemplate": "https://tracking.app.planzer.ch/delivery/info?deliveryNumber={trackingNumber}",
     "linkRules": [
       {
         "domains": [
@@ -52,6 +52,14 @@ export const CARRIER_CAPABILITIES = {
         ],
         "params": [
           "parcel"
+        ]
+      },
+      {
+        "domains": [
+          "tracking.app.planzer.ch"
+        ],
+        "params": [
+          "deliveryNumber"
         ]
       }
     ],
@@ -583,6 +591,18 @@ export interface ApiDeletePushSubscriptionRequest {
 export interface ApiPushSubscriptionResponse {
   "ok": boolean;
   "testSent": boolean;
+}
+
+export interface ApiNativePushDeviceRequest {
+  "token": string;
+  "environment": "development" | "production";
+  "locale": "en" | "de" | "fr" | "it";
+  "deviceName"?: string;
+  "sendTest": boolean;
+}
+
+export interface ApiDeleteNativePushDeviceRequest {
+  "token": string;
 }
 
 export interface ApiSyncSummary {

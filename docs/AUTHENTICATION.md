@@ -30,6 +30,17 @@ The URL and publishable key are safe to expose; RLS protects database rows. The
 service-role key bypasses RLS and must never use a `VITE_` prefix or enter logs,
 screenshots, frontend build arguments, or repository history.
 
+The native iPhone app uses the same public values from its gitignored
+`ios/Configuration/Local.xcconfig`. When native Google sign-in is enabled, add
+this exact deep link to Supabase Auth's redirect allow list:
+
+```text
+swissdeliverytracker://auth-callback
+```
+
+The app completes PKCE in `ASWebAuthenticationSession` and stores the resulting
+session in Keychain. The Google client secret still remains only in Supabase.
+
 ## Email OTP setup
 
 Enable the Email provider and permit email sign-ups in Supabase Auth. Set the
@@ -110,7 +121,8 @@ reopening the installed PWA.
 
 1. Request a code for a non-team email address and verify the branded message
    arrives once.
-2. Enter the code, reload the browser, and reopen the installed PWA.
+2. Enter the code, reload the browser, reopen the installed PWA, and relaunch
+   the configured iPhone build.
 3. Confirm another account cannot see, sync, archive, restore, export, or receive
    notifications for the first account's parcel.
 4. Sign out and confirm private API requests return `401`.
