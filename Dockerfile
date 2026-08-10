@@ -13,6 +13,7 @@ RUN npm ci
 COPY index.html tsconfig.json vite.config.ts ./
 COPY public ./public
 COPY src ./src
+COPY contracts ./contracts
 RUN npm run build
 
 FROM python:3.13-slim@sha256:bf503bb2243c5aad0aa951544dd60d165f992646441d35dea90893703fc26251 AS runtime
