@@ -644,10 +644,10 @@
         }
       ],
       "delete": {
-        "operationId": "deleteArchivedPackage",
+        "operationId": "deletePackagePermanently",
         "responses": {
           "200": {
-            "description": "Archived parcel permanently deleted",
+            "description": "Parcel permanently deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -660,9 +660,6 @@
             "$ref": "#/components/responses/ApiError"
           },
           "404": {
-            "$ref": "#/components/responses/ApiError"
-          },
-          "409": {
             "$ref": "#/components/responses/ApiError"
           },
           "502": {

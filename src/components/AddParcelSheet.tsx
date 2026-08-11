@@ -34,8 +34,10 @@ export function AddParcelSheet({
     dpdPostcode: lastDpdPostcode ?? '',
   });
   const [selectedCarrier, setSelectedCarrier] = useState<CarrierId | 'auto'>('auto');
+  const [showCarrierPicker, setShowCarrierPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasteError, setPasteError] = useState<string | null>(null);
   const trackingInput = useRef<HTMLTextAreaElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, onClose, trackingInput);
 
@@ -56,6 +58,33 @@ export function AddParcelSheet({
     const value = carrierInputValue(requirement.field).trim();
     return value && (!requirement.pattern || new RegExp(requirement.pattern).test(value));
   });
+  const carrierHint = carrier
+    ? requiresCarrierConfirmation
+      ? t('add.confirmCarrier', {
+        carriers: parsedTracking.candidates
+          .map((candidate) => carrierInfo(candidate).name)
+          .join(` ${t('auth.or')} `),
+      })
+      : carrier.id === 'unknown'
+        ? t('add.unknownCarrier')
+        : tracksAutomatically(carrier.id)
+          ? t('add.autoSync', { carrier: carrier.name })
+          : t('add.linkSync', { carrier: carrier.name })
+    : '';
+  const carrierPickerVisible = Boolean(trackingNumber) && (
+    showCarrierPicker || requiresCarrierConfirmation || carrier?.id === 'unknown'
+  );
+
+  async function pasteTrackingInput() {
+    setPasteError(null);
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) throw new Error('Clipboard is empty');
+      setTrackingInputValue(text);
+    } catch {
+      setPasteError(t('add.pasteFailed'));
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -111,20 +140,19 @@ export function AddParcelSheet({
           {t('add.intro')}
         </p>
         <form onSubmit={handleSubmit} className="sheet__form">
-          <label className="field">
-            <span className="field__label">{t('add.contents')} <small>{t('add.optional')}</small></span>
-            <input
-              className="field__input"
-              type="text"
-              value={label}
-              placeholder={t('add.contentsPlaceholder')}
-              onChange={(e) => setLabel(e.target.value)}
-              maxLength={80}
-            />
-          </label>
-          <label className="field">
-            <span className="field__label">{t('add.tracking')}</span>
+          <div className="field">
+            <div className="field__label">
+              <label htmlFor="add-parcel-tracking">{t('add.tracking')}</label>
+              <button
+                type="button"
+                className="field__inline-action"
+                onClick={() => void pasteTrackingInput()}
+              >
+                {t('add.paste')}
+              </button>
+            </div>
             <textarea
+              id="add-parcel-tracking"
               className="field__input field__input--tracking"
               ref={trackingInput}
               value={trackingInputValue}
@@ -135,7 +163,8 @@ export function AddParcelSheet({
               spellCheck={false}
               required
             />
-          </label>
+          </div>
+          {pasteError && <p className="sheet__error" role="status">{pasteError}</p>}
           {trackingInputValue.trim() && !trackingNumber && (
             <p className="sheet__error" role="status">
               {t('add.notFound')}
@@ -150,21 +179,46 @@ export function AddParcelSheet({
                 : 'add.foundTextSuffix')}
             </p>
           )}
-          <label className="field">
-            <span className="field__label">{t('add.carrier')}</span>
-            <select
-              className="field__input"
-              value={selectedCarrier}
-              onChange={(e) => setSelectedCarrier(e.target.value as CarrierId | 'auto')}
-            >
-              <option value="auto">{t('add.detect')}</option>
-              {SELECTABLE_CARRIERS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}{tracksAutomatically(option.id) ? '' : ` (${t('add.linkOnly')})`}
-                </option>
-              ))}
-            </select>
-          </label>
+          {carrier && trackingNumber && (
+            <div className={`sheet__carrier-card${requiresCarrierConfirmation ? ' sheet__carrier-card--warning' : ''}`}>
+              <span className="sheet__carrier-mark" aria-hidden="true" />
+              <span className="sheet__carrier-copy">
+                <small>{selectedCarrier === 'auto' ? t('add.detectedCarrier') : t('add.carrier')}</small>
+                <strong>{carrier.name}</strong>
+                <span>{carrierHint}</span>
+              </span>
+              {!requiresCarrierConfirmation
+                && (selectedCarrier !== 'auto' || parsedTracking.carrier !== 'unknown') && (
+                <button
+                  type="button"
+                  onClick={() => setShowCarrierPicker((visible) => !visible)}
+                >
+                  {carrierPickerVisible
+                    ? selectedCarrier === 'auto'
+                      ? t('add.useDetectedCarrier')
+                      : t('common.close')
+                    : t('add.changeCarrier')}
+                </button>
+              )}
+            </div>
+          )}
+          {carrierPickerVisible && (
+            <label className="field">
+              <span className="field__label">{t('add.carrier')}</span>
+              <select
+                className="field__input"
+                value={selectedCarrier}
+                onChange={(e) => setSelectedCarrier(e.target.value as CarrierId | 'auto')}
+              >
+                <option value="auto">{t('add.detect')}</option>
+                {SELECTABLE_CARRIERS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}{tracksAutomatically(option.id) ? '' : ` (${t('add.linkOnly')})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {requirements
             .filter(({ field }) => field !== 'trackingUrl' || !parsedCarrierTrackingUrl)
             .map((requirement) => (
@@ -202,21 +256,17 @@ export function AddParcelSheet({
                 )}
               </label>
             ))}
-          {carrier && (
-            <p className="sheet__carrier-hint">
-              {requiresCarrierConfirmation
-                ? t('add.confirmCarrier', {
-                  carriers: parsedTracking.candidates
-                    .map((candidate) => carrierInfo(candidate).name)
-                    .join(` ${t('auth.or')} `),
-                })
-                : carrier.id === 'unknown'
-                  ? t('add.unknownCarrier')
-                  : tracksAutomatically(carrier.id)
-                  ? t('add.autoSync', { carrier: carrier.name })
-                  : t('add.linkSync', { carrier: carrier.name })}
-            </p>
-          )}
+          <label className="field">
+            <span className="field__label">{t('add.contents')} <small>{t('add.optional')}</small></span>
+            <input
+              className="field__input"
+              type="text"
+              value={label}
+              placeholder={t('add.contentsPlaceholder')}
+              onChange={(e) => setLabel(e.target.value)}
+              maxLength={80}
+            />
+          </label>
           {error && (
             <p className="sheet__error" role="alert">
               {error}

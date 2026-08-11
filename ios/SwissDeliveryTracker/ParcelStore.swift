@@ -539,11 +539,8 @@ private final class DemoRepository {
 
     func permanentlyDelete(id: UUID) throws {
         var all = load()
-        guard let parcel = all.first(where: { $0.id == id }) else {
+        guard all.contains(where: { $0.id == id }) else {
             throw DeliveryAPIError.service("Parcel not found.")
-        }
-        guard parcel.isArchived else {
-            throw DeliveryAPIError.service("Archive the parcel before permanently deleting it.")
         }
         all.removeAll { $0.id == id }
         save(all)

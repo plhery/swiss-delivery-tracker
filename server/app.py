@@ -1035,13 +1035,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not package:
                     self._json(404, {"error": "Package not found"})
                     return
-                if package.get("archived_at") is None:
-                    self._json(
-                        HTTPStatus.CONFLICT,
-                        {"error": "Archive the parcel before permanently deleting it"},
-                    )
-                    return
-                if not client.delete_archived_package(package_id):
+                if not client.delete_package(package_id):
                     self._json(404, {"error": "Package not found"})
                     return
                 self._json(200, {"ok": True})

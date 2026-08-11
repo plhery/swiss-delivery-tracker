@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import VisionKit
 
 struct AddParcelView: View {
     let draft: SharedParcelDraft?
@@ -8,6 +10,8 @@ struct AddParcelView: View {
     @State private var label: String
     @State private var trackingInput: String
     @State private var selectedCarrier = "auto"
+    @State private var showingCarrierPicker = false
+    @State private var showingScanner = false
     @State private var trackingURL = ""
     @State private var dpdPostcode = ""
     @State private var saving = false
@@ -31,20 +35,27 @@ struct AddParcelView: View {
                         .listRowBackground(Color.clear)
                 }
 
-                Section(localizer.text("add.contents")) {
-                    TextField(localizer.text("add.contentsPlaceholder"), text: $label)
-                        .textContentType(.name)
-                        .onChange(of: label) { _, value in
-                            if value.count > 80 { label = String(value.prefix(80)) }
-                        }
-                }
-
                 Section(localizer.text("add.tracking")) {
                     TextEditor(text: $trackingInput)
                         .frame(minHeight: 86)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .font(.body.monospaced())
+
+                    HStack(spacing: 10) {
+                        Button(localizer.text("add.paste"), systemImage: "doc.on.clipboard") {
+                            pasteTrackingInput()
+                        }
+                        .buttonStyle(.bordered)
+
+                        if DataScannerViewController.isSupported,
+                           DataScannerViewController.isAvailable {
+                            Button(localizer.text("add.scan"), systemImage: "barcode.viewfinder") {
+                                showingScanner = true
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
 
                     if !trackingInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                        parsed.trackingNumber.isEmpty {
@@ -62,25 +73,44 @@ struct AddParcelView: View {
                     }
                 }
 
-                Section(localizer.text("add.carrier")) {
-                    Picker(localizer.text("add.carrier"), selection: $selectedCarrier) {
-                        Text(localizer.text("add.detect")).tag("auto")
-                        ForEach(catalog.selectableCarriers) { carrier in
-                            let info = catalog.info(for: carrier)
-                            Text(info.displayName + (catalog.tracksAutomatically(carrier)
-                                ? "" : " (\(localizer.text("add.linkOnly")))"))
-                                .tag(carrier.rawValue)
-                        }
-                    }
-
-                    if let definition = resolvedDefinition, !parsed.trackingNumber.isEmpty {
+                if let definition = resolvedDefinition, !parsed.trackingNumber.isEmpty {
+                    Section(localizer.text(selectedCarrier == "auto" ? "add.detectedCarrier" : "add.carrier")) {
                         HStack(spacing: 10) {
                             Circle()
                                 .fill(Color(hex: definition.color))
                                 .frame(width: 10, height: 10)
-                            Text(carrierHint)
-                                .font(.caption)
-                                .foregroundStyle(requiresConfirmation ? .orange : .secondary)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(definition.displayName).font(.subheadline.weight(.semibold))
+                                Text(carrierHint)
+                                    .font(.caption)
+                                    .foregroundStyle(requiresConfirmation ? .orange : .secondary)
+                            }
+                            Spacer(minLength: 4)
+                            if !requiresConfirmation,
+                               selectedCarrier != "auto" || parsed.carrier != .unknown {
+                                Button(localizer.text(
+                                    carrierPickerVisible
+                                        ? selectedCarrier == "auto"
+                                            ? "add.useDetectedCarrier"
+                                            : "common.close"
+                                        : "add.changeCarrier"
+                                )) {
+                                    showingCarrierPicker.toggle()
+                                }
+                                .font(.caption.weight(.semibold))
+                            }
+                        }
+
+                        if carrierPickerVisible {
+                            Picker(localizer.text("add.carrier"), selection: $selectedCarrier) {
+                                Text(localizer.text("add.detect")).tag("auto")
+                                ForEach(catalog.selectableCarriers) { carrier in
+                                    let info = catalog.info(for: carrier)
+                                    Text(info.displayName + (catalog.tracksAutomatically(carrier)
+                                        ? "" : " (\(localizer.text("add.linkOnly")))"))
+                                        .tag(carrier.rawValue)
+                                }
+                            }
                         }
                     }
                 }
@@ -110,6 +140,14 @@ struct AddParcelView: View {
                             Text(help).font(.caption).foregroundStyle(.secondary)
                         }
                     }
+                }
+
+                Section(localizer.text("add.contents")) {
+                    TextField(localizer.text("add.contentsPlaceholder"), text: $label)
+                        .textContentType(.name)
+                        .onChange(of: label) { _, value in
+                            if value.count > 80 { label = String(value.prefix(80)) }
+                        }
                 }
 
                 if let errorMessage {
@@ -148,6 +186,13 @@ struct AddParcelView: View {
                         .dpdPostcode ?? ""
                 }
             }
+            .fullScreenCover(isPresented: $showingScanner) {
+                TrackingScannerView { value in
+                    trackingInput = value
+                    showingScanner = false
+                }
+                .environmentObject(localizer)
+            }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
@@ -171,6 +216,10 @@ struct AddParcelView: View {
 
     private var requiresConfirmation: Bool {
         selectedCarrier == "auto" && parsed.confidence == .low
+    }
+
+    private var carrierPickerVisible: Bool {
+        showingCarrierPicker || requiresConfirmation || resolvedCarrier == .unknown
     }
 
     private var canSave: Bool {
@@ -220,6 +269,92 @@ struct AddParcelView: View {
             } catch {
                 errorMessage = error.localizedDescription
                 saving = false
+            }
+        }
+    }
+
+    private func pasteTrackingInput() {
+        guard let value = UIPasteboard.general.string?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ), !value.isEmpty else {
+            errorMessage = localizer.text("add.pasteFailed")
+            return
+        }
+        errorMessage = nil
+        trackingInput = value
+    }
+}
+
+private struct TrackingScannerView: View {
+    let onScan: (String) -> Void
+    @EnvironmentObject private var localizer: Localizer
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            TrackingDataScanner(onScan: onScan)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(localizer.text("add.scanTitle"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(localizer.text("common.cancel")) { dismiss() }
+                    }
+                }
+        }
+    }
+}
+
+private struct TrackingDataScanner: UIViewControllerRepresentable {
+    let onScan: (String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onScan: onScan) }
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let scanner = DataScannerViewController(
+            recognizedDataTypes: [.barcode()],
+            qualityLevel: .balanced,
+            recognizesMultipleItems: false,
+            isHighFrameRateTrackingEnabled: true,
+            isPinchToZoomEnabled: true,
+            isGuidanceEnabled: true,
+            isHighlightingEnabled: true
+        )
+        scanner.delegate = context.coordinator
+        Task { @MainActor in try? scanner.startScanning() }
+        return scanner
+    }
+
+    func updateUIViewController(_ uiViewController: DataScannerViewController, context: Context) {}
+
+    static func dismantleUIViewController(
+        _ uiViewController: DataScannerViewController,
+        coordinator: Coordinator
+    ) {
+        uiViewController.stopScanning()
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        private let onScan: (String) -> Void
+        private var delivered = false
+
+        init(onScan: @escaping (String) -> Void) { self.onScan = onScan }
+
+        func dataScanner(
+            _ dataScanner: DataScannerViewController,
+            didAdd addedItems: [RecognizedItem],
+            allItems: [RecognizedItem]
+        ) {
+            guard !delivered else { return }
+            for item in addedItems {
+                guard case .barcode(let barcode) = item,
+                      let value = barcode.payloadStringValue?.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                      ), !value.isEmpty else { continue }
+                delivered = true
+                onScan(value)
+                return
             }
         }
     }

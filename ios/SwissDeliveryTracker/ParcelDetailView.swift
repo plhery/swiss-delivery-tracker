@@ -54,9 +54,13 @@ struct ParcelDetailView: View {
                         }
                         if !parcel.isArchived {
                             Divider()
-                            Button(localizer.text("detail.archive"), systemImage: "archivebox", role: .destructive) {
+                            Button(localizer.text("detail.archive"), systemImage: "archivebox") {
                                 archive(parcel)
                             }
+                        }
+                        Divider()
+                        Button(localizer.text("detail.delete"), systemImage: "trash", role: .destructive) {
+                            confirmingDelete = true
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -72,7 +76,7 @@ struct ParcelDetailView: View {
                 run(.rename) { try await store.rename(parcel, label: titleDraft) }
             }
         }
-        .alert(localizer.text("detail.deleteQuestion"), isPresented: $confirmingDelete) {
+        .alert(deleteAlertTitle, isPresented: $confirmingDelete) {
             Button(localizer.text("common.cancel"), role: .cancel) {}
             Button(localizer.text("detail.delete"), role: .destructive) {
                 guard let parcel else { return }
@@ -96,15 +100,21 @@ struct ParcelDetailView: View {
 
     private var parcel: Parcel? { store.parcels.first { $0.id == parcelID } }
 
+    private var deleteAlertTitle: String {
+        localizer.text("detail.deleteQuestionAria", [
+            "name": parcel?.label.nonEmpty ?? localizer.text("common.parcel"),
+        ])
+    }
+
     private func detailHero(_ parcel: Parcel) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             ZStack {
                 Circle().fill(Color(hex: carrier(for: parcel).color).opacity(0.14))
                 Image(systemName: parcel.currentStage?.metadata.symbol ?? "shippingbox")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(.system(size: 23, weight: .semibold))
                     .foregroundStyle(Color(hex: carrier(for: parcel).color))
             }
-            .frame(width: 72, height: 72)
+            .frame(width: 54, height: 54)
 
             VStack(spacing: 7) {
                 Text(carrier(for: parcel).displayName)
@@ -113,13 +123,17 @@ struct ParcelDetailView: View {
                     .tracking(1.1)
                     .foregroundStyle(.secondary)
                 Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .font(.system(.title2, design: .rounded, weight: .bold))
                     .multilineTextAlignment(.center)
                 StatusBadge(status: parcel.displayStatus)
             }
 
             DeliveryProgress(stage: parcel.currentStage)
                 .padding(.horizontal, 12)
+
+            if let current = parcel.currentEvent {
+                latestUpdate(current)
+            }
 
             trackingTicket(parcel)
 
@@ -177,33 +191,55 @@ struct ParcelDetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(17)
         .parcelCardSurface(tone: parcel.displayStatus.tone)
     }
 
     private func trackingTicket(_ parcel: Parcel) -> some View {
-        VStack(spacing: 10) {
-            HStack {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(localizer.text("detail.trackingNumber"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Spacer()
-                Button(copied ? localizer.text("detail.copied") : localizer.text("detail.copy")) {
-                    copy(parcel.trackingNumber)
-                }
-                .font(.caption.weight(.bold))
+                Text(CarrierCatalog.format(parcel.trackingNumber))
+                    .font(.system(.subheadline, design: .monospaced, weight: .semibold))
+                    .lineLimit(2)
+                    .textSelection(.enabled)
             }
-            Text(CarrierCatalog.format(parcel.trackingNumber))
-                .font(.system(.body, design: .monospaced, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-            BarcodeBars(seed: parcel.trackingNumber)
-                .frame(height: 26)
-                .opacity(0.78)
+            Spacer(minLength: 6)
+            Button(copied ? localizer.text("detail.copied") : localizer.text("detail.copy")) {
+                copy(parcel.trackingNumber)
+            }
+            .font(.caption.weight(.bold))
+            .buttonStyle(.bordered)
         }
-        .padding(16)
+        .padding(14)
         .background(Brand.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(style: StrokeStyle(lineWidth: 1, dash: [5, 4])).foregroundStyle(.secondary.opacity(0.25)))
+    }
+
+    private func latestUpdate(_ event: TrackingEvent) -> some View {
+        HStack(alignment: .top, spacing: 11) {
+            Circle()
+                .fill(event.stage.metadata.tone.color)
+                .frame(width: 9, height: 9)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(localizer.text(event.stage.localizationKey))
+                    .font(.subheadline.weight(.semibold))
+                Text(event.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text([event.location, localizer.dateTime(event.occurredAt)]
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(13)
+        .background(Brand.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func journey(_ parcel: Parcel) -> some View {
@@ -246,15 +282,15 @@ struct ParcelDetailView: View {
                 .frame(width: 38, height: 38)
                 .background(.secondary.opacity(0.09), in: Circle())
             VStack(alignment: .leading, spacing: 3) {
-                Text(localizer.text("detail.mute")).font(.subheadline.weight(.semibold))
-                Text(localizer.text("detail.muteDescription"))
+                Text(localizer.text("detail.notifications")).font(.subheadline.weight(.semibold))
+                Text(localizer.text("detail.notificationsDescription"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 5)
             Toggle("", isOn: Binding(
-                get: { parcel.notificationsMuted },
-                set: { muted in
-                    run(.mute) { try await store.setMuted(parcel, muted: muted) }
+                get: { !parcel.notificationsMuted },
+                set: { enabled in
+                    run(.mute) { try await store.setMuted(parcel, muted: !enabled) }
                 }
             ))
             .labelsHidden()
@@ -311,12 +347,6 @@ struct ParcelDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Brand.accent)
                 .foregroundStyle(Brand.ink)
-
-                Button(localizer.text("detail.archive"), systemImage: "archivebox", role: .destructive) {
-                    archive(parcel)
-                }
-                .buttonStyle(.bordered)
-                .tint(.orange)
             }
         }
         .frame(maxWidth: .infinity)
@@ -403,31 +433,5 @@ private struct TimelineRow: View {
             .padding(.bottom, isLast ? 0 : 15)
             Spacer(minLength: 0)
         }
-    }
-}
-
-private struct BarcodeBars: View {
-    let seed: String
-
-    var body: some View {
-        GeometryReader { proxy in
-            Canvas { context, size in
-                var x: CGFloat = 0
-                let values = Array(seed.utf8)
-                var index = 0
-                while x < size.width {
-                    let byte = values.isEmpty ? UInt8(3) : values[index % values.count]
-                    let width = CGFloat((Int(byte) + index) % 3 + 1)
-                    context.fill(
-                        Path(CGRect(x: x, y: 0, width: width, height: size.height)),
-                        with: .color(Brand.ink)
-                    )
-                    x += width + CGFloat((Int(byte) >> 2) % 3 + 1)
-                    index += 1
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .accessibilityHidden(true)
     }
 }

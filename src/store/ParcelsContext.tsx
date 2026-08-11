@@ -24,7 +24,7 @@ interface ParcelsState {
   setParcelNotificationsMuted: (id: string, muted: boolean) => Promise<void>;
   removeParcel: (id: string) => Promise<void>;
   restoreParcel: (id: string) => Promise<void>;
-  deleteArchivedParcel: (id: string) => Promise<void>;
+  deleteParcel: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
   refreshParcel: (id: string) => Promise<void>;
   retryLoad: () => Promise<void>;
@@ -164,12 +164,12 @@ export function ParcelsProvider({
     }
   }, [repo, rememberError]);
 
-  const deleteArchivedParcel = useCallback(async (id: string) => {
+  const deleteParcel = useCallback(async (id: string) => {
     try {
-      if (!repo.deleteArchived) {
-        throw new Error('Permanently deleting archived parcels is unavailable');
+      if (!repo.deletePermanently) {
+        throw new Error('Permanently deleting parcels is unavailable');
       }
-      await repo.deleteArchived(id);
+      await repo.deletePermanently(id);
       if (mounted.current) {
         setParcels((current) => current.filter((parcel) => parcel.id !== id));
         setError(null);
@@ -250,7 +250,7 @@ export function ParcelsProvider({
       setParcelNotificationsMuted,
       removeParcel,
       restoreParcel,
-      deleteArchivedParcel,
+      deleteParcel,
       refresh,
       refreshParcel,
       retryLoad,
@@ -268,7 +268,7 @@ export function ParcelsProvider({
       setParcelNotificationsMuted,
       removeParcel,
       restoreParcel,
-      deleteArchivedParcel,
+      deleteParcel,
       refresh,
       refreshParcel,
       retryLoad,

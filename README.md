@@ -28,7 +28,9 @@ notifications, and keep every tracking number private to your account.
 
 - Tracks supported carriers automatically and links out gracefully for the rest.
 - Checks active deliveries every 10 minutes from 08:00 to 22:00, and hourly overnight.
-- Understands tracking numbers, carrier URLs and text pasted from shipping emails.
+- Understands tracking numbers, carrier URLs and text pasted from shipping emails, with
+  one-tap paste on web and barcode scanning on iPhone.
+- Keeps search visible, exposes active filter chips, and surfaces the next parcel and ETA.
 - Keeps delivery history in sync across your devices.
 - Sends optional browser and native iPhone notifications without putting tracking numbers in them.
 - Includes a real SwiftUI iPhone app and Share extension, plus the installable PWA.
@@ -40,7 +42,8 @@ The full [carrier list and caveats](docs/CARRIERS.md) are documented separately.
 
 The native SwiftUI target lives in [`ios/`](ios/README.md). It mirrors the web
 app’s authentication, carrier parsing, parcel actions, search/filter/sort,
-tracking timeline, notification preferences, archive, account export/deletion,
+tracking timeline, notification preferences, archive, guarded direct parcel deletion,
+account export/deletion,
 offline snapshot, demo mode, and four languages. It uses standard iOS lists,
 forms, menus, sheets, swipe actions and sharing, with a restrained Liquid Glass
 treatment on iOS 26 and a material fallback on iOS 18–25.

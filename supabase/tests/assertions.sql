@@ -146,6 +146,10 @@ begin
     'authenticated',
     'public.delete_owned_archived_package(uuid)',
     'EXECUTE'
+  ) or not has_function_privilege(
+    'authenticated',
+    'public.delete_owned_package(uuid)',
+    'EXECUTE'
   ) then
     raise exception 'authenticated cannot execute notification preference RPCs';
   end if;
@@ -156,6 +160,23 @@ $$;
 -- same tracking number as another user, and cannot alter server-owned fields.
 set role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', false);
+
+do $$
+declare
+  deletable_id uuid;
+begin
+  select id into deletable_id
+  from public.create_owned_package('DELETEDIRECT01', 'Direct delete test', 'unknown', null, null);
+
+  if not public.delete_owned_package(deletable_id) then
+    raise exception 'an owner could not permanently delete an active package';
+  end if;
+  if exists (select 1 from public.packages where id = deletable_id)
+    or exists (select 1 from public.tracking_events where package_id = deletable_id) then
+    raise exception 'direct permanent deletion did not cascade through package history';
+  end if;
+end;
+$$;
 
 do $$
 declare
@@ -476,6 +497,11 @@ begin
     '40000000-0000-0000-0000-000000000004'
   ) then
     raise exception 'second user deleted a first-user archived package through the RPC';
+  end if;
+  if public.delete_owned_package(
+    '40000000-0000-0000-0000-000000000004'
+  ) then
+    raise exception 'second user directly deleted a first-user package through the RPC';
   end if;
 end;
 $$;

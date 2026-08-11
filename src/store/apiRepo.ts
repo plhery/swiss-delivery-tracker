@@ -238,7 +238,7 @@ export function createApiRepo(
       return toParcel(row);
     },
 
-    async deleteArchived(id: string): Promise<void> {
+    async deletePermanently(id: string): Promise<void> {
       await request<ApiOkResponse>(
         `/api/packages/${encodeURIComponent(id)}/permanent`,
         auth,

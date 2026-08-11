@@ -31,7 +31,7 @@ struct ParcelListView: View {
             .toolbar { toolbar }
             .searchable(
                 text: $query,
-                placement: .navigationBarDrawer(displayMode: .automatic),
+                placement: .navigationBarDrawer(displayMode: .always),
                 prompt: localizer.text("view.searchPlaceholder")
             )
             .navigationDestination(for: UUID.self) { parcelID in
@@ -125,6 +125,13 @@ struct ParcelListView: View {
                 .listRowSeparator(.hidden)
             }
 
+            if hasCustomView {
+                filterChips
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 5, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
             if !store.loading && store.parcels.isEmpty {
                 ContentUnavailableView(
                     localizer.text("app.emptyTitle"),
@@ -156,12 +163,13 @@ struct ParcelListView: View {
                                 notice: section.kind == .attention
                                     ? parcel.attention().map { localizer.text($0.localizationKey) }
                                     : nil,
-                                onOpen: { path.append(parcel.id) }
+                                onOpen: { path.append(parcel.id) },
+                                onArchive: parcel.isArchived ? nil : { archive(parcel) }
                             )
                             .environmentObject(localizer)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 if !parcel.isArchived {
-                                    Button(localizer.text("parcel.archive"), systemImage: "archivebox", role: .destructive) {
+                                    Button(localizer.text("parcel.archive"), systemImage: "archivebox") {
                                         archive(parcel)
                                     }
                                     .tint(.orange)
@@ -216,8 +224,30 @@ struct ParcelListView: View {
                     .foregroundStyle(Brand.ink.opacity(0.68))
             }
             Spacer(minLength: 8)
-            ParcelGlyph(size: 76)
-                .overlay(RoundedRectangle(cornerRadius: 19).stroke(Brand.ink.opacity(0.1)))
+            if let nextParcel {
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text(localizer.text("app.nextUp"))
+                        .font(.caption2.weight(.bold))
+                        .textCase(.uppercase)
+                        .tracking(1)
+                        .foregroundStyle(Brand.ink.opacity(0.58))
+                    Text(nextParcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                        .font(.subheadline.weight(.bold))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.trailing)
+                    Text(nextParcel.expectedDelivery.map {
+                        localizer.text("parcel.expected", ["date": localizer.expectedDelivery($0)])
+                    } ?? localizer.text(nextParcel.displayStatus.key))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(Brand.ink.opacity(0.68))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.trailing)
+                }
+                .frame(maxWidth: 150, alignment: .trailing)
+            } else {
+                ParcelGlyph(size: 70)
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.ink.opacity(0.1)))
+            }
         }
         .foregroundStyle(Brand.ink)
         .padding(22)
@@ -357,9 +387,60 @@ struct ParcelListView: View {
         }
     }
 
+    private var nextParcel: Parcel? {
+        ParcelOrganizer.visible(
+            store.parcels,
+            query: "",
+            status: .active,
+            carrier: nil,
+            sort: .priority,
+            catalog: catalog
+        ).first
+    }
+
     private var hasCustomView: Bool {
         !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || statusFilter != .all || carrierFilter != nil || sort != .priority
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    filterChip("“\(query)”") { query = "" }
+                }
+                if statusFilter != .all {
+                    filterChip(localizer.text(statusFilter.localizationKey)) { statusFilter = .all }
+                }
+                if let carrierFilter {
+                    filterChip(catalog.info(for: carrierFilter).displayName) { self.carrierFilter = nil }
+                }
+                if sort != .priority {
+                    filterChip(localizer.text(sort.localizationKey)) { sort = .priority }
+                }
+                Button(localizer.text("view.clearAll")) { clearFilters() }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 5)
+            }
+        }
+    }
+
+    private func filterChip(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title).lineLimit(1)
+                Image(systemName: "xmark").font(.caption2.weight(.bold))
+            }
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 11)
+            .frame(height: 34)
+            .background(Brand.warning.opacity(0.12), in: Capsule())
+            .overlay(Capsule().stroke(Brand.warning.opacity(0.25), lineWidth: 0.7))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Brand.ink)
     }
 
     @ViewBuilder
@@ -406,6 +487,7 @@ struct ParcelListView: View {
         query = ""
         statusFilter = .all
         carrierFilter = nil
+        sort = .priority
     }
 
     private func consumeSharedDraft() {
@@ -443,70 +525,98 @@ private struct ParcelCardView: View {
     let parcel: Parcel
     let notice: String?
     let onOpen: () -> Void
+    let onArchive: (() -> Void)?
     @EnvironmentObject private var localizer: Localizer
     private let catalog = CarrierCatalog.shared
 
     var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: 13) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(hex: carrier.color).opacity(0.14))
-                    Image(systemName: parcel.currentStage?.metadata.symbol ?? "shippingbox")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(Color(hex: carrier.color))
-                }
-                .frame(width: 48, height: 48)
-                .accessibilityHidden(true)
+        HStack(spacing: 0) {
+            Button(action: onOpen) {
+                HStack(spacing: 13) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color(hex: carrier.color).opacity(0.14))
+                        Image(systemName: parcel.currentStage?.metadata.symbol ?? "shippingbox")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(Color(hex: carrier.color))
+                    }
+                    .frame(width: 48, height: 48)
+                    .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack {
-                        Text(carrier.displayName)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer()
-                        if let event = parcel.currentEvent {
-                            Text(localizer.relativeTime(from: event.occurredAt))
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack {
+                            Text(carrier.displayName)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer()
+                            if let event = parcel.currentEvent {
+                                Text(localizer.text("parcel.updated", [
+                                    "date": localizer.relativeTime(from: event.occurredAt),
+                                ]))
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            }
                         }
-                    }
-                    Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                    Text(CarrierCatalog.format(parcel.trackingNumber))
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    HStack(alignment: .center, spacing: 8) {
-                        StatusBadge(status: parcel.displayStatus)
-                        if let expected = parcel.expectedDelivery {
-                            Text(localizer.text("parcel.expected", [
-                                "date": localizer.expectedDelivery(expected),
-                            ]))
-                            .font(.caption2.weight(.medium))
+                        Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        Text(CarrierCatalog.format(parcel.trackingNumber))
+                            .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                        HStack(alignment: .center, spacing: 8) {
+                            StatusBadge(status: parcel.displayStatus)
+                            if let expected = parcel.expectedDelivery {
+                                Label(
+                                    localizer.text("parcel.expected", [
+                                        "date": localizer.expectedDelivery(expected),
+                                    ]),
+                                    systemImage: "calendar"
+                                )
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.green)
+                                .lineLimit(1)
+                            }
                         }
+                        if let notice {
+                            Label(notice, systemImage: "exclamationmark.circle.fill")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.orange)
+                                .lineLimit(2)
+                        }
+                        DeliveryProgress(stage: parcel.currentStage)
+                            .padding(.top, 2)
                     }
-                    if let notice {
-                        Label(notice, systemImage: "exclamationmark.circle.fill")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.orange)
-                            .lineLimit(2)
-                    }
-                    DeliveryProgress(stage: parcel.currentStage)
-                        .padding(.top, 2)
                 }
+                .padding(.vertical, 16)
+                .padding(.leading, 16)
+                .padding(.trailing, onArchive == nil ? 16 : 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(16)
-            .contentShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
-            .parcelCardSurface(tone: parcel.displayStatus.tone)
+            .buttonStyle(TactileButtonStyle())
+            .accessibilityElement(children: .combine)
+
+            if let onArchive {
+                Menu {
+                    Button(localizer.text("parcel.archive"), systemImage: "archivebox") {
+                        onArchive()
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.bold))
+                        .frame(width: 44, height: 48)
+                        .contentShape(Rectangle())
+                }
+                .tint(.secondary)
+                .accessibilityLabel(localizer.text("detail.parcelActions"))
+                .padding(.trailing, 6)
+            }
         }
-        .buttonStyle(TactileButtonStyle())
-        .accessibilityElement(children: .combine)
+        .parcelCardSurface(tone: parcel.displayStatus.tone)
     }
 
     private var carrier: CarrierDefinition {

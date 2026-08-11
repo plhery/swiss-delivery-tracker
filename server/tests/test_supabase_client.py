@@ -182,6 +182,13 @@ class SupabaseServiceClientTests(unittest.TestCase):
         self.assertIn("archived_at=not.is.null", delete.args[0])
         self.assertEqual(delete.kwargs["method"], "DELETE")
 
+        self.client._request = Mock(return_value=[{"id": "pkg/1"}])
+        self.assertTrue(self.client.delete_package("pkg/1"))
+        direct_delete = self.client._request.call_args
+        self.assertIn("id=eq.pkg%2F1", direct_delete.args[0])
+        self.assertNotIn("archived_at", direct_delete.args[0])
+        self.assertEqual(direct_delete.kwargs["method"], "DELETE")
+
     def test_create_package_requires_insert_and_reload_results(self):
         self.client._request = Mock(return_value=[])
         with self.assertRaisesRegex(SupabaseError, "did not return"):
@@ -494,6 +501,11 @@ class SupabaseUserClientMutationTests(unittest.TestCase):
         delete = self.client._request.call_args
         self.assertEqual(delete.args[0], "/rest/v1/rpc/delete_owned_archived_package")
         self.assertEqual(delete.kwargs["body"], {"p_package_id": "pkg-1"})
+
+        self.assertTrue(self.client.delete_package("pkg-1"))
+        direct_delete = self.client._request.call_args
+        self.assertEqual(direct_delete.args[0], "/rest/v1/rpc/delete_owned_package")
+        self.assertEqual(direct_delete.kwargs["body"], {"p_package_id": "pkg-1"})
 
         self.client.update_package("pkg-1", {"notifications_muted": True})
         notifications = self.client._request.call_args

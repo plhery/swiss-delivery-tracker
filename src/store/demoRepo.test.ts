@@ -128,15 +128,11 @@ describe('createDemoRepo', () => {
     expect(listed.find((candidate) => candidate.id === parcel.id)?.archivedAt).toBeUndefined();
   });
 
-  it('only permanently deletes parcels after they are archived', async () => {
+  it('permanently deletes an active parcel without an archive round trip', async () => {
     const repo = createDemoRepo(window.localStorage);
     const parcel = await repo.add({ trackingNumber: '1234567890', label: 'Delete me' });
 
-    await expect(repo.deleteArchived!(parcel.id)).rejects.toThrow(
-      'Archive the parcel before permanently deleting it',
-    );
-    await repo.remove(parcel.id);
-    await repo.deleteArchived!(parcel.id);
+    await repo.deletePermanently!(parcel.id);
 
     expect((await repo.list()).find((candidate) => candidate.id === parcel.id)).toBeUndefined();
   });

@@ -1,4 +1,4 @@
-import { useState, useRef, type FormEvent, type PointerEvent } from 'react';
+import { useEffect, useState, useRef, type FormEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   activeTrackingCarrierId,
@@ -58,7 +58,17 @@ export function ParcelDetail({
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const backButton = useRef<HTMLButtonElement>(null);
-  const dialog = useModalDialog<HTMLDivElement>(true, onBack, backButton);
+  const actionsMenu = useRef<HTMLDetailsElement>(null);
+  const dialog = useModalDialog<HTMLDivElement>(true, () => {
+    if (confirmingDelete) {
+      if (!deleting) {
+        setConfirmingDelete(false);
+        setCheckError(null);
+      }
+      return;
+    }
+    onBack();
+  }, backButton);
 
   function beginTitleEdit() {
     setTitle(parcel.label);
@@ -182,6 +192,7 @@ export function ParcelDetail({
   function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
     const start = swipeStart.current;
     swipeStart.current = null;
+    if (confirmingDelete) return;
     const detailBounds = event.currentTarget.getBoundingClientRect();
     if (start && isBackSwipe(start, {
       x: event.clientX - detailBounds.left,
@@ -209,6 +220,37 @@ export function ParcelDetail({
           {t('detail.back')}
         </button>
         <span>{t('detail.label')}</span>
+        <details className="detail__actions-menu" ref={actionsMenu}>
+          <summary aria-label={t('detail.parcelActions')}>
+            <span aria-hidden="true">•••</span>
+          </summary>
+          <div>
+            {!parcel.archivedAt && (
+              <button
+                type="button"
+                disabled={archiving || deleting}
+                onClick={() => {
+                  if (actionsMenu.current) actionsMenu.current.open = false;
+                  void archiveNow();
+                }}
+              >
+                {archiving ? t('detail.archiving') : t('detail.archive')}
+              </button>
+            )}
+            <button
+              type="button"
+              className="detail__actions-menu-danger"
+              disabled={archiving || deleting}
+              onClick={() => {
+                if (actionsMenu.current) actionsMenu.current.open = false;
+                setCheckError(null);
+                setConfirmingDelete(true);
+              }}
+            >
+              {t('detail.delete')}
+            </button>
+          </div>
+        </details>
       </header>
 
       <div className="detail__hero">
@@ -273,6 +315,19 @@ export function ParcelDetail({
           </span>
         </p>
         <ProgressTrack stage={current?.stage ?? null} />
+        {current && (
+          <div className="detail__latest">
+            <span aria-hidden="true" />
+            <div>
+              <strong>{t(parcelDisplayStatusKey(parcel))}</strong>
+              <p>{current.description}</p>
+              <small>
+                {[current.location, new Date(current.occurredAt).toLocaleString(languageTag)]
+                  .filter(Boolean).join(' · ')}
+              </small>
+            </div>
+          </div>
+        )}
         <div className="detail__tracking-ticket">
           <span className="detail__tracking-label">{t('detail.trackingNumber')}</span>
           <strong>{formatTrackingNumber(parcel.trackingNumber)}</strong>
@@ -340,91 +395,35 @@ export function ParcelDetail({
         <Timeline events={parcel.events} syncing={status.syncing} />
       </section>
 
-      <footer className="detail__footer">
+      <footer className="detail__footer detail__footer--single">
         {checkError && <p className="detail__check-error" role="alert">{checkError}</p>}
         {checkNotice && <p className="detail__check-notice" role="status">{checkNotice}</p>}
-        {parcel.archivedAt && confirmingDelete ? (
-          <div
-            className="detail__danger-confirm"
-            role="group"
-            aria-label={t('detail.deleteQuestionAria', {
-              name: parcel.label || t('common.parcel').toLocaleLowerCase(languageTag),
-            })}
+        {parcel.archivedAt ? (
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => void restoreNow()}
+            disabled={restoring}
           >
-            <p>
-              <strong>{t('detail.deleteQuestion')}</strong>
-              <span>{t('detail.deleteDescription')}</span>
-            </p>
-            <div className="detail__danger-actions">
-              <button
-                type="button"
-                className="button button--secondary"
-                onClick={() => {
-                  setConfirmingDelete(false);
-                  setCheckError(null);
-                }}
-                disabled={deleting}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                className="button button--danger"
-                onClick={() => void deleteNow()}
-                disabled={deleting}
-              >
-                {deleting ? t('detail.deleting') : t('detail.delete')}
-              </button>
-            </div>
-          </div>
-        ) : parcel.archivedAt ? (
-          <>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void restoreNow()}
-              disabled={restoring}
-            >
-              {restoring ? t('common.restoring') : t('detail.restore')}
-            </button>
-            <button
-              type="button"
-              className="button button--danger"
-              onClick={() => {
-                setCheckError(null);
-                setConfirmingDelete(true);
-              }}
-            >
-              {t('detail.delete')}
-            </button>
-          </>
+            {restoring ? t('common.restoring') : t('detail.restore')}
+          </button>
         ) : (
-          <>
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={() => void checkNow()}
-              disabled={checking}
-            >
-              {checking ? t('detail.queueing') : t('detail.checkNow')}
-            </button>
-            <button
-              type="button"
-              className="button button--danger"
-              onClick={() => void archiveNow()}
-              disabled={archiving}
-            >
-              {archiving ? t('detail.archiving') : t('detail.archive')}
-            </button>
-          </>
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void checkNow()}
+            disabled={checking}
+          >
+            {checking ? t('detail.queueing') : t('detail.checkNow')}
+          </button>
         )}
       </footer>
 
       <section className="detail__notification-footer">
         <div className="detail__notification-setting">
           <div>
-            <strong>{t('detail.mute')}</strong>
-            <span>{t('detail.muteDescription')}</span>
+            <strong>{t('detail.notifications')}</strong>
+            <span>{t('detail.notificationsDescription')}</span>
           </div>
           <button
             type="button"
@@ -432,7 +431,7 @@ export function ParcelDetail({
               ? ' detail__notification-toggle--muted'
               : ''}`}
             role="switch"
-            aria-checked={Boolean(parcel.notificationsMuted)}
+            aria-checked={!parcel.notificationsMuted}
             aria-label={t('detail.notifications')}
             disabled={savingNotifications}
             onClick={() => void toggleNotifications()}
@@ -444,7 +443,86 @@ export function ParcelDetail({
           <p className="detail__check-error" role="alert">{notificationError}</p>
         )}
       </section>
+
+      {confirmingDelete && (
+        <DeleteParcelDialog
+          parcelName={parcel.label || t('common.parcel').toLocaleLowerCase(languageTag)}
+          deleting={deleting}
+          error={checkError}
+          onCancel={() => {
+            setConfirmingDelete(false);
+            setCheckError(null);
+          }}
+          onDelete={() => void deleteNow()}
+        />
+      )}
     </div>,
     document.body,
+  );
+}
+
+function DeleteParcelDialog({
+  parcelName,
+  deleting,
+  error,
+  onCancel,
+  onDelete,
+}: {
+  parcelName: string;
+  deleting: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useI18n();
+  const dialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (typeof element.showModal === 'function') element.showModal();
+    else element.setAttribute('open', '');
+    return () => {
+      if (typeof element.close === 'function' && element.open) element.close();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialog}
+      className="delete-parcel-dialog"
+      aria-labelledby="delete-parcel-title"
+      aria-describedby="delete-parcel-description"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!deleting) onCancel();
+      }}
+    >
+      <p className="sheet__eyebrow">{t('detail.parcelActions')}</p>
+      <h2 id="delete-parcel-title">
+        {t('detail.deleteQuestionAria', { name: parcelName })}
+      </h2>
+      <p id="delete-parcel-description">{t('detail.deleteDescription')}</p>
+      {error && <p className="sheet__error" role="alert">{error}</p>}
+      <div className="delete-parcel-dialog__actions">
+        <button
+          type="button"
+          className="button button--secondary"
+          onClick={onCancel}
+          disabled={deleting}
+          autoFocus
+        >
+          {t('common.cancel')}
+        </button>
+        <button
+          type="button"
+          className="button button--danger"
+          onClick={onDelete}
+          disabled={deleting}
+        >
+          {deleting ? t('detail.deleting') : t('detail.delete')}
+        </button>
+      </div>
+    </dialog>
   );
 }

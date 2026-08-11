@@ -35,6 +35,7 @@ export function ParcelCard({
   const statusLabel = t(parcelDisplayStatusKey(parcel));
   const parcelName = parcel.label || t('common.parcel');
   const dragStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const actionsMenu = useRef<HTMLDetailsElement>(null);
   const suppressClick = useRef(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -42,6 +43,7 @@ export function ParcelCard({
 
   async function archive() {
     if (!onArchive || archiving) return;
+    if (actionsMenu.current) actionsMenu.current.open = false;
     setArchiving(true);
     setDragOffset(-88);
     try {
@@ -125,7 +127,9 @@ export function ParcelCard({
         <div className="parcel-card__top">
           <span className="parcel-card__carrier">{carrier.name}</span>
           <span className="parcel-card__time">
-            {current ? localizedRelativeTime(current.occurredAt, t) : ''}
+            {current
+              ? t('parcel.updated', { date: localizedRelativeTime(current.occurredAt, t) })
+              : ''}
           </span>
         </div>
         <span className="parcel-card__label">{parcelName}</span>
@@ -138,12 +142,12 @@ export function ParcelCard({
           >
             {statusLabel}
           </span>
+          {expectedDelivery && (
+            <span className="parcel-card__eta">
+              {t('parcel.expected', { date: expectedDelivery })}
+            </span>
+          )}
         </div>
-        {expectedDelivery && (
-          <p className="parcel-card__eta">
-            {t('parcel.expected', { date: expectedDelivery })}
-          </p>
-        )}
         {parcel.syncStatus === 'error' && (
           <p className="parcel-card__sync-error">{t('parcel.syncAttention')}</p>
         )}
@@ -163,11 +167,24 @@ export function ParcelCard({
           aria-label={t('parcel.archiveAria', { name: parcelName })}
           aria-busy={archiving}
           disabled={archiving}
+          tabIndex={-1}
           onFocus={() => setDragOffset(-88)}
           onClick={() => void archive()}
         >
           {archiving ? t('detail.archiving') : t('parcel.archive')}
         </button>
+      )}
+      {onArchive && (
+        <details className="parcel-card-menu" ref={actionsMenu}>
+          <summary aria-label={`${t('detail.parcelActions')}: ${parcelName}`}>
+            <span aria-hidden="true">•••</span>
+          </summary>
+          <div>
+            <button type="button" disabled={archiving} onClick={() => void archive()}>
+              {archiving ? t('detail.archiving') : t('parcel.archive')}
+            </button>
+          </div>
+        </details>
       )}
     </div>
   );

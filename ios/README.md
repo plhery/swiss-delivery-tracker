@@ -57,11 +57,11 @@ builds register against APNs sandbox and Release builds use production.
 | Web capability | Native implementation |
 | --- | --- |
 | Google OAuth, email OTP, session refresh, sign-out | Authentication Services, native OTP form, Keychain session |
-| Paste number, carrier URL, or shipping text | Native add sheet with the shared carrier parser |
+| Paste number, carrier URL, shipping text, or scan a barcode | Native add sheet with the shared carrier parser and camera scanner |
 | All 16 carriers and special Planzer, Dachser, DPD, S10, and handoff rules | Catalog generated from `contracts/openapi.json` |
 | Search, status/carrier filters, priority/date sorting | Searchable native list, pickers, and sections |
 | Refresh all or one parcel and live updates | Pull to refresh, toolbar/detail actions, lightweight sync-job polling |
-| Rename, archive/undo, restore, permanent delete | Menus, swipe action, toast, native confirmation alerts |
+| Rename, archive/undo, restore, direct permanent delete | Detail menus, swipe action, toast, and a destructive confirmation alert |
 | Carrier progress, expected date, history, source links | SwiftUI detail hero, progress track, timeline, external links |
 | Global presets, quiet hours, per-parcel mute | Native notification settings and parcel toggle |
 | Browser Share Target | iOS Share extension for text and URLs |

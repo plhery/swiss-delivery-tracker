@@ -7,12 +7,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('finds, filters, and opens a parcel', async ({ page }) => {
-  await expect(page.getByRole('searchbox', { name: 'Search parcels' })).toBeHidden();
-  await page.getByRole('button', { name: 'Search & filters' }).click();
   const search = page.getByRole('searchbox', { name: 'Search parcels' });
+  await expect(search).toBeVisible();
+  await page.getByRole('button', { name: 'Filters' }).click();
   await search.fill('birthday');
-  await expect(page.getByText('Birthday gift 🎁')).toBeVisible();
-  await expect(page.getByText('Coffee beans ☕')).toBeHidden();
+  await expect(
+    page.getByRole('region', { name: 'Needs attention' }).getByText('Birthday gift 🎁'),
+  ).toBeVisible();
+  await expect(page.locator('.parcel-sections').getByText('Coffee beans ☕')).toHaveCount(0);
   await expect(page.getByText('1 shown')).toBeVisible();
 
   await search.fill('');
@@ -22,6 +24,29 @@ test('finds, filters, and opens a parcel', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Coffee beans ☕' })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Tracking history' }))
     .toHaveAttribute('aria-label', 'Tracking history');
+});
+
+test('carefully deletes an active parcel from its detail screen', async ({ page }) => {
+  await page.getByRole('button', { name: /^New sneakers 👟 —/ }).click();
+  const detail = page.getByRole('dialog', { name: 'New sneakers 👟' });
+  await detail.getByLabel('Parcel actions', { exact: true }).click();
+  await page.getByRole('button', { name: 'Delete permanently' }).click();
+
+  let confirmation = page.getByRole('dialog', {
+    name: /permanently delete new sneakers/i,
+  });
+  await expect(confirmation).toContainText('cannot be undone');
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await confirmation.getByRole('button', { name: 'Cancel' }).click();
+  await expect(detail).toBeVisible();
+
+  await detail.getByLabel('Parcel actions', { exact: true }).click();
+  await page.getByRole('button', { name: 'Delete permanently' }).click();
+  confirmation = page.getByRole('dialog', { name: /permanently delete new sneakers/i });
+  await confirmation.getByRole('button', { name: 'Delete permanently' }).click();
+
+  await expect(page.getByRole('status')).toContainText('New sneakers 👟 permanently deleted');
+  await expect(detail).toBeHidden();
 });
 
 test('adds a parcel from tracking text', async ({ page }) => {

@@ -213,7 +213,7 @@ describe('createApiRepo', () => {
     );
   });
 
-  it('permanently deletes an archived parcel through its distinct endpoint', async () => {
+  it('permanently deletes a parcel through its guarded endpoint', async () => {
     const fetch = vi.fn().mockResolvedValue(response({ ok: true }));
     vi.stubGlobal('fetch', fetch);
     window.localStorage.setItem(API_CACHE_KEY, JSON.stringify([{
@@ -226,7 +226,7 @@ describe('createApiRepo', () => {
       events: [],
     }]));
 
-    await createApiRepo().deleteArchived!(packageRow.id);
+    await createApiRepo().deletePermanently!(packageRow.id);
 
     expect(fetch).toHaveBeenCalledWith(
       `/api/packages/${packageRow.id}/permanent`,

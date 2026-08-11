@@ -5,7 +5,12 @@ import { ParcelCard } from './components/ParcelCard';
 import { ParcelDetail } from './components/ParcelDetail';
 import { NotificationControl } from './components/NotificationControl';
 import { ParcelViewControls } from './components/ParcelViewControls';
-import { LanguageControl, type MessageKey, useI18n } from './i18n';
+import {
+  LanguageControl,
+  localizedExpectedDelivery,
+  type MessageKey,
+  useI18n,
+} from './i18n';
 import type { ApiAuth } from './lib/apiClient';
 import {
   isActiveParcel,
@@ -23,6 +28,7 @@ import {
   readSharedParcelInput,
   type SharedParcelInput,
 } from './lib/shareTarget';
+import { parcelDisplayStatusKey } from './lib/parcelStatus';
 import { currentStage, isDelivered } from './lib/stages';
 import { useParcels } from './store/ParcelsContext';
 import type { CarrierId, ParcelWithEvents } from './types';
@@ -66,7 +72,7 @@ export default function App({
     setParcelNotificationsMuted,
     removeParcel,
     restoreParcel,
-    deleteArchivedParcel,
+    deleteParcel,
     refresh,
     refreshParcel,
     retryLoad,
@@ -189,6 +195,18 @@ export default function App({
     () => prioritizeActiveParcels(activeParcels, viewNow, parcelComparator(sort)),
     [activeParcels, sort, viewNow],
   );
+  const allPrioritized = useMemo(
+    () => prioritizeActiveParcels(
+      parcels.filter(isActiveParcel),
+      viewNow,
+      parcelComparator('priority'),
+    ),
+    [parcels, viewNow],
+  );
+  const nextParcel = allPrioritized.attention[0]?.parcel
+    ?? allPrioritized.arrivingToday[0]
+    ?? allPrioritized.onTheWay[0]
+    ?? null;
   const activeCount = useMemo(
     () => parcels.filter(isActiveParcel).length,
     [parcels],
@@ -224,12 +242,19 @@ export default function App({
   }
 
   async function handleDelete(parcel: ParcelWithEvents) {
-    await deleteArchivedParcel(parcel.id);
+    await deleteParcel(parcel.id);
     if (openParcelId === parcel.id) closeParcelDetail();
     setUndoParcel((current) => current?.id === parcel.id ? null : current);
     setRefreshNotice(t('app.deletedToast', {
       name: parcel.label || t('common.parcel'),
     }));
+  }
+
+  function clearView() {
+    setQuery('');
+    setStatusFilter('all');
+    setCarrierFilter('');
+    setSort('priority');
   }
 
   async function handleRestore(parcel: ParcelWithEvents) {
@@ -322,7 +347,19 @@ export default function App({
               {t('app.onTheWay')}
             </span>
           </div>
-          {summaryMessage && <p className="app__subtitle">{summaryMessage}</p>}
+          {nextParcel ? (
+            <div className="app__next">
+              <span>{t('app.nextUp')}</span>
+              <strong>{nextParcel.label || t('common.parcel')}</strong>
+              <small>
+                {nextParcel.expectedDelivery
+                  ? t('parcel.expected', {
+                    date: localizedExpectedDelivery(nextParcel.expectedDelivery, t),
+                  })
+                  : t(parcelDisplayStatusKey(nextParcel))}
+              </small>
+            </div>
+          ) : summaryMessage ? <p className="app__subtitle">{summaryMessage}</p> : null}
         </div>
       </header>
 
@@ -360,42 +397,23 @@ export default function App({
 
         {!loading && parcels.length > 0 && (
           <div className="parcel-view-shell">
-            <button
-              type="button"
-              className={`parcel-view-toggle${hasCustomView ? ' parcel-view-toggle--active' : ''}`}
-              aria-expanded={viewControlsOpen}
-              aria-controls={PARCEL_VIEW_CONTROLS_ID}
-              onClick={() => setViewControlsOpen((open) => !open)}
-            >
-              <svg className="parcel-view-toggle__search" aria-hidden="true" viewBox="0 0 20 20">
-                <circle cx="8.5" cy="8.5" r="5.5" />
-                <path d="m13 13 4 4" />
-              </svg>
-              <span>
-                {viewControlsOpen ? t('view.hideControls') : t('view.showControls')}
-              </span>
-              {hasCustomView && (
-                <span className="parcel-view-toggle__active">{t('view.customized')}</span>
-              )}
-              <svg className="parcel-view-toggle__chevron" aria-hidden="true" viewBox="0 0 20 20">
-                <path d="m6 8 4 4 4-4" />
-              </svg>
-            </button>
-            {viewControlsOpen && (
-              <ParcelViewControls
-                id={PARCEL_VIEW_CONTROLS_ID}
-                query={query}
-                status={statusFilter}
-                carrier={carrierFilter}
-                sort={sort}
-                carriers={availableCarriers}
-                count={visibleParcels.length}
-                onQueryChange={setQuery}
-                onStatusChange={setStatusFilter}
-                onCarrierChange={setCarrierFilter}
-                onSortChange={setSort}
-              />
-            )}
+            <ParcelViewControls
+              id={PARCEL_VIEW_CONTROLS_ID}
+              query={query}
+              status={statusFilter}
+              carrier={carrierFilter}
+              sort={sort}
+              carriers={availableCarriers}
+              count={visibleParcels.length}
+              advancedOpen={viewControlsOpen}
+              hasCustomView={hasCustomView}
+              onQueryChange={setQuery}
+              onStatusChange={setStatusFilter}
+              onCarrierChange={setCarrierFilter}
+              onSortChange={setSort}
+              onToggleAdvanced={() => setViewControlsOpen((open) => !open)}
+              onClearAll={clearView}
+            />
           </div>
         )}
 
@@ -423,17 +441,14 @@ export default function App({
             <button
               type="button"
               className="button button--secondary"
-              onClick={() => {
-                setQuery('');
-                setStatusFilter('all');
-                setCarrierFilter('');
-              }}
+              onClick={clearView}
             >
               {t('view.clear')}
             </button>
           </div>
         )}
 
+        <div className="parcel-sections">
         {!loading && prioritized.attention.length > 0 && (
           <section
             className="parcel-section parcel-section--attention"
@@ -567,6 +582,7 @@ export default function App({
             </details>
           </section>
         )}
+        </div>
       </main>
 
       <button

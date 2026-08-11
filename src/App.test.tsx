@@ -54,7 +54,7 @@ describe('App', () => {
     })).toBeInTheDocument();
     expect(await screen.findByText('Coffee beans ☕')).toBeInTheDocument();
     expect(screen.getByText('New sneakers 👟')).toBeInTheDocument();
-    expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
+    expect(screen.getAllByText('Birthday gift 🎁')).toHaveLength(2);
     expect(screen.getByText(/demo mode/i)).toBeInTheDocument();
     expect(
       screen.queryByText('Every shipment, from first lookup to arrival.'),
@@ -89,15 +89,18 @@ describe('App', () => {
     renderApp();
     await screen.findByText('Coffee beans ☕');
 
-    const viewToggle = screen.getByRole('button', { name: 'Search & filters' });
+    const viewToggle = screen.getByRole('button', { name: 'Filters' });
     expect(viewToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('searchbox', { name: 'Search parcels' })).not.toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Search parcels' })).toBeInTheDocument();
     await user.click(viewToggle);
     expect(viewToggle).toHaveAttribute('aria-expanded', 'true');
 
     await user.type(screen.getByRole('searchbox', { name: 'Search parcels' }), 'birthday');
 
-    expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Needs attention' }))
+        .getByText('Birthday gift 🎁'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
     expect(screen.queryByText('New sneakers 👟')).not.toBeInTheDocument();
     expect(screen.getByText('1 shown')).toBeInTheDocument();
@@ -116,19 +119,23 @@ describe('App', () => {
     renderApp();
     await screen.findByText('Coffee beans ☕');
 
-    await user.click(screen.getByRole('button', { name: 'Search & filters' }));
+    await user.click(screen.getByRole('button', { name: 'Filters' }));
 
     await user.selectOptions(screen.getByLabelText('Status'), 'delivered');
     expect(screen.getByText('Coffee beans ☕')).toBeInTheDocument();
-    expect(screen.queryByText('Birthday gift 🎁')).not.toBeInTheDocument();
+    const parcelSections = document.querySelector('.parcel-sections');
+    expect(parcelSections).not.toBeNull();
+    expect(within(parcelSections as HTMLElement).queryByText('Birthday gift 🎁'))
+      .not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText('Status'), 'all');
     await user.selectOptions(screen.getByLabelText('Carrier'), 'intl-post');
-    expect(screen.getByText('Birthday gift 🎁')).toBeInTheDocument();
+    expect(within(parcelSections as HTMLElement).getByText('Birthday gift 🎁'))
+      .toBeInTheDocument();
     expect(screen.queryByText('Coffee beans ☕')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /hide search & filters/i }));
+    await user.click(screen.getByRole('button', { name: /hide filters/i }));
     expect(screen.queryByLabelText('Status')).not.toBeInTheDocument();
-    expect(screen.getByText('Custom view')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /international post/i })).toBeInTheDocument();
   });
 
   it('shows current stage badges on the cards', async () => {
@@ -136,7 +143,7 @@ describe('App', () => {
     expect(await screen.findByText('Delivered', { selector: '.status-badge' }))
       .toBeInTheDocument();
     expect(screen.getByText('Out for delivery')).toBeInTheDocument();
-    expect(screen.getByText('At customs')).toBeInTheDocument();
+    expect(screen.getByText('At customs', { selector: '.status-badge' })).toBeInTheDocument();
   });
 
   it('treats returned parcels as final without calling them delivered', async () => {
@@ -202,7 +209,8 @@ describe('App', () => {
 
     renderApp(repo);
 
-    expect(await screen.findByText('Expected tomorrow')).toBeInTheDocument();
+    expect(await screen.findByText('Expected tomorrow', { selector: '.parcel-card__eta' }))
+      .toBeInTheDocument();
   });
 
   it('puts a non-actionable parcel with a delivery window in Arriving today', async () => {
@@ -358,7 +366,8 @@ describe('App', () => {
     };
     renderApp(repo);
 
-    expect(await screen.findByText('Sync in progress')).toBeInTheDocument();
+    expect(await screen.findByText('Sync in progress', { selector: '.status-badge' }))
+      .toBeInTheDocument();
 
     parcel = {
       ...parcel,
@@ -378,7 +387,7 @@ describe('App', () => {
       await notify?.();
     });
 
-    expect(screen.getByText('Announced')).toBeInTheDocument();
+    expect(screen.getByText('Announced', { selector: '.status-badge' })).toBeInTheDocument();
     expect(screen.queryByText('Sync in progress')).not.toBeInTheDocument();
   });
 
@@ -663,7 +672,7 @@ describe('App', () => {
     };
 
     renderApp(repo);
-    await user.click(await screen.findByText('AliExpress parcel'));
+    await user.click(await screen.findByRole('button', { name: /^AliExpress parcel —/ }));
 
     const detail = screen.getByRole('dialog', { name: 'AliExpress parcel' });
     const sources = within(detail).getByLabelText('Tracking sources');
@@ -713,11 +722,11 @@ describe('App', () => {
     await user.click(await screen.findByText('New sneakers 👟'));
 
     const toggle = screen.getByRole('switch', { name: 'Parcel alerts' });
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     await user.click(toggle);
 
     expect(screen.getByRole('switch', { name: 'Parcel alerts' }))
-      .toHaveAttribute('aria-checked', 'true');
+      .toHaveAttribute('aria-checked', 'false');
     expect(screen.getByRole('switch', { name: 'Parcel alerts' }))
       .toHaveTextContent('Muted');
     expect(screen.getByRole('dialog', { name: 'New sneakers 👟' }).lastElementChild)
@@ -775,6 +784,7 @@ describe('App', () => {
     renderApp();
 
     await user.click(await screen.findByText('Coffee beans ☕'));
+    await user.click(screen.getByLabelText('Parcel actions'));
     await user.click(screen.getByRole('button', { name: /archive parcel/i }));
 
     expect(screen.queryByRole('dialog', { name: 'Coffee beans ☕' })).not.toBeInTheDocument();
@@ -810,6 +820,7 @@ describe('App', () => {
     });
 
     await user.click(await screen.findByText('Coffee beans ☕'));
+    await user.click(screen.getByLabelText('Parcel actions'));
     await user.click(screen.getByRole('button', { name: /archive parcel/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Archive service unavailable');
@@ -870,7 +881,7 @@ describe('App', () => {
       syncStatus: 'ok',
       events: [],
     };
-    const deleteArchived = vi.fn().mockResolvedValue(undefined);
+    const deletePermanently = vi.fn().mockResolvedValue(undefined);
     const repo: ParcelRepo = {
       mode: 'api',
       list: vi.fn().mockResolvedValue([archived]),
@@ -878,7 +889,7 @@ describe('App', () => {
       rename: vi.fn(),
       remove: vi.fn(),
       restore: vi.fn(),
-      deleteArchived,
+      deletePermanently,
       refresh: vi.fn().mockResolvedValue([archived]),
     };
     const user = userEvent.setup();
@@ -887,16 +898,74 @@ describe('App', () => {
     const archive = await screen.findByRole('region', { name: 'Archived' });
     await user.click(within(archive).getByText('Archived'));
     await user.click(within(archive).getByRole('button', { name: /old delivery/i }));
+    await user.click(screen.getByLabelText('Parcel actions'));
     await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
 
-    expect(screen.getByRole('group', { name: /permanently delete old delivery/i }))
+    expect(screen.getByRole('dialog', { name: /permanently delete old delivery/i }))
       .toHaveTextContent('cannot be undone');
-    await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await user.click(within(screen.getByRole('dialog', {
+      name: /permanently delete old delivery/i,
+    })).getByRole('button', { name: 'Delete permanently' }));
 
-    expect(deleteArchived).toHaveBeenCalledWith(archived.id);
+    expect(deletePermanently).toHaveBeenCalledWith(archived.id);
     expect(screen.queryByRole('dialog', { name: 'Old delivery' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Archived' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Old delivery permanently deleted');
+  });
+
+  it('carefully deletes an active parcel directly from its detail screen', async () => {
+    const active: ParcelWithEvents = {
+      id: 'parcel-active-delete',
+      trackingNumber: '993412345612345678',
+      label: 'Duplicate delivery',
+      carrier: 'swiss-post',
+      createdAt: '2026-08-10T10:00:00Z',
+      syncStatus: 'ok',
+      events: [],
+    };
+    const remove = vi.fn();
+    const deletePermanently = vi.fn().mockResolvedValue(undefined);
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([active]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove,
+      deletePermanently,
+      refresh: vi.fn().mockResolvedValue([active]),
+    };
+    const user = userEvent.setup();
+    renderApp(repo);
+
+    await user.click(await screen.findByRole('button', { name: /^Duplicate delivery —/ }));
+    await user.click(screen.getByLabelText('Parcel actions'));
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    let confirmation = screen.getByRole('dialog', {
+      name: /permanently delete duplicate delivery/i,
+    });
+    expect(deletePermanently).not.toHaveBeenCalled();
+    expect(within(confirmation).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', {
+      name: /permanently delete duplicate delivery/i,
+    })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Duplicate delivery' })).toBeInTheDocument();
+    expect(deletePermanently).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText('Parcel actions'));
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    confirmation = screen.getByRole('dialog', {
+      name: /permanently delete duplicate delivery/i,
+    });
+    await user.click(within(confirmation).getByRole('button', { name: 'Delete permanently' }));
+
+    expect(deletePermanently).toHaveBeenCalledWith(active.id);
+    expect(remove).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Duplicate delivery' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Duplicate delivery permanently deleted',
+    );
   });
 
   it('advances the simulation when refreshing in demo mode', async () => {
@@ -960,7 +1029,7 @@ describe('App', () => {
 
     renderApp(repo);
 
-    expect(await screen.findByText('Saved coffee')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Saved coffee —/ })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('last parcel data saved');
     expect(screen.queryByText('No parcels yet')).not.toBeInTheDocument();
   });
