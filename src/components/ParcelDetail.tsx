@@ -7,8 +7,12 @@ import {
   parcelTrackingLinks,
 } from '../lib/carriers';
 import { localizedExpectedDelivery, useI18n } from '../i18n';
-import { parcelDisplayStatus, parcelDisplayStatusKey } from '../lib/parcelStatus';
-import { currentEvent } from '../lib/stages';
+import {
+  localizedParcelCompletionDate,
+  parcelDisplayStatus,
+  parcelDisplayStatusKey,
+} from '../lib/parcelStatus';
+import { currentEvent, isFinal } from '../lib/stages';
 import { isBackSwipe, type TouchPoint } from '../lib/swipe';
 import { useModalDialog } from '../lib/modal';
 import type { ParcelWithEvents } from '../types';
@@ -41,6 +45,9 @@ export function ParcelDetail({
   const carrier = carrierInfo(activeTrackingCarrierId(parcel));
   const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
+  const final = current ? isFinal(current.stage) : false;
+  const statusLabel = t(parcelDisplayStatusKey(parcel));
+  const completionDate = localizedParcelCompletionDate(parcel, languageTag);
   const trackingLinks = parcelTrackingLinks(parcel, locale);
   const swipeStart = useRef<TouchPoint | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -254,12 +261,6 @@ export function ParcelDetail({
       </header>
 
       <div className="detail__hero">
-        <div className="detail__stamp" aria-hidden="true">
-          <svg viewBox="0 0 40 40">
-            <path d="m7 13 13-7 13 7-13 7-13-7Z" />
-            <path d="M7 13v15l13 7 13-7V13M20 20v15" />
-          </svg>
-        </div>
         <p className="detail__eyebrow">{carrier.name}</p>
         {editingTitle ? (
           <form className="detail__title-form" onSubmit={handleTitleSubmit}>
@@ -309,24 +310,24 @@ export function ParcelDetail({
             </button>
           </div>
         )}
-        <p className="detail__status">
-          <span className={`status-badge status-badge--${status.tone}${status.syncing ? ' status-badge--syncing' : ''}`}>
-            {t(parcelDisplayStatusKey(parcel))}
-          </span>
-        </p>
-        <ProgressTrack stage={current?.stage ?? null} />
-        {current && (
-          <div className="detail__latest">
-            <span aria-hidden="true" />
-            <div>
-              <strong>{t(parcelDisplayStatusKey(parcel))}</strong>
-              <p>{current.description}</p>
-              <small>
-                {[current.location, new Date(current.occurredAt).toLocaleString(languageTag)]
-                  .filter(Boolean).join(' · ')}
-              </small>
-            </div>
-          </div>
+        <div className="detail__status">
+          {final ? (
+            <span className={`status-badge status-badge--${status.tone}`}>
+              {statusLabel}
+            </span>
+          ) : (
+            <span className={`detail__state detail__state--${status.tone}`}>
+              {statusLabel}
+            </span>
+          )}
+          {completionDate && (
+            <span className="detail__completion">
+              {t('parcel.onDate', { date: completionDate })}
+            </span>
+          )}
+        </div>
+        {!final && (
+          <ProgressTrack stage={current?.stage ?? null} />
         )}
         <div className="detail__tracking-ticket">
           <span className="detail__tracking-label">{t('detail.trackingNumber')}</span>
@@ -339,25 +340,15 @@ export function ParcelDetail({
           >
             {copyStatus === 'copied' ? t('detail.copied') : t('detail.copy')}
           </button>
-          <span className="detail__barcode" aria-hidden="true" />
         </div>
         {copyStatus === 'error' && (
           <p className="detail__copy-error" role="alert">
             {t('detail.copyUnavailable')}
           </p>
         )}
-        {parcel.expectedDelivery && (
-          <p className="detail__meta">
-            {t('detail.expected', {
-              date: localizedExpectedDelivery(parcel.expectedDelivery, t),
-            })}
-          </p>
-        )}
-        {parcel.lastSyncedAt && (
-          <p className="detail__meta">
-            {t('detail.lastChecked', {
-              date: new Date(parcel.lastSyncedAt).toLocaleString(languageTag),
-            })}
+        {parcel.expectedDelivery && !final && (
+          <p className="detail__eta">
+            {localizedExpectedDelivery(parcel.expectedDelivery, t)}
           </p>
         )}
         {parcel.syncError && (

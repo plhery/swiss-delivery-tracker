@@ -108,14 +108,6 @@ struct ParcelDetailView: View {
 
     private func detailHero(_ parcel: Parcel) -> some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle().fill(Color(hex: carrier(for: parcel).color).opacity(0.14))
-                Image(systemName: parcel.currentStage?.metadata.symbol ?? "shippingbox")
-                    .font(.system(size: 23, weight: .semibold))
-                    .foregroundStyle(Color(hex: carrier(for: parcel).color))
-            }
-            .frame(width: 54, height: 54)
-
             VStack(spacing: 7) {
                 Text(carrier(for: parcel).displayName)
                     .font(.caption.weight(.bold))
@@ -125,34 +117,35 @@ struct ParcelDetailView: View {
                 Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
                     .font(.system(.title2, design: .rounded, weight: .bold))
                     .multilineTextAlignment(.center)
-                StatusBadge(status: parcel.displayStatus)
+                HStack(spacing: 8) {
+                    if parcel.currentStage?.isFinal == true {
+                        StatusBadge(status: parcel.displayStatus)
+                        if let date = localizer.parcelCompletionDate(parcel) {
+                            Text(localizer.text("parcel.onDate", ["date": date]))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text(localizer.parcelStatus(parcel))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(statusColor(for: parcel))
+                    }
+                }
             }
 
-            DeliveryProgress(stage: parcel.currentStage)
-                .padding(.horizontal, 12)
-
-            if let current = parcel.currentEvent {
-                latestUpdate(current)
+            if parcel.currentStage?.isFinal != true {
+                DeliveryProgress(stage: parcel.currentStage)
+                    .padding(.horizontal, 12)
             }
 
             trackingTicket(parcel)
 
-            VStack(spacing: 6) {
-                if let expected = parcel.expectedDelivery {
-                    Label(
-                        localizer.text("detail.expected", ["date": localizer.expectedDelivery(expected)]),
-                        systemImage: "calendar"
-                    )
-                }
-                if let checked = parcel.lastSyncedAt {
-                    Label(
-                        localizer.text("detail.lastChecked", ["date": localizer.dateTime(checked)]),
-                        systemImage: "clock"
-                    )
-                }
+            if parcel.currentStage?.isFinal != true,
+               let expected = parcel.expectedDelivery {
+                Text(localizer.expectedDelivery(expected))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
 
             if let syncError = parcel.syncError {
                 NoticeBanner(
@@ -180,7 +173,6 @@ struct ParcelDetailView: View {
                                     }
                                 }
                                 Spacer()
-                                Image(systemName: "arrow.up.right.square")
                             }
                             .padding(.horizontal, 14)
                             .frame(minHeight: 48)
@@ -216,30 +208,6 @@ struct ParcelDetailView: View {
         .padding(14)
         .background(Brand.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(style: StrokeStyle(lineWidth: 1, dash: [5, 4])).foregroundStyle(.secondary.opacity(0.25)))
-    }
-
-    private func latestUpdate(_ event: TrackingEvent) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            Circle()
-                .fill(event.stage.metadata.tone.color)
-                .frame(width: 9, height: 9)
-                .padding(.top, 5)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(localizer.text(event.stage.localizationKey))
-                    .font(.subheadline.weight(.semibold))
-                Text(event.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text([event.location, localizer.dateTime(event.occurredAt)]
-                    .compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(13)
-        .background(Brand.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func journey(_ parcel: Parcel) -> some View {
@@ -366,6 +334,14 @@ struct ParcelDetailView: View {
 
     private func carrier(for parcel: Parcel) -> CarrierDefinition {
         catalog.info(for: parcel.activeTrackingCarrier)
+    }
+
+    private func statusColor(for parcel: Parcel) -> Color {
+        switch parcel.displayStatus.tone {
+        case .normal: .primary
+        case .warning: .orange
+        case .complete: .green
+        }
     }
 
     private func copy(_ value: String) {

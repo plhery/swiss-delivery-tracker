@@ -8,8 +8,9 @@ test.beforeEach(async ({ page }) => {
 
 test('finds, filters, and opens a parcel', async ({ page }) => {
   const search = page.getByRole('searchbox', { name: 'Search parcels' });
-  await expect(search).toBeVisible();
-  await page.getByRole('button', { name: 'Filters' }).click();
+  await expect(search).toBeHidden();
+  await page.getByRole('button', { name: 'Search & filters' }).click();
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
   await search.fill('birthday');
   await expect(
     page.getByRole('region', { name: 'Needs attention' }).getByText('Birthday gift 🎁'),

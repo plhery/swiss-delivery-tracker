@@ -355,7 +355,7 @@ button:disabled {
 
 .parcel-view-shell {
   display: flex;
-  align-items: stretch;
+  align-items: flex-end;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 24px;
@@ -733,13 +733,11 @@ button:disabled {
 
 .parcel-card {
   position: relative;
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 26px;
-  gap: 13px;
+  display: block;
   width: 100%;
-  min-height: 158px;
+  min-height: 126px;
   overflow: hidden;
-  padding: 17px 14px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--paper);
@@ -752,6 +750,7 @@ button:disabled {
 
 .parcel-card--swipeable {
   z-index: 1;
+  padding-right: 52px;
   touch-action: pan-y;
   will-change: transform;
 }
@@ -790,33 +789,6 @@ button:disabled {
   transform: translateY(0) scale(0.99);
 }
 
-.parcel-card__stamp {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  margin-top: 2px;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--yellow-soft);
-}
-
-.parcel-card--warn .parcel-card__stamp {
-  background: var(--orange-soft);
-}
-
-.parcel-card--done .parcel-card__stamp {
-  background: var(--green-soft);
-}
-
-.parcel-card__stamp svg {
-  width: 25px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
 .parcel-card__body {
   min-width: 0;
 }
@@ -824,8 +796,6 @@ button:disabled {
 .parcel-card__top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
 }
 
 .parcel-card__carrier {
@@ -837,12 +807,6 @@ button:disabled {
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.parcel-card__time {
-  flex: 0 0 auto;
-  color: var(--ink-soft);
-  font-size: 11px;
 }
 
 .parcel-card__label,
@@ -871,28 +835,23 @@ button:disabled {
 .parcel-card__status {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 7px 10px;
+  margin-top: 10px;
 }
 
-.parcel-card__chevron {
-  display: grid;
-  align-self: center;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--canvas);
-  color: var(--ink-soft);
+.parcel-card__state {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 780;
 }
 
-.parcel-card__chevron svg {
-  width: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
+.parcel-card__state--warn {
+  color: #8a481f;
+}
+
+.parcel-card__state--done {
+  color: var(--green);
 }
 
 .parcel-card__sync-error {
@@ -909,11 +868,12 @@ button:disabled {
   font-weight: 750;
 }
 
+.parcel-card__completion,
 .parcel-card__eta {
   overflow: hidden;
-  color: var(--green);
+  color: var(--ink-soft);
   font-size: 11px;
-  font-weight: 780;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1717,25 +1677,6 @@ button:disabled {
   text-align: center;
 }
 
-.detail__stamp {
-  display: grid;
-  width: 52px;
-  height: 52px;
-  margin: 0 auto 9px;
-  place-items: center;
-  border-radius: 18px;
-  background: var(--yellow-soft);
-}
-
-.detail__stamp svg {
-  width: 30px;
-  fill: none;
-  stroke: var(--ink);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
 .detail__eyebrow {
   color: var(--orange-text);
 }
@@ -1812,7 +1753,31 @@ button:disabled {
 }
 
 .detail__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   margin: 0;
+}
+
+.detail__state {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 780;
+}
+
+.detail__state--warn {
+  color: #8a481f;
+}
+
+.detail__state--done {
+  color: var(--green);
+}
+
+.detail__completion {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .detail__hero .progress-track {
@@ -1820,50 +1785,11 @@ button:disabled {
   margin: 12px auto 0;
 }
 
-.detail__latest {
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr);
-  gap: 10px;
-  margin-top: 15px;
-  padding: 11px 12px;
-  border-radius: 11px;
-  background: var(--canvas);
-  text-align: left;
-}
-
-.detail__latest > span {
-  width: 9px;
-  height: 9px;
-  margin-top: 4px;
-  border-radius: 50%;
-  background: var(--orange);
-}
-
-.detail__latest div {
-  display: grid;
-  gap: 2px;
-}
-
-.detail__latest strong {
-  font-size: 12px;
-}
-
-.detail__latest p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.detail__latest small {
-  color: var(--ink-soft);
-  font-size: 10px;
-}
-
 .detail__tracking-ticket {
   position: relative;
   margin-top: 14px;
   overflow: hidden;
-  padding: 13px 78px 20px 14px;
+  padding: 13px 78px 13px 14px;
   border: 1px dashed #b9b2a4;
   border-radius: 11px;
   background: #faf8f2;
@@ -1910,20 +1836,11 @@ button:disabled {
   font-size: 12px;
 }
 
-.detail__barcode {
-  position: absolute;
-  right: 14px;
-  bottom: 8px;
-  left: 14px;
-  height: 5px;
-  opacity: 0.45;
-  background: repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 4px, var(--ink) 4px 6px, transparent 6px 9px);
-}
-
-.detail__meta {
+.detail__eta {
   margin: 9px 0 0;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .detail__sync-error {
@@ -2744,14 +2661,11 @@ button:disabled {
   }
 
   .parcel-card {
-    grid-template-columns: 40px minmax(0, 1fr) 24px;
-    gap: 11px;
-    padding-right: 12px;
+    padding: 17px;
   }
 
-  .parcel-card__stamp {
-    width: 40px;
-    height: 40px;
+  .parcel-card--swipeable {
+    padding-right: 50px;
   }
 
   .sheet__carrier-card {

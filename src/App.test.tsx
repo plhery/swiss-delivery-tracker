@@ -89,9 +89,9 @@ describe('App', () => {
     renderApp();
     await screen.findByText('Coffee beans ☕');
 
-    const viewToggle = screen.getByRole('button', { name: 'Filters' });
+    const viewToggle = screen.getByRole('button', { name: 'Search & filters' });
     expect(viewToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByRole('searchbox', { name: 'Search parcels' })).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Search parcels' })).not.toBeInTheDocument();
     await user.click(viewToggle);
     expect(viewToggle).toHaveAttribute('aria-expanded', 'true');
 
@@ -119,6 +119,8 @@ describe('App', () => {
     renderApp();
     await screen.findByText('Coffee beans ☕');
 
+    const viewToggle = screen.getByRole('button', { name: 'Search & filters' });
+    await user.click(viewToggle);
     await user.click(screen.getByRole('button', { name: 'Filters' }));
 
     await user.selectOptions(screen.getByLabelText('Status'), 'delivered');
@@ -136,14 +138,19 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: /hide filters/i }));
     expect(screen.queryByLabelText('Status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /international post/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /hide search & filters/i }));
+    expect(screen.queryByRole('searchbox', { name: 'Search parcels' })).not.toBeInTheDocument();
+    expect(viewToggle).toHaveTextContent('Custom view');
   });
 
-  it('shows current stage badges on the cards', async () => {
+  it('shows one concise status line on each card', async () => {
     renderApp();
     expect(await screen.findByText('Delivered', { selector: '.status-badge' }))
       .toBeInTheDocument();
+    expect(screen.getByText(/^on /, { selector: '.parcel-card__completion' }))
+      .toBeInTheDocument();
     expect(screen.getByText('Out for delivery')).toBeInTheDocument();
-    expect(screen.getByText('At customs', { selector: '.status-badge' })).toBeInTheDocument();
+    expect(screen.getByText('At customs', { selector: '.parcel-card__state' })).toBeInTheDocument();
   });
 
   it('treats returned parcels as final without calling them delivered', async () => {
@@ -209,7 +216,7 @@ describe('App', () => {
 
     renderApp(repo);
 
-    expect(await screen.findByText('Expected tomorrow', { selector: '.parcel-card__eta' }))
+    expect(await screen.findByText('tomorrow', { selector: '.parcel-card__eta' }))
       .toBeInTheDocument();
   });
 
@@ -246,7 +253,7 @@ describe('App', () => {
 
     const section = await screen.findByRole('region', { name: 'Arriving today' });
     expect(within(section).getByText('Today parcel')).toBeInTheDocument();
-    expect(within(section).getAllByText(/^Expected today/)).toHaveLength(1);
+    expect(within(section).getAllByText(/^today/)).toHaveLength(1);
     expect(screen.queryByRole('region', { name: 'On the way' })).not.toBeInTheDocument();
   });
 
@@ -366,7 +373,7 @@ describe('App', () => {
     };
     renderApp(repo);
 
-    expect(await screen.findByText('Sync in progress', { selector: '.status-badge' }))
+    expect(await screen.findByText('Sync in progress', { selector: '.parcel-card__state' }))
       .toBeInTheDocument();
 
     parcel = {
@@ -387,7 +394,7 @@ describe('App', () => {
       await notify?.();
     });
 
-    expect(screen.getByText('Announced', { selector: '.status-badge' })).toBeInTheDocument();
+    expect(screen.getByText('Announced', { selector: '.parcel-card__state' })).toBeInTheDocument();
     expect(screen.queryByText('Sync in progress')).not.toBeInTheDocument();
   });
 
@@ -976,7 +983,7 @@ describe('App', () => {
     expect(await screen.findByText('Out for delivery')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /refresh tracking/i }));
 
-    const cards = await screen.findAllByText('Delivered');
+    const cards = await screen.findAllByText('Delivered', { selector: '.status-badge' });
     expect(cards.length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('status')).toHaveTextContent('Tracking checks queued');
   });
@@ -1053,6 +1060,46 @@ describe('App', () => {
       'href',
       '/',
     );
+  });
+
+  it('shows a newly unannounced parcel as neutral while automatic checks continue', async () => {
+    const parcel: ParcelWithEvents = {
+      id: 'pkg-unannounced',
+      trackingNumber: '993412345612345678',
+      label: 'Early shipping label',
+      carrier: 'swiss-post',
+      createdAt: new Date().toISOString(),
+      lastSyncedAt: new Date().toISOString(),
+      syncStatus: 'waiting',
+      events: [{
+        id: 'event-added',
+        parcelId: 'pkg-unannounced',
+        stage: 'pending',
+        description: 'Tracking added',
+        occurredAt: new Date().toISOString(),
+      }],
+    };
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([parcel]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([parcel]),
+    };
+
+    renderApp(repo);
+
+    const card = await screen.findByRole('button', {
+      name: /Early shipping label — Not announced yet/i,
+    });
+    expect(card).toHaveClass('parcel-card--ok');
+    expect(screen.queryByText('Sync needs attention')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'On the way' }))
+        .getByText('Early shipping label'),
+    ).toBeInTheDocument();
   });
 
   it('shows sync diagnostics and an empty journey', async () => {

@@ -6,13 +6,15 @@ import {
 } from '../lib/carriers';
 import {
   localizedExpectedDelivery,
-  localizedRelativeTime,
   useI18n,
 } from '../i18n';
-import { parcelDisplayStatus, parcelDisplayStatusKey } from '../lib/parcelStatus';
-import { currentEvent } from '../lib/stages';
+import {
+  localizedParcelCompletionDate,
+  parcelDisplayStatus,
+  parcelDisplayStatusKey,
+} from '../lib/parcelStatus';
+import { currentEvent, isFinal } from '../lib/stages';
 import type { ParcelWithEvents } from '../types';
-import { ProgressTrack } from './ProgressTrack';
 
 export function ParcelCard({
   parcel,
@@ -25,14 +27,19 @@ export function ParcelCard({
   onArchive?: (parcel: ParcelWithEvents) => Promise<unknown>;
   notice?: string;
 }) {
-  const { t } = useI18n();
+  const { languageTag, t } = useI18n();
   const carrier = carrierInfo(activeTrackingCarrierId(parcel));
   const current = currentEvent(parcel.events);
   const status = parcelDisplayStatus(parcel);
-  const expectedDelivery = parcel.expectedDelivery
+  const final = current ? isFinal(current.stage) : false;
+  const expectedDelivery = parcel.expectedDelivery && !final
     ? localizedExpectedDelivery(parcel.expectedDelivery, t)
     : null;
   const statusLabel = t(parcelDisplayStatusKey(parcel));
+  const completionDate = localizedParcelCompletionDate(parcel, languageTag);
+  const statusSummary = completionDate
+    ? `${statusLabel} ${t('parcel.onDate', { date: completionDate })}`
+    : statusLabel;
   const parcelName = parcel.label || t('common.parcel');
   const dragStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const actionsMenu = useRef<HTMLDetailsElement>(null);
@@ -114,37 +121,35 @@ export function ParcelCard({
         onPointerUp={finishSwipe}
         onPointerCancel={cancelSwipe}
         aria-label={expectedDelivery
-          ? t('parcel.ariaExpected', { name: parcelName, status: statusLabel, date: expectedDelivery })
-          : t('parcel.aria', { name: parcelName, status: statusLabel })}
+          ? t('parcel.ariaExpected', { name: parcelName, status: statusSummary, date: expectedDelivery })
+          : t('parcel.aria', { name: parcelName, status: statusSummary })}
       >
-      <div className="parcel-card__stamp" aria-hidden="true">
-        <svg viewBox="0 0 32 32">
-          <path d="m6 10 10-5 10 5-10 5-10-5Z" />
-          <path d="M6 10v12l10 5 10-5V10M16 15v12" />
-        </svg>
-      </div>
       <div className="parcel-card__body">
         <div className="parcel-card__top">
           <span className="parcel-card__carrier">{carrier.name}</span>
-          <span className="parcel-card__time">
-            {current
-              ? t('parcel.updated', { date: localizedRelativeTime(current.occurredAt, t) })
-              : ''}
-          </span>
         </div>
         <span className="parcel-card__label">{parcelName}</span>
         <span className="parcel-card__tracking">
           {formatTrackingNumber(parcel.trackingNumber)}
         </span>
         <div className="parcel-card__status">
-          <span
-            className={`status-badge status-badge--${status.tone}${status.syncing ? ' status-badge--syncing' : ''}`}
-          >
-            {statusLabel}
-          </span>
+          {final ? (
+            <span className={`status-badge status-badge--${status.tone}`}>
+              {statusLabel}
+            </span>
+          ) : (
+            <span className={`parcel-card__state parcel-card__state--${status.tone}`}>
+              {statusLabel}
+            </span>
+          )}
+          {completionDate && (
+            <span className="parcel-card__completion">
+              {t('parcel.onDate', { date: completionDate })}
+            </span>
+          )}
           {expectedDelivery && (
             <span className="parcel-card__eta">
-              {t('parcel.expected', { date: expectedDelivery })}
+              {expectedDelivery}
             </span>
           )}
         </div>
@@ -154,10 +159,6 @@ export function ParcelCard({
         {notice && parcel.syncStatus !== 'error' && (
           <p className="parcel-card__notice">{notice}</p>
         )}
-        <ProgressTrack stage={current?.stage ?? null} />
-      </div>
-      <div className="parcel-card__chevron" aria-hidden="true">
-        <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
       </div>
       </button>
       {onArchive && (

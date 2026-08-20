@@ -126,6 +126,15 @@ final class ParcelLogicTests: XCTestCase {
             events: [event(announcedID, .pending, "2026-08-01T08:00:00Z")]
         )
         XCTAssertNil(announced.attention(now: now))
+
+        var oldUnannounced = announced
+        oldUnannounced.syncStatus = .waiting
+        XCTAssertEqual(oldUnannounced.displayStatus.key, "status.unannounced")
+        XCTAssertEqual(oldUnannounced.attention(now: now), .notAnnounced)
+
+        var recentUnannounced = oldUnannounced
+        recentUnannounced.createdAt = "2026-08-08T12:01:00Z"
+        XCTAssertNil(recentUnannounced.attention(now: now))
     }
 
     func testFiltersSearchCompactTrackingNumbers() {

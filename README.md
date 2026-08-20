@@ -30,7 +30,7 @@ notifications, and keep every tracking number private to your account.
 - Checks active deliveries every 10 minutes from 08:00 to 22:00, and hourly overnight.
 - Understands tracking numbers, carrier URLs and text pasted from shipping emails, with
   one-tap paste on web and barcode scanning on iPhone.
-- Keeps search visible, exposes active filter chips, and surfaces the next parcel and ETA.
+- Keeps search and filters tucked away until needed, and surfaces the next parcel and ETA.
 - Keeps delivery history in sync across your devices.
 - Sends optional browser and native iPhone notifications without putting tracking numbers in them.
 - Includes a real SwiftUI iPhone app and Share extension, plus the installable PWA.

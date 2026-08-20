@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime, timezone
 from types import ModuleType
 from unittest.mock import patch
+from urllib.error import HTTPError
 from zoneinfo import ZoneInfo
 
 from server.tracking_sync import (
@@ -545,6 +546,58 @@ class TrackingSyncTests(unittest.TestCase):
         long_client = FakeClient([self.package("pkg-long")])
         TrackingSyncService(long_client, FakeAdapter(error=RuntimeError("x" * 700))).sync()
         self.assertEqual(len(long_client.updates[-1][1]["sync_error"]), 500)
+
+    def test_unannounced_404_waits_without_showing_a_sync_failure(self):
+        package = self.package("pkg-unannounced")
+        package["current_stage"] = "pending"
+        client = FakeClient([package])
+        carrier_404 = HTTPError(
+            "https://carrier.example/track",
+            404,
+            "Not Found",
+            None,
+            None,
+        )
+        wrapped_error = RuntimeError("Carrier tracking request failed")
+        wrapped_error.__cause__ = carrier_404
+        service = TrackingSyncService(
+            client,
+            FakeAdapter(error=wrapped_error),
+            now=lambda: datetime(2026, 8, 11, 9, tzinfo=timezone.utc),
+        )
+
+        summary = service.sync()
+
+        self.assertEqual(summary.waiting, 1)
+        self.assertEqual(summary.errors, 0)
+        self.assertEqual(
+            client.updates[-1][1],
+            {
+                "last_synced_at": "2026-08-11T09:00:00+00:00",
+                "sync_status": "waiting",
+                "sync_error": None,
+            },
+        )
+
+    def test_404_after_real_carrier_progress_remains_an_error(self):
+        package = self.package("pkg-announced")
+        package["current_stage"] = "in_transit"
+        client = FakeClient([package])
+        carrier_404 = HTTPError(
+            "https://carrier.example/track",
+            404,
+            "Not Found",
+            None,
+            None,
+        )
+
+        summary = TrackingSyncService(
+            client,
+            FakeAdapter(error=carrier_404),
+        ).sync()
+
+        self.assertEqual(summary.errors, 1)
+        self.assertEqual(client.updates[-1][1]["sync_status"], "error")
 
     def test_one_carrier_failure_does_not_stop_other_packages(self):
         class MixedAdapter:

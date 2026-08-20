@@ -236,7 +236,7 @@ struct ParcelListView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.trailing)
                     Text(nextParcel.expectedDelivery.map {
-                        localizer.text("parcel.expected", ["date": localizer.expectedDelivery($0)])
+                        localizer.expectedDelivery($0)
                     } ?? localizer.text(nextParcel.displayStatus.key))
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(Brand.ink.opacity(0.68))
@@ -532,63 +532,46 @@ private struct ParcelCardView: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onOpen) {
-                HStack(spacing: 13) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color(hex: carrier.color).opacity(0.14))
-                        Image(systemName: parcel.currentStage?.metadata.symbol ?? "shippingbox")
-                            .font(.system(size: 19, weight: .semibold))
-                            .foregroundStyle(Color(hex: carrier.color))
-                    }
-                    .frame(width: 48, height: 48)
-                    .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            Text(carrier.displayName)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(carrier.displayName)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    Text(CarrierCatalog.format(parcel.trackingNumber))
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    HStack(alignment: .center, spacing: 10) {
+                        if parcel.currentStage?.isFinal == true {
+                            StatusBadge(status: parcel.displayStatus)
+                            if let date = localizer.parcelCompletionDate(parcel) {
+                                Text(localizer.text("parcel.onDate", ["date": date]))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        } else {
+                            Text(localizer.parcelStatus(parcel))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(statusColor)
+                                .lineLimit(1)
+                        }
+                        if parcel.currentStage?.isFinal != true, let expected = parcel.expectedDelivery {
+                            Text(localizer.expectedDelivery(expected))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
-                            Spacer()
-                            if let event = parcel.currentEvent {
-                                Text(localizer.text("parcel.updated", [
-                                    "date": localizer.relativeTime(from: event.occurredAt),
-                                ]))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            }
                         }
-                        Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                    }
+                    if let notice {
+                        Text(notice)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.orange)
                             .lineLimit(2)
-                        Text(CarrierCatalog.format(parcel.trackingNumber))
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        HStack(alignment: .center, spacing: 8) {
-                            StatusBadge(status: parcel.displayStatus)
-                            if let expected = parcel.expectedDelivery {
-                                Label(
-                                    localizer.text("parcel.expected", [
-                                        "date": localizer.expectedDelivery(expected),
-                                    ]),
-                                    systemImage: "calendar"
-                                )
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.green)
-                                .lineLimit(1)
-                            }
-                        }
-                        if let notice {
-                            Label(notice, systemImage: "exclamationmark.circle.fill")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.orange)
-                                .lineLimit(2)
-                        }
-                        DeliveryProgress(stage: parcel.currentStage)
-                            .padding(.top, 2)
                     }
                 }
                 .padding(.vertical, 16)
@@ -621,5 +604,13 @@ private struct ParcelCardView: View {
 
     private var carrier: CarrierDefinition {
         catalog.info(for: parcel.activeTrackingCarrier)
+    }
+
+    private var statusColor: Color {
+        switch parcel.displayStatus.tone {
+        case .normal: .primary
+        case .warning: .orange
+        case .complete: .green
+        }
     }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ParcelWithEvents, SyncStatus } from '../types';
-import { parcelDisplayStatus } from './parcelStatus';
+import { localizedParcelCompletionDate, parcelDisplayStatus } from './parcelStatus';
 
 function parcel(syncStatus: SyncStatus, stage: 'pending' | 'in_transit' = 'pending'): ParcelWithEvents {
   return {
@@ -30,7 +30,7 @@ describe('parcelDisplayStatus', () => {
       syncing: true,
     });
     expect(parcelDisplayStatus(parcel('syncing')).label).toBe('Sync in progress');
-    expect(parcelDisplayStatus(parcel('waiting')).label).toBe('Tracked');
+    expect(parcelDisplayStatus(parcel('waiting')).label).toBe('Not announced yet');
   });
 
   it('makes first-sync failures and unsupported carriers explicit', () => {
@@ -54,5 +54,12 @@ describe('parcelDisplayStatus', () => {
     });
 
     expect(parcelDisplayStatus(tracked).label).toBe('In transit');
+  });
+
+  it('folds a final event date into one concise status line', () => {
+    const delivered = parcel('ok', 'in_transit');
+    delivered.events[0].stage = 'delivered';
+    delivered.events[0].occurredAt = '2026-07-16T10:00:00Z';
+    expect(localizedParcelCompletionDate(delivered, 'de-CH')).toBe('16.7.26');
   });
 });

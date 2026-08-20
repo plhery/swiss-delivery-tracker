@@ -56,6 +56,8 @@ extension Parcel {
     }
 
     var currentStage: TrackingStage? { currentEvent?.stage }
+    var hasCarrierUpdate: Bool { currentEvent.map { $0.stage != .pending } ?? false }
+    var isUnannounced: Bool { !hasCarrierUpdate && syncStatus == .waiting }
     var isArchived: Bool { archivedAt != nil }
     var isDelivered: Bool { currentStage == .delivered }
     var isReturned: Bool { currentStage == .returned }
@@ -67,7 +69,6 @@ extension Parcel {
     }
 
     var displayStatus: ParcelDisplayStatus {
-        let hasCarrierUpdate = currentEvent.map { $0.stage != .pending } ?? false
         if !hasCarrierUpdate && (syncStatus == .pending || syncStatus == .syncing) {
             return ParcelDisplayStatus(key: "status.syncing", tone: .normal, syncing: true)
         }
@@ -76,6 +77,9 @@ extension Parcel {
         }
         if !hasCarrierUpdate && syncStatus == .unsupported {
             return ParcelDisplayStatus(key: "status.unsupported", tone: .warning, syncing: false)
+        }
+        if isUnannounced {
+            return ParcelDisplayStatus(key: "status.unannounced", tone: .normal, syncing: false)
         }
         guard let currentStage else {
             return ParcelDisplayStatus(key: "status.unannounced", tone: .normal, syncing: false)
@@ -101,7 +105,7 @@ extension Parcel {
            now.timeIntervalSince(update) >= 4 * 86_400 {
             return .stalled
         }
-        if currentEvent == nil,
+        if isUnannounced,
            let created = DateParser.date(createdAt),
            now.timeIntervalSince(created) >= 2 * 86_400 {
             return .notAnnounced

@@ -252,6 +252,40 @@ def result_has_update(result: CarrierResult) -> bool:
     return False
 
 
+_UNANNOUNCED_ERROR_PHRASES = (
+    "did not return the requested parcel",
+    "no parcel found",
+    "not announced",
+    "not found yet",
+    "not registered",
+    "shipment not found",
+    "tracking number not found",
+    "unknown tracking number",
+)
+
+
+def is_unannounced_tracking_error(error: BaseException) -> bool:
+    """Recognize a carrier saying a newly added identifier is not live yet."""
+
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        response = getattr(current, "response", None)
+        status = (
+            getattr(current, "code", None)
+            or getattr(current, "status", None)
+            or getattr(response, "status_code", None)
+        )
+        if status == 404:
+            return True
+        message = " ".join(str(current).casefold().split())
+        if any(phrase in message for phrase in _UNANNOUNCED_ERROR_PHRASES):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
 def result_timezone(carrier_id: str, result: CarrierResult) -> tzinfo:
     declared = result.get("timezone")
     if isinstance(declared, str) and 1 <= len(declared) <= 64:
@@ -426,9 +460,25 @@ class TrackingSyncService:
         self.client.update_package(package["id"], {"sync_status": "syncing", "sync_error": None})
         try:
             carrier_id = str(package["carrier"])
-            result, source_carrier_id, swiss_post_ready = self._fetch_result(
-                package, carrier_id
-            )
+            try:
+                result, source_carrier_id, swiss_post_ready = self._fetch_result(
+                    package, carrier_id
+                )
+            except Exception as exc:
+                has_carrier_progress = str(
+                    package.get("current_stage") or "pending"
+                ) != "pending"
+                if not has_carrier_progress and is_unannounced_tracking_error(exc):
+                    self.client.update_package(
+                        package["id"],
+                        {
+                            "last_synced_at": now.isoformat(),
+                            "sync_status": "waiting",
+                            "sync_error": None,
+                        },
+                    )
+                    return "waiting"
+                raise
             events = build_events(package, result, now, source_carrier_id)
             self.client.insert_events(events)
             if source_carrier_id == "swiss-post" and result.get("events"):

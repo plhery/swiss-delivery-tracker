@@ -1,4 +1,5 @@
 import { currentEvent, currentStage } from './stages';
+import { parcelIsUnannounced } from './parcelStatus';
 import type { ParcelWithEvents } from '../types';
 
 const DAY = 86_400_000;
@@ -50,7 +51,7 @@ export function parcelAttention(
 
   const created = new Date(parcel.createdAt).getTime();
   if (
-    !current
+    parcelIsUnannounced(parcel)
     && Number.isFinite(created)
     && now - created >= 2 * DAY
   ) {

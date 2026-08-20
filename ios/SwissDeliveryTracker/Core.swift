@@ -159,6 +159,19 @@ final class Localizer: ObservableObject {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+
+    func parcelStatus(_ parcel: Parcel) -> String {
+        text(parcel.displayStatus.key)
+    }
+
+    func parcelCompletionDate(_ parcel: Parcel) -> String? {
+        if let event = parcel.currentEvent,
+           event.stage.isFinal,
+           let date = DateParser.date(event.occurredAt) {
+            return shortDate(date)
+        }
+        return nil
+    }
 }
 
 enum CarrierID: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
