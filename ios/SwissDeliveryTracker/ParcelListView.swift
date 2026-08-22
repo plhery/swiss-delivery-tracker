@@ -339,31 +339,50 @@ struct ParcelListView: View {
 
             HStack {
                 Spacer()
-                Button {
-                    sharedDraft = nil
-                    showingAdd = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus")
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(Brand.accentBright)
-                        Text(localizer.text("app.addParcel"))
-                            .font(.headline)
-                            .foregroundStyle(Brand.paper)
-                    }
-                        .padding(.horizontal, 20)
-                        .frame(height: 54)
-                        .background(Brand.ink, in: Capsule())
-                        .overlay(Capsule().stroke(.white.opacity(0.1), lineWidth: 0.7))
-                        .shadow(color: Brand.ink.opacity(0.2), radius: 13, y: 7)
-                }
-                .buttonStyle(TactileButtonStyle(scale: 0.97))
+                addParcelButton
             }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 5)
         .animation(.snappy, value: store.undoParcel?.id)
         .animation(.snappy, value: actionMessage)
+    }
+
+    @ViewBuilder
+    private var addParcelButton: some View {
+        if #available(iOS 26.0, *) {
+            addParcelButtonLabel
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .controlSize(.extraLarge)
+                .tint(Brand.ink)
+        } else {
+            addParcelButtonLabel
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .tint(Brand.ink)
+        }
+    }
+
+    private var addParcelButtonLabel: some View {
+        Button {
+            sharedDraft = nil
+            showingAdd = true
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: "plus")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Brand.ink)
+                    .frame(width: 27, height: 27)
+                    .background(Brand.accent.opacity(0.24), in: Circle())
+                Text(localizer.text("app.addParcel"))
+                    .font(.headline)
+                    .foregroundStyle(Brand.ink)
+            }
+            .padding(.horizontal, 4)
+            .frame(minHeight: 30)
+        }
     }
 
     private var visibleParcels: [Parcel] {

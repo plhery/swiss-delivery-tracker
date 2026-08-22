@@ -145,7 +145,14 @@ struct AddParcelView: View {
                     .frame(width: 42, height: 42)
                     .background(Brand.accentBright, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
 
-                TextField(localizer.text("add.contentsPlaceholder"), text: $label, axis: .vertical)
+                TextField(
+                    "",
+                    text: $label,
+                    prompt: Text(localizer.text("add.contentsPlaceholder"))
+                        .font(.body)
+                        .foregroundColor(Brand.ink.opacity(0.5)),
+                    axis: .vertical
+                )
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Brand.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,6 +160,7 @@ struct AddParcelView: View {
                     .textContentType(.name)
                     .submitLabel(.next)
                     .focused($focusedField, equals: .label)
+                    .accessibilityLabel(localizer.text("add.contents"))
                     .onSubmit { focusedField = .tracking }
                     .onChange(of: label) { _, value in
                         if value.count > 80 { label = String(value.prefix(80)) }
