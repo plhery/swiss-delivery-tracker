@@ -12,6 +12,12 @@ import { SupabaseAuthError, SupabaseAuthenticator } from './auth';
 import { fetchBounded, parseJsonBytes } from './boundedFetch';
 import { RateLimiter } from './rateLimit';
 import { NativePushNotificationService, notificationText, pushServices } from './push';
+import {
+  authConfiguration,
+  deliveryServiceConfigured,
+  publicSupabaseOrigin,
+  serviceClient,
+} from './runtime';
 import { SupabaseClient } from './supabase';
 import {
   nativePushDevice,
@@ -24,8 +30,10 @@ import {
 
 const originalEnvironment = {
   SUPABASE_URL: process.env.SUPABASE_URL,
+  SUPABASE_PUBLIC_URL: process.env.SUPABASE_PUBLIC_URL,
   SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY,
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
   APNS_TEAM_ID: process.env.APNS_TEAM_ID,
@@ -40,6 +48,45 @@ afterEach(() => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
+});
+
+describe('server runtime configuration', () => {
+  it('distinguishes an intentionally absent service from malformed configuration', () => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLIC_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.SUPABASE_ANON_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    expect(publicSupabaseOrigin()).toBeNull();
+    expect(authConfiguration()).toBeNull();
+    expect(serviceClient()).toBeNull();
+    expect(deliveryServiceConfigured()).toBe(false);
+
+    process.env.SUPABASE_URL = 'not-a-url';
+    process.env.SUPABASE_PUBLISHABLE_KEY = 'public-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key';
+    expect(publicSupabaseOrigin()).toBeNull();
+    expect(() => authConfiguration()).toThrow('required');
+    expect(() => serviceClient()).toThrow('required');
+    expect(deliveryServiceConfigured()).toBe(false);
+  });
+
+  it('normalizes valid origins, prefers the public URL, and reuses the service client', () => {
+    process.env.SUPABASE_URL = 'http://supabase.internal:8000/';
+    process.env.SUPABASE_PUBLIC_URL = 'https://supabase.example.com/';
+    process.env.SUPABASE_PUBLISHABLE_KEY = 'public-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key';
+
+    expect(publicSupabaseOrigin()).toBe('https://supabase.example.com');
+    expect(authConfiguration()).toEqual({
+      url: 'http://supabase.internal:8000',
+      publishableKey: 'public-key',
+    });
+    const first = serviceClient();
+    expect(first).not.toBeNull();
+    expect(serviceClient()).toBe(first);
+    expect(deliveryServiceConfigured()).toBe(true);
+  });
 });
 
 describe('API request boundaries', () => {
@@ -93,6 +140,63 @@ describe('API request boundaries', () => {
       headers: { 'Content-Length': '16385' },
       body: '{}',
     }))).rejects.toThrow('request size');
+    await expect(readJsonObject(new Request('https://delivery.example/api', {
+      method: 'POST',
+      headers: { 'Content-Length': '1e1' },
+      body: '{}',
+    }))).rejects.toThrow('request size');
+  });
+
+  it('stream-limits chunked JSON bodies and cancels oversized input', async () => {
+    const encoder = new TextEncoder();
+    const streamed = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"ok":'));
+        controller.enqueue(encoder.encode('true}'));
+        controller.close();
+      },
+    });
+    await expect(readJsonObject(new Request('https://delivery.example/api', {
+      method: 'POST',
+      body: streamed,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' }))).resolves.toEqual({ ok: true });
+
+    let cancelled = false;
+    let chunk = 0;
+    const oversized = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(encoder.encode(chunk === 0 ? 'x'.repeat(16_384) : 'x'));
+        chunk += 1;
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    await expect(readJsonObject(new Request('https://delivery.example/api', {
+      method: 'POST',
+      body: oversized,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' }))).rejects.toThrow('request size');
+    expect(cancelled).toBe(true);
+  });
+
+  it('rejects invalid UTF-8 before parsing streamed JSON', async () => {
+    let cancelled = false;
+    const invalidUtf8 = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Uint8Array.from([0xff]));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    await expect(readJsonObject(new Request('https://delivery.example/api', {
+      method: 'POST',
+      body: invalidUtf8,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' }))).rejects.toThrow('valid JSON object');
+    expect(cancelled).toBe(true);
   });
 
   it('normalizes UUIDs and rejects route-shaped junk', () => {

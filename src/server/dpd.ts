@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { randomBytes } from 'node:crypto';
 import { load } from 'cheerio';
 import { DateTime } from 'luxon';

@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
+  resolve: {
+    // Next.js replaces this marker at build time. Tests intentionally exercise
+    // the server modules directly, so map the marker to an inert module here.
+    alias: { 'server-only': fileURLToPath(new URL('./src/test/serverOnly.ts', import.meta.url)) },
+  },
   test: {
     include: ['src/**/*.test.{ts,tsx}'],
     environment: 'jsdom',

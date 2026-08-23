@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { AUTOMATIC_CARRIER_IDS } from './carriers';
 import { isRecord, type JsonObject } from './types';
 

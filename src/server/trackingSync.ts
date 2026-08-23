@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { createHash } from 'node:crypto';
 import { DateTime, IANAZone } from 'luxon';
 import { STAGES } from '../generated/apiContract';

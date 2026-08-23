@@ -25,8 +25,10 @@
     "start": "node .next/standalone/server.js",
     "preview": "npm run start",
     "test": "vitest run",
+    "test:scripts": "node --test scripts/prepare-personal-ios-project.test.mjs scripts/validate-production-config.test.mjs",
     "test:contract": "node scripts/generate-api-contract.mjs --check",
     "test:coverage": "vitest run --coverage",
+    "test:coverage:server": "vitest run --config vitest.server.config.ts --coverage",
     "test:e2e": "playwright test",
     "test:pwa": "node scripts/test-pwa-build.mjs",
     "test:watch": "vitest",
@@ -34,7 +36,8 @@
     "ios:resources": "node scripts/generate-ios-resources.mjs",
     "lint": "eslint . --max-warnings=0",
     "lint:frontend": "npm run lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:production-config": "node scripts/validate-production-config.mjs"
   },
   "dependencies": {
     "@serwist/next": "^9.5.12",

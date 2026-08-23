@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { load } from 'cheerio';
 import makeFetchCookie from 'fetch-cookie';
 import { Cookie, CookieJar } from 'tough-cookie';

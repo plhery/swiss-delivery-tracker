@@ -7,7 +7,6 @@ const config = [
   {
     ignores: [
       '.next/**',
-      '.venv/**',
       'coverage/**',
       'dist/**',
       'out/**',

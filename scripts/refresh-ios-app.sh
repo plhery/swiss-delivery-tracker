@@ -64,50 +64,7 @@ remove_cached_personal_profiles() {
 
 prepare_personal_project() {
   local project_file="$PROJECT_PATH/project.pbxproj"
-
-  /usr/bin/python3 - "$project_file" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-replacements = [
-    (
-        'buildPhases = (E30000000000000000000001, E20000000000000000000001, E40000000000000000000001, E10000000000000000000001, ); buildRules = (); dependencies = (D20000000000000000000001, D20000000000000000000003, );',
-        'buildPhases = (E30000000000000000000001, E20000000000000000000001, E40000000000000000000001, E10000000000000000000001, ); buildRules = (); dependencies = (D20000000000000000000003, );',
-        1,
-    ),
-    (
-        'A10000000000000000000001 = {CreatedOnToolsVersion = 26.6; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; com.apple.Push = {enabled = 1; }; }; };',
-        'A10000000000000000000001 = {CreatedOnToolsVersion = 26.6; };',
-        1,
-    ),
-    (
-        'A10000000000000000000004 = {CreatedOnToolsVersion = 26.6; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; }; };',
-        'A10000000000000000000004 = {CreatedOnToolsVersion = 26.6; };',
-        1,
-    ),
-    (
-        'files = (B10000000000000000000014 /* ShareExtension.appex in Embed App Extensions */, B10000000000000000000022 /* DeliveryWidgetExtension.appex in Embed App Extensions */, );',
-        'files = (B10000000000000000000022 /* DeliveryWidgetExtension.appex in Embed App Extensions */, );',
-        1,
-    ),
-    ('APS_ENVIRONMENT = development; ', '', 1),
-    ('APS_ENVIRONMENT = production; ', '', 1),
-    ('CODE_SIGN_ENTITLEMENTS = SwissDeliveryTracker/SwissDeliveryTracker.entitlements; ', '', 2),
-    ('CODE_SIGN_ENTITLEMENTS = DeliveryWidgetExtension/DeliveryWidgetExtension.entitlements; ', '', 2),
-    ('PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker;', 'PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker.Personal;', 2),
-    ('PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker.DeliveryWidget;', 'PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker.Personal.DeliveryWidget;', 2),
-]
-
-for old, new, expected in replacements:
-    count = text.count(old)
-    if count != expected:
-        raise SystemExit(f'Expected {expected} project matches, found {count}: {old[:72]}')
-    text = text.replace(old, new, expected)
-
-path.write_text(text)
-PY
+  node "$PROJECT_ROOT/scripts/prepare-personal-ios-project.mjs" "$project_file"
 }
 
 on_exit() {

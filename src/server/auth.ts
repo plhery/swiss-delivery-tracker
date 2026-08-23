@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { createHash } from 'node:crypto';
 import { SupabaseUserClient } from './supabase';
 import { authConfiguration } from './runtime';

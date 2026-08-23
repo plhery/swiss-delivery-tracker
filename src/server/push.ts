@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { connect, constants as http2Constants } from 'node:http2';
 import { createPrivateKey, type KeyObject } from 'node:crypto';
 import { SignJWT } from 'jose';

@@ -1,13 +1,11 @@
 .git
 .github
 .next
-.venv
 coverage
 dist
 ios
 node_modules
 playwright-report
-server
 test-results
 *.tsbuildinfo
 .env

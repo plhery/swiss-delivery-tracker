@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { DateTime } from 'luxon';

@@ -7,12 +7,7 @@ dist/
 .env.local
 *.local
 .DS_Store
-__pycache__/
-*.pyc
-.venv/
-.coverage
 coverage/
-htmlcov/
 playwright-report/
 test-results/
 public/sw.js

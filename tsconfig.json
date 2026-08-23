@@ -44,6 +44,7 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "vitest.config.ts",
+    "vitest.server.config.ts",
     "next.config.ts",
     ".next/dev/types/**/*.ts"
   ],

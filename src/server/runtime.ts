@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { SupabaseServiceClient } from './supabase';
 
 interface ServiceRuntime {

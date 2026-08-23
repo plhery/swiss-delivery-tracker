@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { createHash, randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { NextRequest } from 'next/server';
@@ -273,17 +275,37 @@ export async function readJsonObject(request: Request): Promise<JsonObject> {
   const declaredLength = request.headers.get('content-length');
   if (declaredLength !== null) {
     const length = Number(declaredLength);
-    if (!Number.isInteger(length) || length <= 0 || length > MAX_JSON_BODY) {
+    if (!/^\d+$/.test(declaredLength) || length <= 0 || length > MAX_JSON_BODY) {
+      await request.body?.cancel().catch(() => undefined);
       throw new HttpError(400, 'Invalid request size');
     }
   }
-  let text: string;
+  const reader = request.body?.getReader();
+  if (!reader) throw new HttpError(400, 'Invalid request size');
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  const parts: string[] = [];
+  let receivedBytes = 0;
   try {
-    text = await request.text();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_JSON_BODY) {
+        await reader.cancel().catch(() => undefined);
+        throw new HttpError(400, 'Invalid request size');
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+    parts.push(decoder.decode());
   } catch (error) {
+    if (error instanceof HttpError) throw error;
+    await reader.cancel().catch(() => undefined);
     throw new HttpError(400, 'Send a valid JSON object', undefined, { cause: error });
+  } finally {
+    reader.releaseLock();
   }
-  if (!text || new TextEncoder().encode(text).byteLength > MAX_JSON_BODY) {
+  const text = parts.join('');
+  if (!text) {
     throw new HttpError(400, 'Invalid request size');
   }
   let payload: unknown;

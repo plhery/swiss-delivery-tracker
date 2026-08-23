@@ -21,8 +21,10 @@ Run:
 ```bash
 npm run lint
 npm run typecheck
+npm run test:scripts
 npm run test:contract
 npm run test:coverage
+npm run test:coverage:server
 npm run test:e2e
 npm run build
 npm run test:pwa

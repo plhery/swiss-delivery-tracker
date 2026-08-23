@@ -100,6 +100,10 @@ docker build \
   -t swiss-delivery-tracker .
 ```
 
+The production Docker build validates these values, requires API mode, and
+requires at least one enabled authentication method. It fails before running
+`next build` rather than producing an unusable sign-in screen.
+
 Set the matching server variables plus `SUPABASE_SERVICE_ROLE_KEY` at runtime.
 Add the stable VAPID key pair and `VAPID_SUBJECT` only when browser push is
 enabled. For native push, set `APNS_TEAM_ID`, `APNS_KEY_ID`, the complete
