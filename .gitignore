@@ -1,6 +1,8 @@
 node_modules/
+.next/
+out/
 dist/
-dev-dist/
+*.tsbuildinfo
 .env
 .env.local
 *.local
@@ -13,6 +15,8 @@ coverage/
 htmlcov/
 playwright-report/
 test-results/
+public/sw.js
+public/swe-worker-*.js
 ios/Configuration/Local.xcconfig
 ios/build/
 ios/DerivedData/

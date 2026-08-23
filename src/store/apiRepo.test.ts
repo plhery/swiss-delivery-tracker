@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import contractFixture from '../../contracts/fixtures/delivery-api.json';
 import { ApiAuthenticationError } from '../lib/apiClient';
-import { API_CACHE_KEY, clearApiCache, createApiRepo } from './apiRepo';
+import { API_CACHE_KEY, browserStorage, clearApiCache, createApiRepo } from './apiRepo';
 
 const packageRow = contractFixture.packageList.packages[0];
 
@@ -18,6 +18,21 @@ describe('createApiRepo', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('treats a denied browser storage getter as unavailable', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Denied', 'SecurityError');
+      },
+    });
+    try {
+      expect(browserStorage()).toBeNull();
+    } finally {
+      if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+    }
   });
 
   it('loads and maps the account package collection', async () => {

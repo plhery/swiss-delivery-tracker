@@ -5,7 +5,6 @@ import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const contractPath = path.join(root, 'contracts', 'openapi.json');
 const typesPath = path.join(root, 'src', 'generated', 'apiContract.ts');
-const pythonPath = path.join(root, 'server', 'api_contract.py');
 const swiftPath = path.join(root, 'ios', 'SwissDeliveryTracker', 'GeneratedAPIContract.swift');
 const contract = JSON.parse(await readFile(contractPath, 'utf8'));
 const schemas = contract.components?.schemas;
@@ -437,49 +436,8 @@ function generatedSwift() {
   return `${lines.join('\n').trim()}\n`;
 }
 
-function pythonLiteral(value, indent = 0) {
-  const padding = ' '.repeat(indent);
-  if (value === null) return 'None';
-  if (value === true) return 'True';
-  if (value === false) return 'False';
-  if (typeof value === 'string') return JSON.stringify(value);
-  if (typeof value === 'number') return String(value);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '()';
-    const rows = value.map((item) => `${' '.repeat(indent + 4)}${pythonLiteral(item, indent + 4)},`);
-    return `(\n${rows.join('\n')}\n${padding})`;
-  }
-  if (typeof value === 'object') {
-    const entries = Object.entries(value);
-    if (entries.length === 0) return '{}';
-    const rows = entries.map(
-      ([key, item]) => `${' '.repeat(indent + 4)}${JSON.stringify(key)}: ${pythonLiteral(item, indent + 4)},`,
-    );
-    return `{\n${rows.join('\n')}\n${padding}}`;
-  }
-  throw new Error(`Unsupported Python literal: ${typeof value}`);
-}
-
-function generatedPython() {
-  const lines = [
-    '"""Generated from contracts/openapi.json. Do not edit."""',
-    '',
-    `CARRIER_CAPABILITIES = ${pythonLiteral(carrierCapabilities)}`,
-    '',
-  ];
-  for (const [name, constant] of Object.entries(enumConstants)) {
-    const values = schemas[name]?.enum;
-    if (!Array.isArray(values)) throw new Error(`${name} must define an enum`);
-    lines.push(`${constant} = frozenset(`, '    (');
-    for (const value of values) lines.push(`        ${JSON.stringify(value)},`);
-    lines.push('    )', ')', '');
-  }
-  return `${lines.join('\n').trim()}\n`;
-}
-
 const outputs = [
   [typesPath, generatedTypeScript()],
-  [pythonPath, generatedPython()],
   [swiftPath, generatedSwift()],
 ];
 

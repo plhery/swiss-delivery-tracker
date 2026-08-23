@@ -21,6 +21,15 @@ import type {
 
 export const API_CACHE_KEY = 'parcel-post.api-cache.v1';
 
+export function browserStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function clearApiCache(storage: Storage | null, userId: string): void {
   if (!storage) return;
   try {
@@ -112,7 +121,7 @@ async function request<T>(path: string, auth: ApiAuth | undefined, init?: Reques
 export function createApiRepo(
   pollIntervalMs = 30_000,
   jobPollIntervalMs = 1_000,
-  storage: Storage | null = typeof window === 'undefined' ? null : window.localStorage,
+  storage: Storage | null = browserStorage(),
   auth?: ApiAuth,
 ): ParcelRepo {
   let notifySubscriber: (() => void) | null = null;

@@ -34,8 +34,10 @@ describe('localization', () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByLabelText('Sprache')).toHaveValue('de');
-    expect(screen.getByText('In Zustellung')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Sprache')).toHaveValue('de');
+      expect(screen.getByText('In Zustellung')).toBeInTheDocument();
+    });
 
     await user.selectOptions(screen.getByLabelText('Sprache'), 'fr');
     expect(screen.getByText('En livraison')).toBeInTheDocument();

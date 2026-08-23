@@ -5,7 +5,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Next's development compiler can leave chunk responses pending when every
+  // desktop CPU is used for a cold, fully parallel browser run. Two workers
+  // keep the test server responsive while still exercising concurrent pages.
+  workers: 2,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: 'http://127.0.0.1:4173',
@@ -28,8 +31,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4173',
-    env: { VITE_USE_API: 'false' },
+    command: 'npm run dev -- --hostname 127.0.0.1 --port 4173',
+    env: { NEXT_PUBLIC_USE_API: 'false' },
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
     url: 'http://127.0.0.1:4173',

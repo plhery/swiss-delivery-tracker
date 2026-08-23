@@ -6,6 +6,7 @@ import { ApiApplication } from './ApiApplication';
 
 const mocks = vi.hoisted(() => ({
   auth: {} as Record<string, unknown>,
+  browserStorage: vi.fn(),
   createApiRepo: vi.fn(),
   clearApiCache: vi.fn(),
   disablePushNotifications: vi.fn(),
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./auth/AuthContext', () => ({ useAuth: () => mocks.auth }));
 vi.mock('./store/apiRepo', () => ({
+  browserStorage: mocks.browserStorage,
   createApiRepo: mocks.createApiRepo,
   clearApiCache: mocks.clearApiCache,
 }));
@@ -76,6 +78,7 @@ beforeEach(() => {
     verifyCode: vi.fn(),
     signOut: vi.fn().mockResolvedValue(undefined),
   };
+  mocks.browserStorage.mockReturnValue(window.localStorage);
   mocks.createApiRepo.mockReturnValue({ mode: 'api' });
   mocks.disablePushNotifications.mockResolvedValue(undefined);
   mocks.unsubscribePushNotificationsLocally.mockResolvedValue(undefined);

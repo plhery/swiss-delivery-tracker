@@ -1,58 +1,37 @@
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (event.request.method === 'POST' && url.pathname === '/share-target') {
-    event.respondWith((async () => {
-      const form = await event.request.formData();
-      const title = String(form.get('title') || '').trim().slice(0, 80);
-      const parts = [form.get('url'), form.get('text')]
-        .map((value) => String(value || '').trim())
-        .filter((value, index, values) => value && values.indexOf(value) === index);
-      const trackingInput = parts.join('\n').slice(0, 10_000);
-      if (trackingInput) {
-        const cache = await caches.open('sdt-private-share-target-v1');
-        await cache.put('/share-target/draft', new Response(
-          JSON.stringify({ label: title, trackingInput }),
-          { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } },
-        ));
-      }
-      return Response.redirect(new URL('/?share-target=1', self.location.origin), 303);
-    })());
-    return;
-  }
-
-  if (event.request.method === 'GET' && url.pathname === '/share-target/draft') {
-    event.respondWith((async () => {
-      const cache = await caches.open('sdt-private-share-target-v1');
-      const draft = await cache.match('/share-target/draft');
-      await cache.delete('/share-target/draft');
-      return draft || new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
-    })());
-  }
+self.addEventListener('activate', (event) => {
+  // Remove cache names used by Serwist defaults before private API traffic was
+  // explicitly made network-only.
+  event.waitUntil(Promise.all([
+    caches.delete('apis'),
+    caches.delete('cross-origin'),
+  ]));
 });
 
 self.addEventListener('push', (event) => {
-  let payload = {};
+  let decoded = {};
   try {
-    payload = event.data ? event.data.json() : {};
+    decoded = event.data ? event.data.json() : {};
   } catch {
-    payload = { title: 'Parcel update', body: 'A delivery has new tracking information.' };
+    decoded = {};
   }
 
-  const title = payload.title || 'Parcel update';
+  const payload = decoded && typeof decoded === 'object' && !Array.isArray(decoded) ? decoded : {};
+  const text = (value, fallback, limit) => (
+    typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : fallback
+  );
+  const title = text(payload.title, 'Parcel update', 120);
   const options = {
-    body: payload.body || 'A delivery has new tracking information.',
-    icon: payload.icon || '/icons/icon-192.png',
-    badge: payload.badge || '/icons/icon-192.png',
-    tag: payload.tag || 'parcel-update',
+    body: text(payload.body, 'A delivery has new tracking information.', 500),
+    icon: text(payload.icon, '/icons/icon-192.png', 2_048),
+    badge: text(payload.badge, '/icons/icon-192.png', 2_048),
+    tag: text(payload.tag, 'parcel-update', 120),
     renotify: true,
-    data: payload.data || { url: '/' },
+    data: payload.data && typeof payload.data === 'object' ? payload.data : { url: '/' },
   };
 
   const tasks = [self.registration.showNotification(title, options)];
   if (self.navigator && typeof self.navigator.setAppBadge === 'function') {
-    tasks.push(self.navigator.setAppBadge(1));
+    tasks.push(Promise.resolve(self.navigator.setAppBadge(1)).catch(() => undefined));
   }
   event.waitUntil(Promise.all(tasks));
 });
@@ -63,14 +42,26 @@ self.addEventListener('notificationclick', (event) => {
     void self.navigator.clearAppBadge();
   }
 
-  let target = new URL(event.notification.data?.url || '/', self.location.origin);
+  let target;
+  try {
+    const requested = typeof event.notification.data?.url === 'string'
+      ? event.notification.data.url
+      : '/';
+    target = new URL(requested, self.location.origin);
+  } catch {
+    target = new URL('/', self.location.origin);
+  }
   if (target.origin !== self.location.origin) target = new URL('/', self.location.origin);
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
       for (const client of clients) {
-        if ('navigate' in client) await client.navigate(target.href);
-        if ('focus' in client) return client.focus();
+        try {
+          if ('navigate' in client) await client.navigate(target.href);
+          if ('focus' in client) return await client.focus();
+        } catch {
+          // A stale or closing client should not prevent opening a usable one.
+        }
       }
       return self.clients.openWindow(target.href);
     }),

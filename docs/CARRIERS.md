@@ -21,7 +21,7 @@ ShipUp can be kept as a manual record.
 
 Carrier names, adapter modes, tracking links, required inputs, timezones and
 detection rules are defined once in `contracts/openapi.json` under
-`x-carriers`, then generated for both the browser and Python service. Broad
+`x-carriers`, then generated for both the Next.js app and native iPhone app. Broad
 numeric formats are treated as suggestions and require manual confirmation;
 UPU S10 identifiers must pass their check digit before automatic detection.
 
@@ -38,10 +38,9 @@ Swiss Post as not ready during the international leg.
 
 Several carriers do not offer a supported public tracking API. Their websites
 and undocumented endpoints can change without notice, so tracking is best
-effort and failures remain visible for later retry. The reusable adapters come
-from the pinned
-[`blue-plhery-assistant/swiss-delivery-tracker`](https://github.com/blue-plhery-assistant/swiss-delivery-tracker)
-package.
+effort and failures remain visible for later retry. Provider-specific adapters
+are isolated under `src/server/`, validate inputs, bound response sizes, and use
+timeouts so one carrier cannot block the rest of a scheduled run.
 
 ## Planzer shared links
 

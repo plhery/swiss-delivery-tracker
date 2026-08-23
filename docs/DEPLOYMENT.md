@@ -95,21 +95,24 @@ The two browser values are build-time arguments:
 
 ```bash
 docker build \
-  --build-arg VITE_SUPABASE_URL=https://supabase.example.com \
-  --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_example \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://supabase.example.com \
+  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_example \
   -t swiss-delivery-tracker .
 ```
 
 Set the matching server variables plus `SUPABASE_SERVICE_ROLE_KEY` at runtime.
 Add the stable VAPID key pair and `VAPID_SUBJECT` only when browser push is
 enabled. For native push, set `APNS_TEAM_ID`, `APNS_KEY_ID`, the complete
-`APNS_PRIVATE_KEY` `.p8` value, and `APNS_BUNDLE_ID`; partial APNs configuration
-is rejected at startup. See `.env.example` for the complete inventory.
+`APNS_PRIVATE_KEY` `.p8` value, and `APNS_BUNDLE_ID`; partial VAPID or APNs
+configuration is rejected at startup. See `.env.example` for the complete inventory.
 
-If a reverse proxy connects directly to the container, set
-`TRUSTED_PROXY_NETWORKS` to its exact comma-separated CIDRs. Leave it empty when
-there is no trusted proxy. Never add broad internet ranges: `CF-Connecting-IP`
-and `X-Forwarded-For` are ignored unless the socket peer matches this allowlist.
+This application includes a durable in-process scheduler, so run the standalone
+Next.js server as a continuously running container or process. A request-only
+serverless runtime will not keep the carrier worker alive.
+
+Set `TRUST_PROXY_HEADERS=true` only when a trusted reverse proxy connects to the
+container and overwrites `CF-Connecting-IP`, `X-Real-IP`, and
+`X-Forwarded-For`. Leave it false when clients can reach the origin directly.
 
 Expose container port `3000`, use `GET /health` as the health check, and keep the
 container behind HTTPS. The public health response intentionally contains only
@@ -147,10 +150,10 @@ repository secrets when they are no longer used.
 - Database functions cap each account at 50 active and 500 total parcels, and a
   scheduled synchronization processes at most five parcels per account in
   round-robin order. Treat changes to these limits as security-sensitive.
-- The HTTP service admits a bounded number of concurrent requests. Its
-  pre-authentication limits combine a proxy-validated client address with a
-  hashed bearer credential when supplied; authenticated limits are per account.
-  Keep the origin behind an edge rate limiter as an independent layer.
+- Next.js handles request admission. Application pre-authentication limits
+  combine a trusted forwarded address with a hashed bearer credential when
+  supplied; authenticated limits are per account. Keep the origin behind an
+  edge rate limiter as an independent layer.
 - Carrier refreshes live in `public.sync_jobs`. Running jobs use leases and can
   be reclaimed after a worker crash; active package and scheduled jobs are
   deduplicated, and terminal job records are retained for 30 days. Back up this

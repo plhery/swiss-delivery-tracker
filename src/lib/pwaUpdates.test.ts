@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { enablePwaLiveReload } from './pwaUpdates';
+import { enablePwaLiveReload, registerPwaServiceWorker } from './pwaUpdates';
 
 function serviceWorker(controller: object | null) {
   let listener: (() => void) | undefined;
@@ -46,5 +46,22 @@ describe('enablePwaLiveReload', () => {
   it('is inert when service workers are unsupported', () => {
     const cleanup = enablePwaLiveReload(vi.fn(), null);
     expect(cleanup()).toBeUndefined();
+  });
+});
+
+describe('registerPwaServiceWorker', () => {
+  it('registers the root worker with update caching disabled', async () => {
+    const registration = {} as ServiceWorkerRegistration;
+    const register = vi.fn().mockResolvedValue(registration);
+
+    await expect(registerPwaServiceWorker({ register })).resolves.toBe(registration);
+    expect(register).toHaveBeenCalledWith('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
+    });
+  });
+
+  it('is inert when service workers are unsupported', async () => {
+    await expect(registerPwaServiceWorker(null)).resolves.toBeNull();
   });
 });

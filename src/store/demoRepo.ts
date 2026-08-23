@@ -17,6 +17,47 @@ export const DEMO_STORAGE_KEY = 'sdt.demo.parcels.v1';
 
 const HOUR = 3_600_000;
 
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear() {
+      values.clear();
+    },
+    getItem(key) {
+      return values.get(key) ?? null;
+    },
+    key(index) {
+      return [...values.keys()][index] ?? null;
+    },
+    removeItem(key) {
+      values.delete(key);
+    },
+    setItem(key, value) {
+      values.set(key, value);
+    },
+  };
+}
+
+function defaultStorage(): Storage {
+  if (typeof window !== 'undefined') {
+    try {
+      const storage = window.localStorage;
+      const probeKey = 'sdt.storage.probe';
+      const previous = storage.getItem(probeKey);
+      storage.setItem(probeKey, '1');
+      if (previous === null) storage.removeItem(probeKey);
+      else storage.setItem(probeKey, previous);
+      return storage;
+    } catch {
+      // Some privacy modes expose localStorage but deny access to it.
+    }
+  }
+  return createMemoryStorage();
+}
+
 /** What the simulated carrier says at each stage. */
 const SIMULATED_UPDATES: Record<Stage, { description: string; location?: string }> = {
   pending: {
@@ -173,7 +214,7 @@ function save(storage: Storage, parcels: ParcelWithEvents[]): void {
  * so the app is fully usable (and demoable) with zero setup.
  */
 export function createDemoRepo(
-  storage: Storage = window.localStorage,
+  storage: Storage = defaultStorage(),
   now: () => number = Date.now,
 ): ParcelRepo {
   function getAll(): ParcelWithEvents[] {

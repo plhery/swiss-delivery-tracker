@@ -12,6 +12,7 @@ import {
 
 const getSubscription = vi.fn();
 const subscribe = vi.fn();
+const getRegistration = vi.fn();
 const registration = { pushManager: { getSubscription, subscribe } };
 
 function response(body: unknown, ok = true): Response {
@@ -26,8 +27,9 @@ beforeEach(() => {
   });
   Object.defineProperty(navigator, 'serviceWorker', {
     configurable: true,
-    value: { ready: Promise.resolve(registration) },
+    value: { ready: Promise.resolve(registration), getRegistration },
   });
+  getRegistration.mockReset().mockResolvedValue(registration);
   getSubscription.mockReset().mockResolvedValue(null);
   subscribe.mockReset();
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ available: true, publicKey: 'AQID' })));
@@ -211,5 +213,14 @@ describe('push subscription lifecycle', () => {
 
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not wait indefinitely when no worker registration exists', async () => {
+    getRegistration.mockResolvedValueOnce(undefined);
+    await expect(disablePushNotifications()).resolves.toBeUndefined();
+
+    getRegistration.mockResolvedValueOnce(undefined);
+    await expect(unsubscribePushNotificationsLocally()).resolves.toBeUndefined();
+    expect(getSubscription).not.toHaveBeenCalled();
   });
 });

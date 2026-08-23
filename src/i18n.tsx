@@ -1,9 +1,9 @@
-/* eslint-disable react-refresh/only-export-components -- context hooks and translation helpers share one typed catalog */
 import {
   createContext,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -699,19 +699,38 @@ export function detectLocale(languages: readonly string[] = []): Locale {
   return 'en';
 }
 
-function initialLocale(): Locale {
-  if (typeof window === 'undefined') return 'en';
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (SUPPORTED_LOCALES.includes(saved as Locale)) return saved as Locale;
+function browserLocale(): Locale {
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (SUPPORTED_LOCALES.includes(saved as Locale)) return saved as Locale;
+  } catch {
+    // Locale detection still works when storage is unavailable.
+  }
   return detectLocale(navigator.languages?.length ? navigator.languages : [navigator.language]);
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>(initialLocale);
+  // The fixed initial locale keeps server and browser markup identical. The
+  // user's preference is restored immediately after hydration.
+  const [locale, setLocale] = useState<Locale>('en');
+  const hydrated = useRef(false);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, locale);
+    const timeout = window.setTimeout(() => setLocale(browserLocale()), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
     document.documentElement.lang = locale;
+    if (!hydrated.current) {
+      hydrated.current = true;
+      return;
+    }
+    try {
+      window.localStorage.setItem(STORAGE_KEY, locale);
+    } catch {
+      // Keep language switching functional even without persistent storage.
+    }
   }, [locale]);
 
   const value = useMemo<I18nValue>(() => ({

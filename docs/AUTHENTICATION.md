@@ -11,10 +11,10 @@ data boundary.
 The production frontend must be built with:
 
 ```dotenv
-VITE_SUPABASE_URL=https://supabase.example.com
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_example
-VITE_AUTH_GOOGLE_ENABLED=true
-VITE_AUTH_EMAIL_OTP_ENABLED=false
+NEXT_PUBLIC_SUPABASE_URL=https://supabase.example.com
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_example
+NEXT_PUBLIC_AUTH_GOOGLE_ENABLED=true
+NEXT_PUBLIC_AUTH_EMAIL_OTP_ENABLED=false
 ```
 
 The server needs the matching private configuration:
@@ -27,7 +27,7 @@ SUPABASE_SERVICE_ROLE_KEY=server-only-service-role-key
 ```
 
 The URL and publishable key are safe to expose; RLS protects database rows. The
-service-role key bypasses RLS and must never use a `VITE_` prefix or enter logs,
+service-role key bypasses RLS and must never use a `NEXT_PUBLIC_` prefix or enter logs,
 screenshots, frontend build arguments, or repository history.
 
 The native iPhone app uses the same public values from its gitignored

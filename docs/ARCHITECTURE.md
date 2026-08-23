@@ -1,8 +1,9 @@
 # Architecture
 
-Swiss Delivery Tracker is a React PWA served by a small Python HTTP service.
-Supabase Auth identifies users, Postgres row-level security (RLS) isolates their
-parcels, and only the background tracker holds a service-role key.
+Swiss Delivery Tracker is a full-stack Next.js PWA. Supabase Auth identifies
+users, Postgres row-level security (RLS) isolates their parcels, and only
+server-side route handlers and the background tracker can access the
+service-role key.
 
 ```text
                          email OTP
@@ -10,11 +11,11 @@ Browser/PWA + native iPhone app <----------> Supabase Auth
               |
               | Bearer access token
               v
-Python API -------- user token -----------> PostgREST + Postgres RLS
-    |
-    +-------- service role ---------------> background tracking writes
-    +--------------------------------------> carrier adapters
-    +--------------------------------------> Web Push endpoints + APNs
+Next.js route handlers -- user token -----> PostgREST + Postgres RLS
+        |
+        +---- service role ---------------> durable background sync writes
+        +---------------------------------> bounded carrier adapters
+        +---------------------------------> Web Push endpoints + APNs
 ```
 
 ## Components
@@ -23,21 +24,23 @@ Python API -------- user token -----------> PostgREST + Postgres RLS
   session. `src/store/` talks only to the same-origin application API.
 - `ios/` contains the native SwiftUI app, Share extension, protected offline
   cache, Keychain-backed Auth session, and APNs registration flow.
-- `server/app.py` serves static assets, authenticates private API routes, applies
-  per-account rate limits, and implements the OpenAPI contract.
-- `server/supabase_auth.py` validates bearer tokens with Supabase Auth and
-  creates a PostgREST client carrying that user's JWT.
-- `server/tracking_sync.py` performs carrier checks. `public.sync_jobs` is the
-  durable, deduplicated queue; the Python worker claims jobs with database
+- `app/` contains the App Router pages, route handlers, manifest, and offline
+  route. `proxy.ts` adds a per-request CSP nonce and security headers.
+- `src/server/auth.ts` validates bearer tokens with Supabase Auth and creates a
+  PostgREST client carrying that user's JWT. `src/server/api.ts` applies
+  privacy-safe logging and account-scoped rate limits to route handlers.
+- `src/server/trackingSync.ts` performs carrier checks and
+  `src/server/background.ts` runs the scheduler. `public.sync_jobs` is the
+  durable, deduplicated queue; the Node.js worker claims jobs with database
   leases so deploys, crashes, and multiple replicas do not lose or double-run
   active work. This is the only workflow that needs cross-account access.
-- `server/push.py` delivers Web Push and APNs notifications only to devices
+- `src/server/push.ts` delivers Web Push and APNs notifications only to devices
   owned by the package's account.
 - `supabase/migrations/` is the append-only database history;
   `supabase/tests/assertions.sql` exercises the RLS boundary in PostgreSQL.
-- `contracts/openapi.json` generates the TypeScript, Python, and Swift contract types.
-  `contracts/fixtures/delivery-api.json` is decoded in TypeScript, Python, and
-  Swift tests to catch cross-platform payload drift.
+- `contracts/openapi.json` generates the TypeScript and Swift contract types.
+  `contracts/fixtures/delivery-api.json` is decoded in TypeScript and Swift
+  tests to catch cross-platform payload drift.
 
 ## Trust boundaries
 
@@ -52,22 +55,27 @@ Python API -------- user token -----------> PostgREST + Postgres RLS
 - Tracking numbers, labels, carrier history, push endpoints, and Planzer or
   Dachser capability URLs are private user data and must not appear in
   application logs or analytics.
-- Carrier responses are untrusted, size-bounded input. The adapters imported
-  from the pinned tracker dependency receive a private bounded HTTP wrapper.
-  Tracking integrations are best effort and cannot establish user identity.
+- Carrier responses are untrusted, size-bounded input. Every adapter uses
+  fixed timeouts, host validation where capability URLs are accepted, and a
+  shared bounded-response reader. Tracking integrations are best effort and
+  cannot establish user identity.
 - The Dachser adapter allowlists normalized shipment state and never stores the
   sender, recipient, address, contact, document URLs, or raw carrier response.
 - Browser push endpoints are accepted only for known browser push-service hosts,
   and push delivery never follows redirects.
+- The service worker caches only the public application shell and static assets.
+  Same-origin APIs, health checks, Supabase Auth, and all other cross-origin
+  requests use a network-only strategy and never enter browser Cache Storage.
 - Native device tokens are accepted only as bounded hexadecimal opaque values,
   never exposed to database client roles, and forwarded only to Apple's fixed
   production or sandbox APNs hosts over HTTP/2.
 - Cloudflare may provide TLS, proxying, and abuse protection, but Cloudflare
   Access is not part of the public application's identity model.
-- Forwarded client addresses are trusted only when the direct socket peer is in
-  `TRUSTED_PROXY_NETWORKS`. Pre-authentication buckets combine that client
-  address with a one-way token hash when available, and authenticated limits
-  remain account-scoped.
+- Forwarded client addresses are used only when `TRUST_PROXY_HEADERS=true` and
+  the deployment's trusted reverse proxy overwrites those headers. Otherwise
+  the pre-authentication fallback bucket is deliberately global. A one-way
+  token hash adds a credential-specific bucket, and authenticated limits remain
+  account-scoped.
 - HTTP and worker logs contain request/job identifiers, normalized routes,
   status, timing, and exception class only. Query strings, tokens, tracking
   data, carrier payloads, and user identifiers are excluded.

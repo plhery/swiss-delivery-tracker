@@ -213,4 +213,32 @@ describe('createDemoRepo', () => {
     const parcels = await repo.list();
     expect(parcels.length).toBeGreaterThan(0);
   });
+
+  it('uses an in-memory fallback when browser storage denies access', async () => {
+    const originalStorage = window.localStorage;
+    const deniedStorage = {
+      get length(): number { throw new DOMException('Denied', 'SecurityError'); },
+      clear() { throw new DOMException('Denied', 'SecurityError'); },
+      getItem() { throw new DOMException('Denied', 'SecurityError'); },
+      key() { throw new DOMException('Denied', 'SecurityError'); },
+      removeItem() { throw new DOMException('Denied', 'SecurityError'); },
+      setItem() { throw new DOMException('Denied', 'SecurityError'); },
+    } satisfies Storage;
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: deniedStorage,
+    });
+    try {
+      const repo = createDemoRepo();
+      const first = await repo.list();
+      const second = await repo.list();
+      expect(first.length).toBeGreaterThan(0);
+      expect(second.map((parcel) => parcel.id)).toEqual(first.map((parcel) => parcel.id));
+    } finally {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        value: originalStorage,
+      });
+    }
+  });
 });

@@ -65,7 +65,7 @@ npm ci
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Refreshing advances the
+Open [http://localhost:3000](http://localhost:3000). Refreshing advances the
 sample deliveries through their journey.
 
 ## Self-host it
@@ -77,14 +77,15 @@ and Docker.
 2. Configure Google OAuth, email OTP with custom SMTP, or both by following the
    [authentication guide](docs/AUTHENTICATION.md).
 3. Copy `.env.example` to `.env` and replace its example runtime values.
-4. Build the frontend with the same public Supabase URL and publishable key:
+4. Build the Next.js application with the same public Supabase URL and
+   publishable key:
 
 ```bash
 docker build \
-  --build-arg VITE_SUPABASE_URL=https://supabase.example.com \
-  --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=your-public-key \
-  --build-arg VITE_AUTH_GOOGLE_ENABLED=true \
-  --build-arg VITE_AUTH_EMAIL_OTP_ENABLED=false \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://supabase.example.com \
+  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-public-key \
+  --build-arg NEXT_PUBLIC_AUTH_GOOGLE_ENABLED=true \
+  --build-arg NEXT_PUBLIC_AUTH_EMAIL_OTP_ENABLED=false \
   -t swiss-delivery-tracker .
 
 docker run --rm --env-file .env -p 3000:3000 swiss-delivery-tracker
@@ -104,9 +105,10 @@ data, HTTPS, Auth and production verification in detail.
 - [Privacy](PRIVACY.md) and [security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 
-The web frontend is React and TypeScript, the iPhone app is SwiftUI, and the
-small Python service handles carrier sync, Supabase-backed storage, Web Push,
-and APNs. CI tests both sides, the production
-container, database migrations and cross-account RLS isolation.
+The web application is a full-stack Next.js and TypeScript service, and the
+iPhone app is SwiftUI. Next.js route handlers expose the shared API while a
+durable in-process worker handles carrier sync, Web Push, and APNs. CI tests
+the application, production container, database migrations, native app, and
+cross-account RLS isolation.
 
 Licensed under [Apache 2.0](LICENSE).

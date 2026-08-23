@@ -1,28 +1,20 @@
-import js from '@eslint/js';
-import globals from 'globals';
-import reactHooks from 'eslint-plugin-react-hooks';
-import reactRefresh from 'eslint-plugin-react-refresh';
-import tseslint from 'typescript-eslint';
+import nextVitals from 'eslint-config-next/core-web-vitals';
+import nextTypeScript from 'eslint-config-next/typescript';
 
-export default tseslint.config(
-  { ignores: ['coverage', 'dist', 'src/generated'] },
+const config = [
+  ...nextVitals,
+  ...nextTypeScript,
   {
-    files: ['src/**/*.{ts,tsx}'],
-    extends: [
-      js.configs.recommended,
-      ...tseslint.configs.recommended,
-      reactHooks.configs.flat['recommended-latest'],
-      reactRefresh.configs.vite,
+    ignores: [
+      '.next/**',
+      '.venv/**',
+      'coverage/**',
+      'dist/**',
+      'out/**',
+      'public/sw.js',
+      'src/generated/**',
     ],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      globals: globals.browser,
-    },
-    rules: {
-      'react-refresh/only-export-components': [
-        'error',
-        { allowExportNames: ['useAuth', 'useParcels'] },
-      ],
-    },
   },
-);
+];
+
+export default config;

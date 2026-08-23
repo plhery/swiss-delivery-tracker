@@ -1,9 +1,24 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+const browserErrors = new WeakMap<Page, string[]>();
 
 test.beforeEach(async ({ page }) => {
+  const errors: string[] = [];
+  browserErrors.set(page, errors);
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(error.message));
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Swiss Delivery Tracker' })).toBeVisible();
+  // This control is rendered only after the client repository has loaded, so
+  // it is also a stable signal that hydration and the first effect completed.
+  await expect(page.getByRole('button', { name: 'Search & filters' })).toBeVisible();
+});
+
+test.afterEach(async ({ page }) => {
+  expect(browserErrors.get(page) ?? []).toEqual([]);
 });
 
 test('finds, filters, and opens a parcel', async ({ page }) => {

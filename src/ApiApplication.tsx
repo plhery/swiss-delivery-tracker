@@ -7,7 +7,7 @@ import {
   disablePushNotifications,
   unsubscribePushNotificationsLocally,
 } from './lib/pushNotifications';
-import { clearApiCache, createApiRepo } from './store/apiRepo';
+import { browserStorage, clearApiCache, createApiRepo } from './store/apiRepo';
 import { ParcelsProvider } from './store/ParcelsContext';
 import { useI18n } from './i18n';
 
@@ -15,6 +15,7 @@ export function ApiApplication() {
   const { t } = useI18n();
   const auth = useAuth();
   const signOut = auth.signOut;
+  const storage = browserStorage();
   const sessionAuth = useMemo(
     () => auth.user ? {
       userId: auth.user.id,
@@ -25,13 +26,10 @@ export function ApiApplication() {
   const handleSignOut = useCallback(async () => {
     if (sessionAuth) {
       await disablePushNotifications(sessionAuth).catch(() => undefined);
-      clearApiCache(
-        typeof window === 'undefined' ? null : window.localStorage,
-        sessionAuth.userId,
-      );
+      clearApiCache(storage, sessionAuth.userId);
     }
     await signOut();
-  }, [sessionAuth, signOut]);
+  }, [sessionAuth, signOut, storage]);
   const apiAuth = useMemo(
     () => sessionAuth ? {
       ...sessionAuth,
@@ -47,20 +45,17 @@ export function ApiApplication() {
     if (!apiAuth) return;
     await deleteAccount(apiAuth, confirmation);
     await unsubscribePushNotificationsLocally().catch(() => undefined);
-    clearApiCache(
-      typeof window === 'undefined' ? null : window.localStorage,
-      apiAuth.userId,
-    );
+    clearApiCache(storage, apiAuth.userId);
     await signOut();
-  }, [apiAuth, signOut]);
+  }, [apiAuth, signOut, storage]);
   const repo = useMemo(
     () => apiAuth ? createApiRepo(
       30_000,
       1_000,
-      typeof window === 'undefined' ? null : window.localStorage,
+      storage,
       apiAuth,
     ) : null,
-    [apiAuth],
+    [apiAuth, storage],
   );
   if (auth.status === 'loading') {
     return <div className="auth-loading" role="status">{t('auth.loading')}</div>;

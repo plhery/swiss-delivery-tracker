@@ -77,7 +77,7 @@ export function SignInScreen({
           <div className="auth-card__configuration" role="alert">
             <strong>{t('auth.configTitle')}</strong>
             <span>
-              Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` when
+              Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` when
               building the production app.
             </span>
           </div>

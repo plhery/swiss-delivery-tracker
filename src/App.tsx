@@ -90,9 +90,7 @@ export default function App({
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [viewNow, setViewNow] = useState(() => Date.now());
-  const [openParcelId, setOpenParcelId] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get('parcel'),
-  );
+  const [openParcelId, setOpenParcelId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -129,6 +127,7 @@ export default function App({
     const onPopState = () => {
       setOpenParcelId(new URLSearchParams(window.location.search).get('parcel'));
     };
+    onPopState();
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -388,6 +387,8 @@ export default function App({
             <span>{error}</span>
             {usingCachedData && <span>{t('app.cachedData')}</span>}
             {authenticationRequired && (
+              // Reloading clears the expired client session before authentication restarts.
+              // eslint-disable-next-line @next/next/no-html-link-for-pages
               <a className="error-banner__action" href="/">
                 {t('app.signInAgain')}
               </a>

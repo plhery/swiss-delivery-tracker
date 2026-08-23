@@ -137,7 +137,9 @@ export async function enablePushNotifications(
 }
 
 export async function disablePushNotifications(auth?: ApiAuth): Promise<void> {
-  const registration = await navigator.serviceWorker.ready;
+  if (!('serviceWorker' in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return;
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) return;
   try {
@@ -153,8 +155,9 @@ export async function disablePushNotifications(auth?: ApiAuth): Promise<void> {
 }
 
 export async function unsubscribePushNotificationsLocally(): Promise<void> {
-  if (!("serviceWorker" in navigator)) return;
-  const registration = await navigator.serviceWorker.ready;
+  if (!('serviceWorker' in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return;
   const subscription = await registration.pushManager.getSubscription();
   await subscription?.unsubscribe();
 }

@@ -65,7 +65,7 @@ describe('SignInScreen', () => {
       <SignInScreen configured={false} sendCode={vi.fn()} verifyCode={vi.fn()} />,
     );
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'VITE_SUPABASE_PUBLISHABLE_KEY',
+      'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
     );
   });
 });
