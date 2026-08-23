@@ -31,10 +31,19 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --hostname 127.0.0.1 --port 4173',
-    env: { NEXT_PUBLIC_USE_API: 'false' },
+    // CI exercises the self-contained production server. This also avoids a
+    // Next dev bug that unnecessarily compiles Node-only instrumentation for
+    // the Edge runtime when CI=true.
+    command: process.env.CI
+      ? 'npm run build && npm start'
+      : 'npm run dev -- --hostname 127.0.0.1 --port 4173',
+    env: {
+      HOSTNAME: '127.0.0.1',
+      NEXT_PUBLIC_USE_API: 'false',
+      PORT: '4173',
+    },
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    timeout: process.env.CI ? 120_000 : 30_000,
     url: 'http://127.0.0.1:4173',
   },
 });

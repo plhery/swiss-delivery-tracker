@@ -11,8 +11,20 @@ import { enablePwaLiveReload, registerPwaServiceWorker } from './lib/pwaUpdates'
 import { createDemoRepo } from './store/demoRepo';
 import { ParcelsProvider } from './store/ParcelsContext';
 
-const useDemo = process.env.NODE_ENV === 'development'
-  && process.env.NEXT_PUBLIC_USE_API !== 'true';
+export function shouldUseDemoRepository(
+  nodeEnvironment: string | undefined,
+  apiSetting: string | undefined,
+): boolean {
+  const normalizedSetting = apiSetting?.trim().toLowerCase();
+  if (normalizedSetting === 'true') return false;
+  if (normalizedSetting === 'false') return true;
+  return nodeEnvironment === 'development';
+}
+
+const useDemo = shouldUseDemoRepository(
+  process.env.NODE_ENV,
+  process.env.NEXT_PUBLIC_USE_API,
+);
 
 const authConfig = authConfigFromEnvironment({
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
