@@ -25,11 +25,13 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000
-RUN addgroup --system --gid 10001 delivery \
+# Coolify probes Dockerfile applications with curl from inside the container.
+RUN apk add --no-cache curl \
+    && addgroup --system --gid 10001 delivery \
     && adduser --system --uid 10001 --ingroup delivery delivery
 COPY --from=build --chown=delivery:delivery /app/.next/standalone ./
 USER delivery
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+  CMD ["curl", "--fail", "--silent", "--show-error", "--max-time", "5", "http://127.0.0.1:3000/health"]
 CMD ["node", "server.js"]
