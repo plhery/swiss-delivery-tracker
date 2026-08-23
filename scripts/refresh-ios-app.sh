@@ -56,7 +56,7 @@ remove_cached_personal_profiles() {
     profile_app_id="$(security cms -D -i "$profile" 2>/dev/null | plutil -extract Entitlements.application-identifier raw - 2>/dev/null || true)"
     profile_is_local="$(security cms -D -i "$profile" 2>/dev/null | plutil -extract LocalProvision raw - 2>/dev/null || true)"
 
-    if [[ "$profile_app_id" == *".$BUNDLE_ID" && "$profile_is_local" == "true" ]]; then
+    if [[ "$profile_app_id" == *".$BUNDLE_ID"* && "$profile_is_local" == "true" ]]; then
       /bin/mv "$profile" "$PROFILE_BACKUP_DIR/"
     fi
   done
@@ -73,18 +73,31 @@ path = Path(sys.argv[1])
 text = path.read_text()
 replacements = [
     (
-        'buildPhases = (E30000000000000000000001, E20000000000000000000001, E40000000000000000000001, E10000000000000000000001, ); buildRules = (); dependencies = (D20000000000000000000001, );',
-        'buildPhases = (E30000000000000000000001, E20000000000000000000001, E40000000000000000000001, ); buildRules = (); dependencies = ();',
+        'buildPhases = (E30000000000000000000001, E20000000000000000000001, E40000000000000000000001, E10000000000000000000001, ); buildRules = (); dependencies = (D20000000000000000000001, D20000000000000000000003, );',
+        'buildPhases = (E30000000000000000000001, E20000000000000000000001, E40000000000000000000001, E10000000000000000000001, ); buildRules = (); dependencies = (D20000000000000000000003, );',
         1,
     ),
     (
-        'A10000000000000000000001 = {CreatedOnToolsVersion = 26.6; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; com.apple.Push = {enabled = 1; }; }; }; A10000000000000000000002 = {CreatedOnToolsVersion = 26.6; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; }; };',
-        'A10000000000000000000001 = {CreatedOnToolsVersion = 26.6; }; A10000000000000000000002 = {CreatedOnToolsVersion = 26.6; };',
+        'A10000000000000000000001 = {CreatedOnToolsVersion = 26.6; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; com.apple.Push = {enabled = 1; }; }; };',
+        'A10000000000000000000001 = {CreatedOnToolsVersion = 26.6; };',
+        1,
+    ),
+    (
+        'A10000000000000000000004 = {CreatedOnToolsVersion = 26.6; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; }; };',
+        'A10000000000000000000004 = {CreatedOnToolsVersion = 26.6; };',
+        1,
+    ),
+    (
+        'files = (B10000000000000000000014 /* ShareExtension.appex in Embed App Extensions */, B10000000000000000000022 /* DeliveryWidgetExtension.appex in Embed App Extensions */, );',
+        'files = (B10000000000000000000022 /* DeliveryWidgetExtension.appex in Embed App Extensions */, );',
         1,
     ),
     ('APS_ENVIRONMENT = development; ', '', 1),
     ('APS_ENVIRONMENT = production; ', '', 1),
     ('CODE_SIGN_ENTITLEMENTS = SwissDeliveryTracker/SwissDeliveryTracker.entitlements; ', '', 2),
+    ('CODE_SIGN_ENTITLEMENTS = DeliveryWidgetExtension/DeliveryWidgetExtension.entitlements; ', '', 2),
+    ('PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker;', 'PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker.Personal;', 2),
+    ('PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker.DeliveryWidget;', 'PRODUCT_BUNDLE_IDENTIFIER = com.plhery.SwissDeliveryTracker.Personal.DeliveryWidget;', 2),
 ]
 
 for old, new, expected in replacements:
@@ -116,7 +129,8 @@ trap 'on_exit $?' EXIT
 
 print "Refreshing Delivery Tracker on $DEVICE_NAME…"
 print "Keep the iPhone unlocked and connected by USB or reachable over Wi-Fi."
-print "This Personal Team build excludes push notifications and the Share Extension."
+print "This Personal Team build excludes push notifications, App Groups, and the Share Extension."
+print "The Lock Screen and Dynamic Island Live Activity remain available."
 print
 notify "Refresh started. Keep the iPhone unlocked and nearby."
 
@@ -151,7 +165,6 @@ xcodebuild \
   -allowProvisioningDeviceRegistration \
   DEVELOPMENT_TEAM="$TEAM_ID" \
   CODE_SIGN_STYLE=Automatic \
-  PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
   -quiet \
   build 2>&1 | tee "$BUILD_LOG"
 
@@ -168,6 +181,16 @@ if [[ "$SIGNED_ENTITLEMENTS" == *"aps-environment"* || "$SIGNED_ENTITLEMENTS" ==
 fi
 if [[ -d "$APP_PATH/PlugIns/ShareExtension.appex" ]]; then
   print -u2 "The limited build unexpectedly contains the Share Extension."
+  exit 1
+fi
+WIDGET_PATH="$APP_PATH/PlugIns/DeliveryWidgetExtension.appex"
+if [[ ! -d "$WIDGET_PATH" ]]; then
+  print -u2 "The limited build is missing the Live Activity extension."
+  exit 1
+fi
+WIDGET_ENTITLEMENTS="$(/usr/bin/codesign -d --entitlements :- "$WIDGET_PATH" 2>/dev/null || true)"
+if [[ "$WIDGET_ENTITLEMENTS" == *"application-groups"* ]]; then
+  print -u2 "The limited Live Activity extension unexpectedly contains an App Group entitlement."
   exit 1
 fi
 

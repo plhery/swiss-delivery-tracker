@@ -71,6 +71,12 @@ const nativeMessages = {
     'welcome.signInInstead': 'Sign in instead',
     'welcome.subtitle': 'Follow every delivery across the web and this iPhone.',
     'welcome.title': 'All your parcels in one place',
+    'widget.disabledDescription': 'Enable it in Account settings to see your next delivery.',
+    'widget.disabledTitle': 'Widget turned off',
+    'widget.galleryDescription': 'See out-for-delivery parcels and your next arrival at a glance.',
+    'widget.galleryName': 'Next delivery',
+    'widget.settingDescription': 'Show out-for-delivery and next-up parcel details on the Home Screen, Lock Screen, and Dynamic Island. Turning it off removes shared parcel data and ends the Live Activity.',
+    'widget.settingTitle': 'Widget & Live Activity',
   },
   de: {
     'native.account': 'Konto',
@@ -123,6 +129,12 @@ const nativeMessages = {
     'welcome.signInInstead': 'Stattdessen anmelden',
     'welcome.subtitle': 'Verfolge jede Lieferung im Web und auf diesem iPhone.',
     'welcome.title': 'Alle deine Pakete an einem Ort',
+    'widget.disabledDescription': 'Aktiviere es in den Kontoeinstellungen, um deine nächste Lieferung zu sehen.',
+    'widget.disabledTitle': 'Widget ausgeschaltet',
+    'widget.galleryDescription': 'Pakete in Zustellung und deine nächste Sendung auf einen Blick.',
+    'widget.galleryName': 'Nächste Lieferung',
+    'widget.settingDescription': 'Zeige Details zu Paketen in Zustellung und zur nächsten Sendung auf dem Home- und Sperrbildschirm sowie in der Dynamic Island. Beim Ausschalten werden geteilte Paketdaten entfernt und die Live-Aktivität beendet.',
+    'widget.settingTitle': 'Widget & Live-Aktivität',
   },
   fr: {
     'native.account': 'Compte',
@@ -175,6 +187,12 @@ const nativeMessages = {
     'welcome.signInInstead': 'Se connecter à la place',
     'welcome.subtitle': 'Suivez chaque livraison sur le web et sur cet iPhone.',
     'welcome.title': 'Tous vos colis au même endroit',
+    'widget.disabledDescription': 'Activez-le dans les réglages du compte pour voir votre prochaine livraison.',
+    'widget.disabledTitle': 'Widget désactivé',
+    'widget.galleryDescription': 'Consultez les colis en livraison et votre prochaine arrivée en un coup d’œil.',
+    'widget.galleryName': 'Prochaine livraison',
+    'widget.settingDescription': 'Affichez les colis en livraison et le prochain colis sur l’écran d’accueil, l’écran verrouillé et la Dynamic Island. Le désactiver supprime les données partagées et termine l’activité en direct.',
+    'widget.settingTitle': 'Widget et activité en direct',
   },
   it: {
     'native.account': 'Account',
@@ -227,6 +245,12 @@ const nativeMessages = {
     'welcome.signInInstead': 'Accedi invece',
     'welcome.subtitle': 'Segui ogni consegna sul web e su questo iPhone.',
     'welcome.title': 'Tutti i tuoi pacchi in un unico posto',
+    'widget.disabledDescription': 'Attivalo nelle impostazioni dell’account per vedere la prossima consegna.',
+    'widget.disabledTitle': 'Widget disattivato',
+    'widget.galleryDescription': 'Controlla i pacchi in consegna e il prossimo arrivo a colpo d’occhio.',
+    'widget.galleryName': 'Prossima consegna',
+    'widget.settingDescription': 'Mostra i pacchi in consegna e il prossimo pacco nella schermata Home, nella schermata di blocco e nella Dynamic Island. Disattivandolo, i dati condivisi vengono rimossi e l’attività in tempo reale termina.',
+    'widget.settingTitle': 'Widget e attività in tempo reale',
   },
 };
 
@@ -313,9 +337,10 @@ const languages = Object.fromEntries(
   }),
 );
 
-const swiftSources = fs.readdirSync(path.join(root, 'ios', 'SwissDeliveryTracker'))
-  .filter((name) => name.endsWith('.swift'))
-  .map((name) => fs.readFileSync(path.join(root, 'ios', 'SwissDeliveryTracker', name), 'utf8'))
+const swiftSources = ['SwissDeliveryTracker', 'DeliveryWidgetExtension']
+  .flatMap((directory) => fs.readdirSync(path.join(root, 'ios', directory))
+    .filter((name) => name.endsWith('.swift'))
+    .map((name) => fs.readFileSync(path.join(root, 'ios', directory, name), 'utf8')))
   .join('\n');
 const localizationPrefixes = new Set(Object.keys(languages.en).map((key) => key.split('.')[0]));
 const referencedKeys = new Set(

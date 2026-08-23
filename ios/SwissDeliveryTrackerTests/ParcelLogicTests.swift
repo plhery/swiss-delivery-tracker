@@ -129,6 +129,55 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(pushJSON["sendTest"] as? Bool, true)
     }
 
+    func testWidgetPrioritizesOutForDeliveryThenKeepsNextUp() {
+        let nextUp = widgetParcel(label: "Next up", outForDelivery: false)
+        let outForDelivery = widgetParcel(label: "Courier", outForDelivery: true)
+        let later = widgetParcel(label: "Later", outForDelivery: false)
+
+        XCTAssertEqual(
+            DeliveryWidgetSelection.displayParcels(from: [nextUp, outForDelivery, later]),
+            [outForDelivery, nextUp]
+        )
+    }
+
+    func testWidgetShowsTwoOutForDeliveryParcelsBeforeOtherCandidates() {
+        let nextUp = widgetParcel(label: "Next up", outForDelivery: false)
+        let first = widgetParcel(label: "Courier one", outForDelivery: true)
+        let second = widgetParcel(label: "Courier two", outForDelivery: true)
+
+        XCTAssertEqual(
+            DeliveryWidgetSelection.displayParcels(from: [nextUp, first, second]),
+            [first, second]
+        )
+        XCTAssertEqual(
+            DeliveryWidgetSelection.displayParcels(from: [nextUp]),
+            [nextUp]
+        )
+    }
+
+    func testDisablingWidgetRemovesSharedParcelSnapshot() throws {
+        let suiteName = "DeliveryWidgetSharedStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = DeliveryWidgetSharedStore(defaults: defaults)
+        let snapshot = DeliveryWidgetSnapshot(
+            generatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            languageCode: "fr",
+            parcels: [widgetParcel(label: "Private parcel", outForDelivery: true)]
+        )
+
+        XCTAssertTrue(store.isEnabled)
+        store.setLanguageCode("fr")
+        XCTAssertTrue(store.save(snapshot))
+        XCTAssertEqual(store.snapshot, snapshot)
+
+        store.setEnabled(false)
+
+        XCTAssertFalse(store.isEnabled)
+        XCTAssertNil(store.snapshot)
+        XCTAssertEqual(store.languageCode, "fr")
+    }
+
     func testPendingEventDoesNotOverrideCarrierProgress() {
         let id = UUID()
         let parcel = makeParcel(
@@ -220,6 +269,17 @@ final class ParcelLogicTests: XCTestCase {
         TrackingEvent(
             id: UUID(), packageID: packageID, stage: stage,
             description: "Update", location: nil, occurredAt: occurredAt
+        )
+    }
+
+    private func widgetParcel(label: String, outForDelivery: Bool) -> DeliveryWidgetParcel {
+        DeliveryWidgetParcel(
+            id: UUID(),
+            label: label,
+            carrier: "Swiss Post",
+            trackingNumber: "99.34.123456.12345678",
+            detail: "Today",
+            isOutForDelivery: outForDelivery
         )
     }
 }

@@ -217,6 +217,17 @@ struct AccountView: View {
                 }
 
                 Section {
+                    Toggle(isOn: Binding(
+                        get: { store.deliveryWidgetEnabled },
+                        set: { store.setDeliveryWidgetEnabled($0) }
+                    )) {
+                        Label(localizer.text("widget.settingTitle"), systemImage: "rectangle.3.group")
+                    }
+                } footer: {
+                    Text(localizer.text("widget.settingDescription"))
+                }
+
+                Section {
                     Button(localizer.text("account.export"), systemImage: "square.and.arrow.up") {
                         run {
                             exportURL = try await store.exportAccount()

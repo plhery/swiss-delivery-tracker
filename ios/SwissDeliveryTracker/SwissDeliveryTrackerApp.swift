@@ -58,6 +58,10 @@ struct RootView: View {
         .task(id: sessionIdentity) {
             guard session.isAuthenticated else {
                 showingNotificationOnboarding = false
+                switch session.state {
+                case .loading: break
+                default: parcels.clearDeliveryWidget()
+                }
                 return
             }
             showingNotificationOnboarding = NotificationOnboardingPolicy.shouldPresent(
@@ -77,6 +81,7 @@ struct RootView: View {
             }
         }
         .onChange(of: localizer.language) { _, language in
+            parcels.refreshDeliveryWidget()
             guard let token = AppDelegate.currentDeviceToken else { return }
             Task { await parcels.forwardNativePushToken(token, language: language) }
         }

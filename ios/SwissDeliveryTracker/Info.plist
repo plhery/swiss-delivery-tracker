@@ -46,6 +46,8 @@
 	<string>public.app-category.utilities</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan parcel tracking barcodes to add deliveries faster.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>SDTAPIBaseURL</key>
 	<string>$(SDT_API_BASE_URL)</string>
 	<key>SDTAppGroupIdentifier</key>

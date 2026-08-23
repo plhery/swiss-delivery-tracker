@@ -1,10 +1,14 @@
+import ActivityKit
 import Foundation
 import UIKit
 import UserNotifications
+import WidgetKit
 
 @MainActor
 final class ParcelStore: ObservableObject {
-    @Published private(set) var parcels: [Parcel] = []
+    @Published private(set) var parcels: [Parcel] = [] {
+        didSet { publishDeliveryWidget() }
+    }
     @Published private(set) var loading = false
     @Published private(set) var refreshing = false
     @Published private(set) var errorMessage: String?
@@ -14,6 +18,7 @@ final class ParcelStore: ObservableObject {
     @Published private(set) var notificationsEnabledOnDevice = false
     @Published private(set) var notificationPreferences: NotificationPreferences?
     @Published private(set) var notificationError: String?
+    @Published private(set) var deliveryWidgetEnabled = true
     @Published var undoParcel: Parcel?
 
     let configuration: AppConfiguration
@@ -21,9 +26,11 @@ final class ParcelStore: ObservableObject {
     private let localizer: Localizer
     private let api: DeliveryAPIClient
     private let demo: DemoRepository
+    private let deliveryWidgetStore: DeliveryWidgetSharedStore?
     private let cache = ParcelCache()
     private var pollingTask: Task<Void, Never>?
     private var jobMonitoringTask: Task<Void, Never>?
+    private var deliveryActivityTask: Task<Void, Never>?
     private var pendingJobIDs = Set<UUID>()
     private var isActive = true
     private var lastStartedAsDemo: Bool?
@@ -37,14 +44,37 @@ final class ParcelStore: ObservableObject {
         self.configuration = configuration
         self.session = session
         self.localizer = localizer
+        deliveryWidgetStore = DeliveryWidgetSharedStore(
+            appGroupIdentifier: configuration.appGroupIdentifier,
+            fallbackToStandard: true
+        )
         api = DeliveryAPIClient(configuration: configuration, session: session)
         demo = DemoRepository()
+        deliveryWidgetEnabled = deliveryWidgetStore?.isEnabled ?? true
     }
 
     var isDemo: Bool { session.isDemo }
     var activeCount: Int { parcels.filter(\.isActive).count }
     var isSynchronizing: Bool {
         parcels.contains { $0.syncStatus == .pending || $0.syncStatus == .syncing }
+    }
+
+    func setDeliveryWidgetEnabled(_ enabled: Bool) {
+        guard deliveryWidgetEnabled != enabled else { return }
+        deliveryWidgetEnabled = enabled
+        deliveryWidgetStore?.setEnabled(enabled)
+        publishDeliveryWidget()
+    }
+
+    func refreshDeliveryWidget() {
+        publishDeliveryWidget()
+    }
+
+    func clearDeliveryWidget() {
+        deliveryWidgetStore?.setLanguageCode(localizer.language.rawValue)
+        deliveryWidgetStore?.clearSnapshot()
+        WidgetCenter.shared.reloadTimelines(ofKind: DeliveryWidgetSharedStore.kind)
+        scheduleDeliveryLiveActivity(snapshot: nil)
     }
 
     func start() async {
@@ -378,6 +408,87 @@ final class ParcelStore: ObservableObject {
     private func upsert(_ parcel: Parcel) {
         if let index = parcels.firstIndex(where: { $0.id == parcel.id }) { parcels[index] = parcel }
         else { parcels.append(parcel) }
+    }
+
+    private func publishDeliveryWidget() {
+        let snapshot: DeliveryWidgetSnapshot?
+        if deliveryWidgetEnabled {
+            let ordered = ParcelOrganizer.visible(
+                parcels,
+                query: "",
+                status: .active,
+                carrier: nil,
+                sort: .priority
+            )
+            let candidates = ordered.map { parcel in
+                DeliveryWidgetParcel(
+                    id: parcel.id,
+                    label: parcel.label.nonEmpty ?? localizer.text("common.parcel"),
+                    carrier: CarrierCatalog.shared.info(for: parcel.carrier).displayName,
+                    trackingNumber: CarrierCatalog.format(parcel.trackingNumber),
+                    detail: parcel.expectedDelivery.map { localizer.expectedDelivery($0) }
+                        ?? localizer.text(parcel.displayStatus.key),
+                    isOutForDelivery: parcel.currentStage == .outForDelivery
+                )
+            }
+            snapshot = DeliveryWidgetSnapshot(
+                generatedAt: Date(),
+                languageCode: localizer.language.rawValue,
+                parcels: DeliveryWidgetSelection.displayParcels(from: candidates)
+            )
+        } else {
+            snapshot = nil
+        }
+
+        deliveryWidgetStore?.setLanguageCode(localizer.language.rawValue)
+        deliveryWidgetStore?.setEnabled(deliveryWidgetEnabled)
+        if let snapshot {
+            _ = deliveryWidgetStore?.save(snapshot)
+        } else {
+            deliveryWidgetStore?.clearSnapshot()
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: DeliveryWidgetSharedStore.kind)
+        scheduleDeliveryLiveActivity(snapshot: snapshot)
+    }
+
+    private func scheduleDeliveryLiveActivity(snapshot: DeliveryWidgetSnapshot?) {
+        deliveryActivityTask?.cancel()
+        deliveryActivityTask = Task { [weak self] in
+            guard let self else { return }
+            await self.updateDeliveryLiveActivity(snapshot: snapshot)
+        }
+    }
+
+    private func updateDeliveryLiveActivity(snapshot: DeliveryWidgetSnapshot?) async {
+        let activities = Activity<DeliveryActivityAttributes>.activities
+        guard deliveryWidgetEnabled,
+              let parcel = snapshot?.parcels.first else {
+            for activity in activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            return
+        }
+
+        let state = DeliveryActivityAttributes.ContentState(
+            parcel: parcel,
+            languageCode: snapshot?.languageCode ?? localizer.language.rawValue
+        )
+        let content = ActivityContent(
+            state: state,
+            staleDate: Date().addingTimeInterval(30 * 60)
+        )
+        if let current = activities.first {
+            await current.update(content)
+            for extra in activities.dropFirst() {
+                await extra.end(nil, dismissalPolicy: .immediate)
+            }
+        } else if ActivityAuthorizationInfo().areActivitiesEnabled {
+            _ = try? Activity.request(
+                attributes: DeliveryActivityAttributes(activityID: UUID()),
+                content: content,
+                pushType: nil
+            )
+        }
     }
 
     private func beginPolling() {

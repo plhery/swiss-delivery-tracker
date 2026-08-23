@@ -35,12 +35,14 @@ swissdeliverytracker://auth-callback
 
 Before installing on a physical iPhone:
 
-1. Select your Apple Developer team for the app and Share extension.
+1. Select your Apple Developer team for the app, Share extension, and Delivery
+   Widget extension.
 2. Register bundle IDs for `com.plhery.SwissDeliveryTracker` and its
-   `.ShareExtension`, or change both target identifiers to your own reverse-DNS
-   names.
+   `.ShareExtension` and `.DeliveryWidget` extensions, or change all three
+   target identifiers to your own reverse-DNS names.
 3. Create the matching App Group and update `SDT_APP_GROUP_IDENTIFIER` in
-   `Shared.xcconfig` if you changed it. Enable that group on both targets.
+   `Shared.xcconfig` if you changed it. Enable that group on the app and both
+   extension targets.
 4. Enable Push Notifications on the app App ID and keep the Push Notifications
    capability enabled in Xcode.
 5. Create an APNs signing key and configure the server’s `APNS_TEAM_ID`,
@@ -51,6 +53,19 @@ The app asks for notification permission only after the user taps Enable. It
 requests the current opaque device token from Apple at launch and forwards it
 over the authenticated API; it does not persist that token locally. Debug
 builds register against APNs sandbox and Release builds use production.
+
+The Delivery Widget shows the next active parcel and prioritizes up to two
+out-for-delivery parcels. Its small card and each parcel in its medium card open
+the corresponding parcel in the app. The same target supplies a Lock Screen and
+Dynamic Island Live Activity for the highest-priority parcel. Account settings
+can disable both surfaces, clear their shared parcel snapshot, and end the Live
+Activity.
+
+The repository's `scripts/refresh-ios-app.sh` helper can install with a free
+Personal Team. Apple does not allow App Groups or push notifications for that
+signing mode, so the installed personal build supports the Live Activity but
+cannot share parcel data with the Home Screen widget. A paid-team build enables
+both.
 
 ## Feature parity
 
@@ -66,6 +81,7 @@ builds register against APNs sandbox and Release builds use production.
 | Carrier progress, expected date, history, source links | SwiftUI detail hero, progress track, timeline, external links |
 | Global presets, quiet hours, per-parcel mute | Native notification settings and parcel toggle |
 | Browser Share Target | iOS Share extension for text and URLs |
+| Next-up and out-for-delivery glance surface | Small/medium Home Screen widget plus Lock Screen and Dynamic Island Live Activity |
 | Offline snapshot and demo mode | Protected per-account cache and persistent fictional demo |
 | Account export, privacy, account deletion | System share sheet, privacy link, destructive account flow |
 | English, German, French, Italian | Catalog generated from `src/i18n.tsx` plus native-only copy |

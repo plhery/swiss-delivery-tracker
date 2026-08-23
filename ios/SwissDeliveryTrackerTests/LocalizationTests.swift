@@ -51,6 +51,12 @@ final class LocalizationTests: XCTestCase {
             "native.configurationHelp",
             "native.error.authenticationExpired",
             "native.auth.invalidResponse",
+            "widget.galleryName",
+            "widget.galleryDescription",
+            "widget.settingTitle",
+            "widget.settingDescription",
+            "widget.disabledTitle",
+            "widget.disabledDescription",
         ]
 
         for (language, values) in dictionaries {
