@@ -38,6 +38,9 @@ enum AuthenticationError: LocalizedError {
     case invalidResponse
     case missingSession
     case oauthCancelled
+    case requestFailed(Int)
+    case secureRequestFailed
+    case sessionSaveFailed
     case server(String)
 
     var errorDescription: String? {
@@ -46,6 +49,9 @@ enum AuthenticationError: LocalizedError {
         case .invalidResponse: "The authentication service returned an invalid response."
         case .missingSession: "The sign-in code did not create a session."
         case .oauthCancelled: "Sign-in was cancelled."
+        case .requestFailed(let status): "Sign-in failed (\(status))."
+        case .secureRequestFailed: "A secure sign-in request could not be created."
+        case .sessionSaveFailed: "The secure session could not be saved."
         case .server(let message): message
         }
     }
@@ -254,9 +260,10 @@ final class SessionStore: ObservableObject {
         guard let http = rawResponse as? HTTPURLResponse else { throw AuthenticationError.invalidResponse }
         if !(200..<300).contains(http.statusCode) {
             let payload = (try? JSONDecoder().decode(AuthErrorPayload.self, from: data))
-            throw AuthenticationError.server(
-                payload?.errorDescription ?? payload?.message ?? payload?.msg ?? "Sign-in failed (\(http.statusCode))."
-            )
+            if let message = payload?.errorDescription ?? payload?.message ?? payload?.msg {
+                throw AuthenticationError.server(message)
+            }
+            throw AuthenticationError.requestFailed(http.statusCode)
         }
         if T.self == EmptyAuthResponse.self, data.isEmpty {
             return EmptyAuthResponse() as! T
@@ -296,7 +303,7 @@ final class SessionStore: ObservableObject {
             SecRandomCopyBytes(kSecRandomDefault, count, buffer.baseAddress!)
         }
         guard status == errSecSuccess else {
-            throw AuthenticationError.server("A secure sign-in request could not be created.")
+            throw AuthenticationError.secureRequestFailed
         }
         return Data(bytes).base64URLEncodedString()
     }
@@ -345,7 +352,7 @@ private struct KeychainStore {
             status = SecItemAdd(query.merging(attributes) { _, new in new } as CFDictionary, nil)
         }
         guard status == errSecSuccess else {
-            throw AuthenticationError.server("The secure session could not be saved.")
+            throw AuthenticationError.sessionSaveFailed
         }
     }
 

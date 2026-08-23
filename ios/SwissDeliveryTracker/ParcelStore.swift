@@ -18,6 +18,7 @@ final class ParcelStore: ObservableObject {
 
     let configuration: AppConfiguration
     private unowned let session: SessionStore
+    private let localizer: Localizer
     private let api: DeliveryAPIClient
     private let demo: DemoRepository
     private let cache = ParcelCache()
@@ -32,9 +33,10 @@ final class ParcelStore: ObservableObject {
     private let nativePushRegisteredKey = "sdt.notificationsNativePushRegistered.v1"
     private let demoNotificationsKey = "sdt.demoNotificationsEnabled"
 
-    init(configuration: AppConfiguration = .current, session: SessionStore) {
+    init(configuration: AppConfiguration = .current, session: SessionStore, localizer: Localizer) {
         self.configuration = configuration
         self.session = session
+        self.localizer = localizer
         api = DeliveryAPIClient(configuration: configuration, session: session)
         demo = DemoRepository()
     }
@@ -87,7 +89,7 @@ final class ParcelStore: ObservableObject {
                 try? cache.save(next, userID: userID)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = localizer.errorMessage(error)
             if let apiError = error as? DeliveryAPIError,
                case .authenticationExpired = apiError {
                 authenticationRequired = true
@@ -112,7 +114,7 @@ final class ParcelStore: ObservableObject {
         trackingURL: String?,
         dpdPostcode: String?
     ) async throws {
-        let request = NewParcelRequest(
+        let request = CreatePackageRequest(
             trackingNumber: CarrierCatalog.normalize(trackingNumber),
             label: label.trimmingCharacters(in: .whitespacesAndNewlines),
             carrier: carrier,
@@ -125,7 +127,7 @@ final class ParcelStore: ObservableObject {
         } else {
             let response = try await api.add(request)
             parcel = response.package
-            monitorJobs(response.jobIds)
+            monitorJobs(response.jobIDs)
         }
         upsert(parcel)
     }
@@ -275,7 +277,7 @@ final class ParcelStore: ObservableObject {
             options: [.alert, .badge, .sound]
         )
         await refreshNotificationState()
-        guard granted else { throw DeliveryAPIError.service("Notifications were not allowed.") }
+        guard granted else { throw DeliveryAPIError.notificationsDenied }
         UserDefaults.standard.set(false, forKey: notificationOptOutKey)
         UIApplication.shared.registerForRemoteNotifications()
         if isDemo {
@@ -284,9 +286,7 @@ final class ParcelStore: ObservableObject {
             return true
         }
         guard let token = await waitForAPNSToken() else {
-            throw DeliveryAPIError.service(
-                "Apple did not return a notification token. Try again on a signed development build."
-            )
+            throw DeliveryAPIError.pushTokenUnavailable
         }
         let sent = try await api.registerNativePushToken(
             token,
@@ -333,7 +333,7 @@ final class ParcelStore: ObservableObject {
                 : try await api.notificationPreferences()
             notificationError = nil
         } catch {
-            notificationError = error.localizedDescription
+            notificationError = localizer.errorMessage(error)
         }
     }
 
@@ -366,7 +366,7 @@ final class ParcelStore: ObservableObject {
             notificationsEnabledOnDevice = session.isAuthenticated
             notificationError = nil
         } catch {
-            notificationError = error.localizedDescription
+            notificationError = localizer.errorMessage(error)
         }
     }
 
@@ -406,7 +406,7 @@ final class ParcelStore: ObservableObject {
                 } catch {
                     if Task.isCancelled { break }
                     self.pendingJobIDs.subtract(current)
-                    self.errorMessage = error.localizedDescription
+                    self.errorMessage = self.localizer.errorMessage(error)
                 }
             }
             self.jobMonitoringTask = nil
@@ -484,10 +484,11 @@ private final class DemoRepository {
         load().sorted { $0.createdAt > $1.createdAt }
     }
 
-    func add(_ request: NewParcelRequest) throws -> Parcel {
+    func add(_ request: CreatePackageRequest) throws -> Parcel {
+        guard let carrier = request.carrier else { throw DeliveryAPIError.invalidResponse }
         var all = load()
         if all.contains(where: { $0.trackingNumber == request.trackingNumber }) {
-            throw DeliveryAPIError.service("This tracking number is already in your delivery box.")
+            throw DeliveryAPIError.duplicateTracking
         }
         let id = UUID()
         let now = DateParser.isoString(Date())
@@ -500,8 +501,8 @@ private final class DemoRepository {
         let parcel = Parcel(
             id: id,
             trackingNumber: request.trackingNumber,
-            label: request.label,
-            carrier: request.carrier,
+            label: request.label ?? "",
+            carrier: carrier,
             createdAt: now,
             expectedDelivery: nil,
             lastStatusText: nil,
@@ -521,7 +522,7 @@ private final class DemoRepository {
     }
 
     func rename(id: UUID, label: String) throws -> Parcel {
-        guard label.count <= 80 else { throw DeliveryAPIError.service("Parcel names can be at most 80 characters.") }
+        guard label.count <= 80 else { throw DeliveryAPIError.labelTooLong }
         return try update(id: id) { $0.label = label }
     }
 
@@ -540,7 +541,7 @@ private final class DemoRepository {
     func permanentlyDelete(id: UUID) throws {
         var all = load()
         guard all.contains(where: { $0.id == id }) else {
-            throw DeliveryAPIError.service("Parcel not found.")
+            throw DeliveryAPIError.parcelMissing
         }
         all.removeAll { $0.id == id }
         save(all)
@@ -578,7 +579,7 @@ private final class DemoRepository {
     private func update(id: UUID, change: (inout Parcel) -> Void) throws -> Parcel {
         var all = load()
         guard let index = all.firstIndex(where: { $0.id == id }) else {
-            throw DeliveryAPIError.service("Parcel not found.")
+            throw DeliveryAPIError.parcelMissing
         }
         change(&all[index])
         save(all)

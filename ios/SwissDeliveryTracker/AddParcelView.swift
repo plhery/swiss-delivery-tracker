@@ -591,7 +591,7 @@ struct AddParcelView: View {
                 )
                 dismiss()
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = localizer.errorMessage(error)
                 saving = false
             }
         }

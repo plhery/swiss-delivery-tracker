@@ -191,7 +191,7 @@ struct ParcelListView: View {
             do {
                 try await store.refreshAll()
                 actionMessage = localizer.text("app.refreshQueued")
-            } catch { actionError = error.localizedDescription }
+            } catch { actionError = localizer.errorMessage(error) }
         }
         .overlay {
             if store.loading && store.parcels.isEmpty {
@@ -225,25 +225,30 @@ struct ParcelListView: View {
             }
             Spacer(minLength: 8)
             if let nextParcel {
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(localizer.text("app.nextUp"))
-                        .font(.caption2.weight(.bold))
-                        .textCase(.uppercase)
-                        .tracking(1)
-                        .foregroundStyle(Brand.ink.opacity(0.58))
-                    Text(nextParcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                        .font(.subheadline.weight(.bold))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
-                    Text(nextParcel.expectedDelivery.map {
-                        localizer.expectedDelivery($0)
-                    } ?? localizer.text(nextParcel.displayStatus.key))
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(Brand.ink.opacity(0.68))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
+                Button { path.append(nextParcel.id) } label: {
+                    VStack(alignment: .trailing, spacing: 5) {
+                        Text(localizer.text("app.nextUp"))
+                            .font(.caption2.weight(.bold))
+                            .textCase(.uppercase)
+                            .tracking(1)
+                            .foregroundStyle(Brand.ink.opacity(0.58))
+                        Text(nextParcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                            .font(.subheadline.weight(.bold))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                        Text(nextParcel.expectedDelivery.map {
+                            localizer.expectedDelivery($0)
+                        } ?? localizer.text(nextParcel.displayStatus.key))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(Brand.ink.opacity(0.68))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .frame(maxWidth: 150, alignment: .trailing)
+                .accessibilityHint(localizer.text("detail.label"))
             } else {
                 ParcelGlyph(size: 70)
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.ink.opacity(0.1)))
@@ -301,7 +306,7 @@ struct ParcelListView: View {
                     do {
                         try await store.refreshAll()
                         actionMessage = localizer.text("app.refreshQueued")
-                    } catch { actionError = error.localizedDescription }
+                    } catch { actionError = localizer.errorMessage(error) }
                 }
             } label: {
                 if store.refreshing { ProgressView().controlSize(.small) }
@@ -324,7 +329,7 @@ struct ParcelListView: View {
                 ) {
                     Task {
                         do { try await store.restore(parcel) }
-                        catch { actionError = error.localizedDescription }
+                        catch { actionError = localizer.errorMessage(error) }
                     }
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -498,7 +503,7 @@ struct ParcelListView: View {
     private func archive(_ parcel: Parcel) {
         Task {
             do { try await store.archive(parcel) }
-            catch { actionError = error.localizedDescription }
+            catch { actionError = localizer.errorMessage(error) }
         }
     }
 

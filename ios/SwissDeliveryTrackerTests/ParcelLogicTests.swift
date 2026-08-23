@@ -16,7 +16,7 @@ final class ParcelLogicTests: XCTestCase {
 
         XCTAssertEqual(fixture.packageList.packages.first?.carrier, .swissPost)
         XCTAssertEqual(fixture.packageList.packages.first?.trackingEvents.first?.stage, .inTransit)
-        XCTAssertEqual(fixture.queue.jobIds.count, 1)
+        XCTAssertEqual(fixture.queue.jobIDs.count, 1)
         XCTAssertEqual(fixture.job.status, .succeeded)
         XCTAssertEqual(fixture.job.result?.checked, 1)
     }
@@ -92,6 +92,41 @@ final class ParcelLogicTests: XCTestCase {
         )
 
         XCTAssertEqual(response.packages.first?.trackingEvents, [])
+    }
+
+    func testGeneratedRequestModelsEncodeAPIFieldNamesAndEnumValues() throws {
+        let packageRequest = CreatePackageRequest(
+            trackingNumber: "99.34.123456.12345678",
+            carrier: .swissPost,
+            trackingURL: "https://service.post.ch/parcel/123"
+        )
+        let packageJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.deliveryTracker.encode(packageRequest)
+            ) as? [String: Any]
+        )
+
+        XCTAssertEqual(packageJSON["trackingNumber"] as? String, packageRequest.trackingNumber)
+        XCTAssertEqual(packageJSON["carrier"] as? String, "swiss-post")
+        XCTAssertEqual(packageJSON["trackingUrl"] as? String, packageRequest.trackingURL)
+        XCTAssertNil(packageJSON["trackingURL"])
+
+        let pushRequest = NativePushDeviceRequest(
+            token: "device-token",
+            environment: .production,
+            locale: .fr,
+            deviceName: "iPhone",
+            sendTest: true
+        )
+        let pushJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.deliveryTracker.encode(pushRequest)
+            ) as? [String: Any]
+        )
+
+        XCTAssertEqual(pushJSON["environment"] as? String, "production")
+        XCTAssertEqual(pushJSON["locale"] as? String, "fr")
+        XCTAssertEqual(pushJSON["sendTest"] as? Bool, true)
     }
 
     func testPendingEventDoesNotOverrideCarrierProgress() {

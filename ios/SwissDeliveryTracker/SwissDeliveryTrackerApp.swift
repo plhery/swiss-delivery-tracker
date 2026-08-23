@@ -5,12 +5,18 @@ struct SwissDeliveryTrackerApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var session: SessionStore
     @StateObject private var parcels: ParcelStore
-    @StateObject private var localizer = Localizer()
+    @StateObject private var localizer: Localizer
 
     init() {
+        let localizer = Localizer()
         let session = SessionStore(configuration: .current)
+        _localizer = StateObject(wrappedValue: localizer)
         _session = StateObject(wrappedValue: session)
-        _parcels = StateObject(wrappedValue: ParcelStore(configuration: .current, session: session))
+        _parcels = StateObject(wrappedValue: ParcelStore(
+            configuration: .current,
+            session: session,
+            localizer: localizer
+        ))
     }
 
     var body: some Scene {

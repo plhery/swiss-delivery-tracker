@@ -72,6 +72,18 @@ describe('App', () => {
     expect(within(past).getByText('Coffee beans ☕')).toBeInTheDocument();
   });
 
+  it('opens the next parcel from the summary', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByRole('button', {
+      name: /next up: birthday gift/i,
+    }));
+
+    expect(screen.getByRole('dialog', { name: 'Birthday gift 🎁' })).toBeInTheDocument();
+    expect(window.location.search).toContain('parcel=');
+  });
+
   it('keeps the signed-in language selector inside the account menu', async () => {
     const user = userEvent.setup();
     const { container } = renderSignedInApp();

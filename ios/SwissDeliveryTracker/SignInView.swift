@@ -211,7 +211,7 @@ struct SignInView: View {
         NoticeBanner(
             symbol: "wrench.and.screwdriver.fill",
             title: localizer.text("auth.configTitle"),
-            message: "Add your public Supabase URL and publishable key to Configuration/Local.xcconfig.",
+            message: localizer.text("native.configurationHelp"),
             tint: .orange
         )
     }
@@ -348,7 +348,7 @@ struct SignInView: View {
         errorMessage = nil
         Task {
             do { try await operation() }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = localizer.errorMessage(error) }
             working = false
         }
     }
@@ -546,7 +546,7 @@ struct NotificationOnboardingView: View {
                 } else if store.notificationStatus == .authorized || store.notificationStatus == .provisional {
                     errorMessage = localizer.text("onboarding.notifications.connectionError")
                 } else {
-                    errorMessage = error.localizedDescription
+                    errorMessage = localizer.errorMessage(error)
                 }
             }
             working = false

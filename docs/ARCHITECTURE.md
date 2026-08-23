@@ -35,7 +35,7 @@ Python API -------- user token -----------> PostgREST + Postgres RLS
   owned by the package's account.
 - `supabase/migrations/` is the append-only database history;
   `supabase/tests/assertions.sql` exercises the RLS boundary in PostgreSQL.
-- `contracts/openapi.json` generates the frontend and backend contract types.
+- `contracts/openapi.json` generates the TypeScript, Python, and Swift contract types.
   `contracts/fixtures/delivery-api.json` is decoded in TypeScript, Python, and
   Swift tests to catch cross-platform payload drift.
 

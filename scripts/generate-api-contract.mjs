@@ -6,6 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const contractPath = path.join(root, 'contracts', 'openapi.json');
 const typesPath = path.join(root, 'src', 'generated', 'apiContract.ts');
 const pythonPath = path.join(root, 'server', 'api_contract.py');
+const swiftPath = path.join(root, 'ios', 'SwissDeliveryTracker', 'GeneratedAPIContract.swift');
 const contract = JSON.parse(await readFile(contractPath, 'utf8'));
 const schemas = contract.components?.schemas;
 const carrierCapabilities = contract['x-carriers'];
@@ -138,6 +139,26 @@ const enumConstants = {
   SyncStatus: 'SYNC_STATUSES',
 };
 
+const swiftSchemaNames = {
+  CarrierId: 'CarrierID',
+  Stage: 'TrackingStage',
+  TrackingEventRow: 'TrackingEvent',
+  PackageRow: 'Parcel',
+  OkResponse: 'OKResponse',
+};
+
+const swiftInlineNames = {
+  'AccountExportResponse.account': 'AccountExportAccount',
+  'PackageRow.carrier_data': 'CarrierData',
+  'NativePushDeviceRequest.environment': 'NativePushEnvironment',
+  'NativePushDeviceRequest.locale': 'NativePushLocale',
+};
+
+const swiftEnumCaseNames = {
+  'CarrierId.intl-post': 'internationalPost',
+  'CarrierId.spring-gds': 'springGDS',
+};
+
 function refName(ref) {
   const prefix = '#/components/schemas/';
   if (!ref.startsWith(prefix)) throw new Error(`Unsupported schema reference: ${ref}`);
@@ -212,6 +233,210 @@ function generatedTypeScript() {
   return `${lines.join('\n').trim()}\n`;
 }
 
+function upperFirst(value) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+function lowerCamelIdentifier(value) {
+  const words = value.split(/[-_]/).filter(Boolean);
+  if (words.length === 0) throw new Error(`Cannot generate a Swift identifier for ${value}`);
+  return words[0] + words.slice(1).map(upperFirst).join('');
+}
+
+function swiftPropertyName(value) {
+  return lowerCamelIdentifier(value)
+    .replace(/Ids$/, 'IDs')
+    .replace(/Id$/, 'ID')
+    .replace(/Urls$/, 'URLs')
+    .replace(/Url$/, 'URL');
+}
+
+function swiftTypeName(schemaName) {
+  return swiftSchemaNames[schemaName] ?? schemaName;
+}
+
+function swiftReferenceName(reference) {
+  const prefix = '#/components/schemas/';
+  if (!reference.startsWith(prefix)) {
+    throw new Error(`Unsupported Swift schema reference: ${reference}`);
+  }
+  return swiftTypeName(reference.slice(prefix.length));
+}
+
+function swiftEnumCase(schemaName, value) {
+  return swiftEnumCaseNames[`${schemaName}.${value}`] ?? swiftPropertyName(value);
+}
+
+function schemaAllowsNull(schema) {
+  if (schema?.type === 'null') return true;
+  if (Array.isArray(schema?.type) && schema.type.includes('null')) return true;
+  return [...(schema?.anyOf ?? []), ...(schema?.oneOf ?? [])].some(schemaAllowsNull);
+}
+
+function schemaWithoutNull(schema) {
+  if (Array.isArray(schema.type)) {
+    const types = schema.type.filter((type) => type !== 'null');
+    if (types.length !== 1) throw new Error(`Unsupported Swift type union: ${JSON.stringify(schema.type)}`);
+    return { ...schema, type: types[0] };
+  }
+  for (const key of ['anyOf', 'oneOf']) {
+    if (schema[key]) {
+      const alternatives = schema[key].filter((value) => !schemaAllowsNull(value));
+      if (alternatives.length !== 1) {
+        throw new Error(`Unsupported Swift ${key} union: ${JSON.stringify(schema[key])}`);
+      }
+      return alternatives[0];
+    }
+  }
+  return schema;
+}
+
+const swiftInlineSchemas = new Map();
+
+function swiftInlineTypeName(parentSchemaName, propertyName) {
+  return swiftInlineNames[`${parentSchemaName}.${propertyName}`]
+    ?? `${swiftTypeName(parentSchemaName)}${upperFirst(swiftPropertyName(propertyName))}`;
+}
+
+function registerSwiftInlineSchema(parentSchemaName, propertyName, schema) {
+  const name = swiftInlineTypeName(parentSchemaName, propertyName);
+  const existing = swiftInlineSchemas.get(name);
+  if (existing && JSON.stringify(existing.schema) !== JSON.stringify(schema)) {
+    throw new Error(`Conflicting inline Swift schema name: ${name}`);
+  }
+  swiftInlineSchemas.set(name, { name, schema, schemaName: `${parentSchemaName}.${propertyName}` });
+  return name;
+}
+
+function swiftBaseType(schema, parentSchemaName, propertyName) {
+  const value = schemaWithoutNull(schema);
+  if (value.$ref) return swiftReferenceName(value.$ref);
+  if (value.enum) return registerSwiftInlineSchema(parentSchemaName, propertyName, value);
+  switch (value.type) {
+    case 'string':
+      return value.format === 'uuid' ? 'UUID' : 'String';
+    case 'integer':
+      return 'Int';
+    case 'number':
+      return 'Double';
+    case 'boolean':
+      return 'Bool';
+    case 'array':
+      return `[${swiftBaseType(value.items ?? {}, parentSchemaName, `${propertyName}Item`)}]`;
+    case 'object':
+      if (value.properties) return registerSwiftInlineSchema(parentSchemaName, propertyName, value);
+      throw new Error(`Object dictionaries are not supported by the Swift generator: ${parentSchemaName}.${propertyName}`);
+    default:
+      throw new Error(`Unsupported Swift schema at ${parentSchemaName}.${propertyName}: ${JSON.stringify(value)}`);
+  }
+}
+
+function swiftProperty(schemaName, propertyName, schema, required) {
+  const specialEmptyArray = schemaName === 'PackageRow' && propertyName === 'tracking_events';
+  return {
+    jsonName: propertyName,
+    name: swiftPropertyName(propertyName),
+    type: swiftBaseType(schema, schemaName, propertyName),
+    optional: !specialEmptyArray && (!required || schemaAllowsNull(schema)),
+    specialEmptyArray,
+  };
+}
+
+function swiftCodingKey(property) {
+  const decodedName = lowerCamelIdentifier(property.jsonName);
+  return property.name === decodedName
+    ? `        case ${property.name}`
+    : `        case ${property.name} = ${JSON.stringify(decodedName)}`;
+}
+
+function generatedSwiftEnum(schemaName, swiftName, schema) {
+  const lines = [
+    `enum ${swiftName}: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {`,
+  ];
+  for (const value of schema.enum) {
+    const caseName = swiftEnumCase(schemaName, value);
+    lines.push(caseName === value ? `    case ${caseName}` : `    case ${caseName} = ${JSON.stringify(value)}`);
+  }
+  lines.push('', '    var id: String { rawValue }', '}');
+  return lines;
+}
+
+function generatedSwiftStruct(schemaName, swiftName, schema) {
+  const required = new Set(schema.required ?? []);
+  const properties = Object.entries(schema.properties ?? {}).map(([name, value]) =>
+    swiftProperty(schemaName, name, value, required.has(name)));
+  const conformances = ['Codable', 'Equatable', 'Hashable', 'Sendable'];
+  if (properties.some((property) => property.name === 'id')) conformances.push('Identifiable');
+  const lines = [`struct ${swiftName}: ${conformances.join(', ')} {`];
+  for (const property of properties) {
+    const defaultValue = property.specialEmptyArray ? ' = []' : property.optional ? ' = nil' : '';
+    lines.push(`    var ${property.name}: ${property.type}${property.optional ? '?' : ''}${defaultValue}`);
+  }
+  if (properties.some((property) => property.name !== lowerCamelIdentifier(property.jsonName))) {
+    lines.push('', '    private enum CodingKeys: String, CodingKey {');
+    properties.forEach((property) => lines.push(swiftCodingKey(property)));
+    lines.push('    }');
+  }
+  lines.push('}');
+  return { lines, properties };
+}
+
+function generatedParcelDecoder(properties) {
+  const lines = [
+    'extension Parcel {',
+    '    init(from decoder: Decoder) throws {',
+    '        let values = try decoder.container(keyedBy: CodingKeys.self)',
+  ];
+  for (const property of properties) {
+    if (property.specialEmptyArray) {
+      lines.push(
+        `        ${property.name} = try values.decodeIfPresent(${property.type}.self, forKey: .${property.name}) ?? []`,
+      );
+    } else if (property.optional) {
+      lines.push(
+        `        ${property.name} = try values.decodeIfPresent(${property.type}.self, forKey: .${property.name})`,
+      );
+    } else {
+      lines.push(`        ${property.name} = try values.decode(${property.type}.self, forKey: .${property.name})`);
+    }
+  }
+  lines.push('    }', '}');
+  return lines;
+}
+
+function generatedSwift() {
+  swiftInlineSchemas.clear();
+  const lines = [
+    '// This file is generated by scripts/generate-api-contract.mjs. Do not edit.',
+    '',
+    'import Foundation',
+    '',
+  ];
+  let parcelProperties = null;
+  for (const [schemaName, schema] of Object.entries(schemas)) {
+    const swiftName = swiftTypeName(schemaName);
+    if (schema.enum) {
+      lines.push(...generatedSwiftEnum(schemaName, swiftName, schema), '');
+    } else if (schema.type === 'object' && schema.properties) {
+      const generated = generatedSwiftStruct(schemaName, swiftName, schema);
+      lines.push(...generated.lines, '');
+      if (schemaName === 'PackageRow') parcelProperties = generated.properties;
+    } else {
+      throw new Error(`Unsupported top-level Swift schema: ${schemaName}`);
+    }
+  }
+  for (const { name, schema, schemaName } of swiftInlineSchemas.values()) {
+    if (schema.enum) {
+      lines.push(...generatedSwiftEnum(schemaName, name, schema), '');
+    } else {
+      lines.push(...generatedSwiftStruct(schemaName, name, schema).lines, '');
+    }
+  }
+  if (!parcelProperties) throw new Error('PackageRow is required to generate the native Parcel model');
+  lines.push(...generatedParcelDecoder(parcelProperties), '');
+  return `${lines.join('\n').trim()}\n`;
+}
+
 function pythonLiteral(value, indent = 0) {
   const padding = ' '.repeat(indent);
   if (value === null) return 'None';
@@ -255,6 +480,7 @@ function generatedPython() {
 const outputs = [
   [typesPath, generatedTypeScript()],
   [pythonPath, generatedPython()],
+  [swiftPath, generatedSwift()],
 ];
 
 if (process.argv.includes('--check')) {

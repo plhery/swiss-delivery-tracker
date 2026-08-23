@@ -3,14 +3,30 @@ import UIKit
 
 enum DeliveryAPIError: LocalizedError {
     case authenticationExpired
+    case duplicateTracking
     case invalidResponse
+    case labelTooLong
+    case notificationsDenied
+    case parcelMissing
+    case pushTokenUnavailable
+    case refreshFailed
+    case refreshTimeout
     case service(String)
+    case serviceFailed(Int)
 
     var errorDescription: String? {
         switch self {
         case .authenticationExpired: "Your sign-in expired. Please sign in again."
+        case .duplicateTracking: "This tracking number is already in your delivery box."
         case .invalidResponse: "The delivery service returned an invalid response."
+        case .labelTooLong: "Parcel names can be at most 80 characters."
+        case .notificationsDenied: "Notifications were not allowed."
+        case .parcelMissing: "This parcel is no longer in your delivery box."
+        case .pushTokenUnavailable: "Apple did not return a notification token. Try again on a signed development build."
+        case .refreshFailed: "Tracking refresh failed. Try again."
+        case .refreshTimeout: "The tracking refresh is taking longer than expected."
         case .service(let message): message
+        case .serviceFailed(let status): "Delivery service failed (\(status))."
         }
     }
 }
@@ -30,7 +46,7 @@ final class DeliveryAPIClient {
         return response.packages
     }
 
-    func add(_ input: NewParcelRequest) async throws -> CreatePackageResponse {
+    func add(_ input: CreatePackageRequest) async throws -> CreatePackageResponse {
         try await request("/api/packages", method: "POST", body: input)
     }
 
@@ -38,7 +54,7 @@ final class DeliveryAPIClient {
         try await request(
             "/api/packages/\(id.uuidString)",
             method: "PATCH",
-            body: ["label": label]
+            body: RenamePackageRequest(label: label)
         )
     }
 
@@ -46,7 +62,7 @@ final class DeliveryAPIClient {
         try await request(
             "/api/packages/\(id.uuidString)/notifications",
             method: "PATCH",
-            body: ["muted": muted]
+            body: PackageNotificationRequest(muted: muted)
         )
     }
 
@@ -67,7 +83,7 @@ final class DeliveryAPIClient {
 
     func refreshAll() async throws {
         let queued: QueueResponse = try await request("/api/sync", method: "POST")
-        try await waitForJobs(queued.jobIds)
+        try await waitForJobs(queued.jobIDs)
     }
 
     func refresh(id: UUID) async throws {
@@ -75,7 +91,7 @@ final class DeliveryAPIClient {
             "/api/packages/\(id.uuidString)/sync",
             method: "POST"
         )
-        try await waitForJobs(queued.jobIds)
+        try await waitForJobs(queued.jobIDs)
     }
 
     func waitForJobs(_ jobIds: [UUID]) async throws {
@@ -87,18 +103,15 @@ final class DeliveryAPIClient {
                     "/api/sync/jobs/\(jobID.uuidString)"
                 )
                 if job.status == .failed {
-                    throw DeliveryAPIError.service(
-                        job.error ?? "Tracking refresh failed. Try again."
-                    )
+                    if let error = job.error { throw DeliveryAPIError.service(error) }
+                    throw DeliveryAPIError.refreshFailed
                 }
                 if job.status != .succeeded { allSucceeded = false }
             }
             if allSucceeded { return }
             if attempt < 119 { try await Task.sleep(for: .seconds(1)) }
         }
-        throw DeliveryAPIError.service(
-            "The tracking refresh is taking longer than expected."
-        )
+        throw DeliveryAPIError.refreshTimeout
     }
 
     func notificationPreferences() async throws -> NotificationPreferences {
@@ -114,26 +127,18 @@ final class DeliveryAPIClient {
         language: AppLanguage,
         sendTest: Bool
     ) async throws -> Bool {
-        struct Body: Codable {
-            let token: String
-            let environment: String
-            let locale: String
-            let deviceName: String
-            let sendTest: Bool
-        }
-        struct Response: Codable { let ok: Bool; let testSent: Bool }
         #if DEBUG
-        let environment = "development"
+        let environment = NativePushEnvironment.development
         #else
-        let environment = "production"
+        let environment = NativePushEnvironment.production
         #endif
-        let response: Response = try await request(
+        let response: PushSubscriptionResponse = try await request(
             "/api/push/devices",
             method: "POST",
-            body: Body(
+            body: NativePushDeviceRequest(
                 token: token,
                 environment: environment,
-                locale: language.rawValue,
+                locale: NativePushLocale(rawValue: language.rawValue) ?? .en,
                 deviceName: UIDevice.current.name,
                 sendTest: sendTest
             )
@@ -145,7 +150,7 @@ final class DeliveryAPIClient {
         let _: OKResponse = try await request(
             "/api/push/devices",
             method: "DELETE",
-            body: ["token": token]
+            body: DeleteNativePushDeviceRequest(token: token)
         )
     }
 
@@ -157,7 +162,7 @@ final class DeliveryAPIClient {
         let _: OKResponse = try await request(
             "/api/account",
             method: "DELETE",
-            body: ["confirmation": confirmation]
+            body: DeleteAccountRequest(confirmation: confirmation)
         )
     }
 
@@ -217,15 +222,10 @@ final class DeliveryAPIClient {
             throw DeliveryAPIError.authenticationExpired
         }
         guard (200..<300).contains(result.1.statusCode) else {
-            let error = try? JSONDecoder().decode(APIErrorPayload.self, from: result.0)
-            throw DeliveryAPIError.service(
-                error?.error ?? "Delivery service failed (\(result.1.statusCode))."
-            )
+            let error = try? JSONDecoder().decode(ErrorResponse.self, from: result.0)
+            if let message = error?.error { throw DeliveryAPIError.service(message) }
+            throw DeliveryAPIError.serviceFailed(result.1.statusCode)
         }
         return result
     }
-}
-
-private struct APIErrorPayload: Codable {
-    let error: String?
 }

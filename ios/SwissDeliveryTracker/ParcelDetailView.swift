@@ -366,7 +366,7 @@ struct ParcelDetailView: View {
         errorMessage = nil
         Task {
             do { try await operation() }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = localizer.errorMessage(error) }
             working = nil
         }
     }

@@ -6,7 +6,7 @@ enum NotificationPreset: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var stages: [TrackingStage] {
+    var stages: [NotificationStage] {
         switch self {
         case .all:
             [.registered, .accepted, .inTransit, .customs, .outForDelivery,
@@ -28,7 +28,7 @@ enum NotificationPreset: String, CaseIterable, Identifiable {
 
     var descriptionKey: String { "\(titleKey)Description" }
 
-    static func matching(_ stages: [TrackingStage]) -> NotificationPreset {
+    static func matching(_ stages: [NotificationStage]) -> NotificationPreset {
         let enabled = Set(stages)
         return allCases.first { Set($0.stages) == enabled } ?? .all
     }

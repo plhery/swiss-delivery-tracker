@@ -348,7 +348,7 @@ export function ParcelDetail({
         )}
         {parcel.expectedDelivery && !final && (
           <p className="detail__eta">
-            {localizedExpectedDelivery(parcel.expectedDelivery, t)}
+            {localizedExpectedDelivery(parcel.expectedDelivery, t, languageTag)}
           </p>
         )}
         {parcel.syncError && (

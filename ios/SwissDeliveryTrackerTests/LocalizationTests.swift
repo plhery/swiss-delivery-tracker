@@ -1,6 +1,7 @@
 import XCTest
 @testable import SwissDeliveryTracker
 
+@MainActor
 final class LocalizationTests: XCTestCase {
     func testEveryLanguageHasTheSameKeysAsEnglish() throws {
         let dictionaries = try localizationDictionaries()
@@ -37,6 +38,42 @@ final class LocalizationTests: XCTestCase {
                 XCTAssertFalse(values[key, default: ""].isEmpty, "\(language).\(key)")
             }
         }
+    }
+
+    func testNativeWelcomeAndErrorCopyExistsInEveryLanguage() throws {
+        let dictionaries = try localizationDictionaries()
+        let keys = [
+            "welcome.title",
+            "welcome.subtitle",
+            "welcome.feature.track",
+            "welcome.feature.alerts",
+            "welcome.feature.private",
+            "native.configurationHelp",
+            "native.error.authenticationExpired",
+            "native.auth.invalidResponse",
+        ]
+
+        for (language, values) in dictionaries {
+            for key in keys {
+                let value = values[key, default: ""]
+                XCTAssertFalse(value.isEmpty, "\(language).\(key)")
+                XCTAssertNotEqual(value, key, "\(language).\(key)")
+            }
+        }
+    }
+
+    func testKnownNativeErrorsUseTheSelectedLanguage() {
+        let localizer = Localizer()
+        localizer.language = .de
+
+        XCTAssertEqual(
+            localizer.errorMessage(DeliveryAPIError.authenticationExpired),
+            "Deine Anmeldung ist abgelaufen. Bitte melde dich erneut an."
+        )
+        XCTAssertEqual(
+            localizer.errorMessage(AuthenticationError.oauthCancelled),
+            "Die Anmeldung wurde abgebrochen."
+        )
     }
 
     private func localizationDictionaries() throws -> [String: [String: String]] {

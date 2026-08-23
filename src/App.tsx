@@ -58,7 +58,7 @@ export default function App({
   onDeleteAccount?: (confirmation: string) => Promise<void>;
   apiAuth?: ApiAuth;
 } = {}) {
-  const { t } = useI18n();
+  const { languageTag, t } = useI18n();
   const {
     parcels,
     loading,
@@ -349,15 +349,21 @@ export default function App({
             </span>
           </div>
           {nextParcel ? (
-            <div className="app__next">
+            <button
+              type="button"
+              className="app__next"
+              aria-label={`${t('app.nextUp')}: ${nextParcel.label || t('common.parcel')}`}
+              aria-haspopup="dialog"
+              onClick={() => openParcelDetail(nextParcel.id)}
+            >
               <span>{t('app.nextUp')}</span>
               <strong>{nextParcel.label || t('common.parcel')}</strong>
               <small>
                 {nextParcel.expectedDelivery
-                  ? localizedExpectedDelivery(nextParcel.expectedDelivery, t)
+                  ? localizedExpectedDelivery(nextParcel.expectedDelivery, t, languageTag)
                   : t(parcelDisplayStatusKey(nextParcel))}
               </small>
-            </div>
+            </button>
           ) : summaryMessage ? <p className="app__subtitle">{summaryMessage}</p> : null}
         </div>
       </header>

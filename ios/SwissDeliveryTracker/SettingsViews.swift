@@ -171,7 +171,7 @@ struct NotificationSettingsView: View {
         errorMessage = nil
         Task {
             do { try await operation() }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = localizer.errorMessage(error) }
             working = false
         }
     }
@@ -314,7 +314,7 @@ struct AccountView: View {
         errorMessage = nil
         Task {
             do { try await operation() }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = localizer.errorMessage(error) }
             working = false
         }
     }

@@ -59,6 +59,7 @@ builds register against APNs sandbox and Release builds use production.
 | Google OAuth, email OTP, session refresh, sign-out | Authentication Services, native OTP form, Keychain session |
 | Paste number, carrier URL, shipping text, or scan a barcode | Native add sheet with the shared carrier parser and camera scanner |
 | All 16 carriers and special Planzer, Dachser, DPD, S10, and handoff rules | Catalog generated from `contracts/openapi.json` |
+| Authenticated API request/response models | Swift Codable models generated from every OpenAPI schema |
 | Search, status/carrier filters, priority/date sorting | Searchable native list, pickers, and sections |
 | Refresh all or one parcel and live updates | Pull to refresh, toolbar/detail actions, lightweight sync-job polling |
 | Rename, archive/undo, restore, direct permanent delete | Detail menus, swipe action, toast, and a destructive confirmation alert |
@@ -69,7 +70,8 @@ builds register against APNs sandbox and Release builds use production.
 | Account export, privacy, account deletion | System share sheet, privacy link, destructive account flow |
 | English, German, French, Italian | Catalog generated from `src/i18n.tsx` plus native-only copy |
 
-Regenerate contract-backed native resources after changing carriers or copy:
+Regenerate contract-backed Swift models and native resources after changing the
+OpenAPI contract, carriers, or copy:
 
 ```bash
 npm run contract:generate

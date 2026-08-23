@@ -33,7 +33,7 @@ export function ParcelCard({
   const status = parcelDisplayStatus(parcel);
   const final = current ? isFinal(current.stage) : false;
   const expectedDelivery = parcel.expectedDelivery && !final
-    ? localizedExpectedDelivery(parcel.expectedDelivery, t)
+    ? localizedExpectedDelivery(parcel.expectedDelivery, t, languageTag)
     : null;
   const statusLabel = t(parcelDisplayStatusKey(parcel));
   const completionDate = localizedParcelCompletionDate(parcel, languageTag);

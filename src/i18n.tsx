@@ -183,6 +183,7 @@ const en = {
   'progress.step': 'Step {{step}} of {{total}}: {{stage}}',
   'progress.empty': 'No tracking updates yet',
   'status.syncing': 'Sync in progress',
+  'status.pending': 'Tracking pending',
   'status.failed': 'Sync failed',
   'status.unsupported': 'Automatic sync unavailable',
   'status.unannounced': 'Not announced yet',
@@ -280,8 +281,9 @@ export type MessageKey = keyof typeof en;
 type Messages = Record<MessageKey, string>;
 
 const de: Messages = {
-  ...en,
-  'language.label': 'Sprache', 'app.eyebrow': 'Alle deine Pakete', 'app.nextUp': 'Als Nächstes',
+  'language.label': 'Sprache', 'language.en': 'English', 'language.de': 'Deutsch',
+  'language.fr': 'Français', 'language.it': 'Italiano',
+  'app.eyebrow': 'Alle deine Pakete', 'app.title': 'Swiss Delivery Tracker', 'app.nextUp': 'Als Nächstes',
   'app.refresh': 'Sendungen aktualisieren', 'app.refreshing': 'Sendungsabfragen werden geplant',
   'app.parcel.one': 'Paket', 'app.parcel.many': 'Pakete', 'app.onTheWay': 'unterwegs',
   'app.opening': 'Deine Paketbox wird geöffnet…', 'app.loadFailed': 'Deine Paketbox konnte nicht geladen werden',
@@ -310,6 +312,7 @@ const de: Messages = {
   'attention.ready_for_pickup': 'Abholbereit', 'attention.customs': 'Beim Zoll zurückgehalten',
   'attention.stalled': 'Seit vier Tagen keine Aktualisierung', 'attention.not_announced': 'Nach zwei Tagen noch nicht angekündigt',
   'parcel.expectedToday': 'Heute erwartet', 'parcel.expected': 'Erwartet {{date}}', 'parcel.updated': 'Aktualisiert {{date}}', 'parcel.syncAttention': 'Synchronisierung prüfen',
+  'parcel.aria': '{{name}} — {{status}}', 'parcel.ariaExpected': '{{name}} — {{status}} — erwartet {{date}}',
   'parcel.onDate': 'am {{date}}',
   'parcel.archive': 'Archivieren', 'parcel.archiveAria': '{{name}} archivieren',
   'add.eyebrow': 'Neue Sendung', 'add.title': 'Paket hinzufügen',
@@ -352,7 +355,7 @@ const de: Messages = {
   'timeline.empty': 'Der Anbieter hat diese Sendung noch nicht angekündigt – schau bald wieder vorbei! 🕊️',
   'timeline.label': 'Sendungsverlauf', 'timeline.syncing': 'Synchronisierung läuft',
   'progress.step': 'Schritt {{step}} von {{total}}: {{stage}}', 'progress.empty': 'Noch keine Sendungsaktualisierungen',
-  'status.syncing': 'Synchronisierung läuft', 'status.failed': 'Synchronisierung fehlgeschlagen',
+  'status.syncing': 'Synchronisierung läuft', 'status.pending': 'Sendungsverfolgung ausstehend', 'status.failed': 'Synchronisierung fehlgeschlagen',
   'status.unsupported': 'Automatische Synchronisierung nicht verfügbar', 'status.unannounced': 'Noch nicht angekündigt',
   'stage.pending': 'Erfasst', 'stage.registered': 'Angekündigt', 'stage.accepted': 'Aufgegeben', 'stage.in_transit': 'Unterwegs',
   'stage.customs': 'Beim Zoll', 'stage.out_for_delivery': 'In Zustellung', 'stage.failed_attempt': 'Zustellversuch',
@@ -378,6 +381,10 @@ const de: Messages = {
   'notifications.quietHours': 'Ruhezeiten', 'notifications.quietDescription': 'Meldungen nachts zurückhalten und danach zustellen.',
   'notifications.from': 'Von', 'notifications.until': 'Bis', 'notifications.save': 'Einstellungen speichern',
   'notifications.saving': 'Wird gespeichert…', 'notifications.saved': 'Einstellungen gespeichert',
+  'notifications.error.unavailable': 'Benachrichtigungseinstellungen sind nicht verfügbar',
+  'notifications.error.enable': 'Benachrichtigungen konnten nicht aktiviert werden',
+  'notifications.error.disable': 'Benachrichtigungen konnten nicht deaktiviert werden',
+  'notifications.error.welcome': 'Aktiviert. Die Willkommensmeldung konnte nicht gesendet werden; Aktualisierungen werden erneut versucht.',
   'notifications.error.preferences': 'Benachrichtigungseinstellungen konnten nicht geladen werden',
   'notifications.error.save': 'Benachrichtigungseinstellungen konnten nicht gespeichert werden',
   'account.options': 'Kontooptionen für {{email}}', 'account.signedIn': 'Angemeldet als',
@@ -386,6 +393,7 @@ const de: Messages = {
   'account.typeToConfirm': 'Zur Bestätigung {{email}} eingeben', 'account.deletePermanent': 'Dauerhaft löschen',
   'account.deleting': 'Wird gelöscht…', 'account.export': 'Meine Daten herunterladen', 'account.exporting': 'Export wird vorbereitet…',
   'account.signOut': 'Abmelden', 'account.signingOut': 'Wird abgemeldet…', 'account.privacy': 'Datenschutzhinweis', 'account.delete': 'Konto löschen',
+  'account.actionFailed': 'Die Kontoaktion konnte nicht abgeschlossen werden',
   'auth.title': 'Melde dich an, um deine Post.CH-, UPS-, DHL- ... Pakete zu verfolgen!',
   'auth.configTitle': 'Die Authentifizierung muss konfiguriert werden.',
   'auth.codeIntro': 'Gib den sechsstelligen Code ein, der an {{email}} gesendet wurde.', 'auth.code': 'Anmeldecode',
@@ -395,11 +403,15 @@ const de: Messages = {
   'auth.email': 'E-Mail-Adresse', 'auth.sending': 'Code wird gesendet…', 'auth.send': 'Code per E-Mail senden',
   'auth.privacy': 'Sendungsnummern und Lieferverlauf bleiben in deinem Konto privat.',
   'auth.readPrivacy': 'Datenschutzhinweis lesen.', 'auth.loading': 'Deine sichere Paketbox wird geöffnet…',
+  'auth.googleFailed': 'Google-Anmeldung konnte nicht gestartet werden',
+  'auth.sendFailed': 'Der Anmeldecode konnte nicht gesendet werden',
+  'auth.verifyFailed': 'Der Anmeldecode konnte nicht bestätigt werden',
 };
 
 const fr: Messages = {
-  ...en,
-  'language.label': 'Langue', 'app.eyebrow': 'Tous vos colis', 'app.nextUp': 'À suivre', 'app.refresh': 'Actualiser le suivi',
+  'language.label': 'Langue', 'language.en': 'English', 'language.de': 'Deutsch',
+  'language.fr': 'Français', 'language.it': 'Italiano',
+  'app.eyebrow': 'Tous vos colis', 'app.title': 'Swiss Delivery Tracker', 'app.nextUp': 'À suivre', 'app.refresh': 'Actualiser le suivi',
   'app.refreshing': 'Planification des vérifications', 'app.parcel.one': 'colis', 'app.parcel.many': 'colis', 'app.onTheWay': 'en route',
   'app.opening': 'Ouverture de votre boîte de livraison…', 'app.loadFailed': 'Votre boîte de livraison n’a pas pu être chargée',
   'app.noneOnWay': 'Aucun colis en route pour le moment',
@@ -427,6 +439,7 @@ const fr: Messages = {
   'attention.ready_for_pickup': 'Prêt au retrait', 'attention.customs': 'Retenu à la douane',
   'attention.stalled': 'Aucune mise à jour depuis quatre jours', 'attention.not_announced': 'Toujours pas annoncé après deux jours',
   'parcel.expectedToday': 'Prévu aujourd’hui', 'parcel.expected': 'Prévu {{date}}', 'parcel.updated': 'Actualisé {{date}}', 'parcel.syncAttention': 'Synchronisation à vérifier',
+  'parcel.aria': '{{name}} — {{status}}', 'parcel.ariaExpected': '{{name}} — {{status}} — prévu le {{date}}',
   'parcel.onDate': 'le {{date}}',
   'parcel.archive': 'Archiver', 'parcel.archiveAria': 'Archiver {{name}}',
   'common.parcel': 'Colis', 'common.close': 'Fermer', 'common.cancel': 'Annuler', 'common.retry': 'Réessayer', 'common.restoring': 'Restauration…',
@@ -470,7 +483,7 @@ const fr: Messages = {
   'timeline.empty': 'Le transporteur n’a pas encore annoncé cet envoi — revenez bientôt ! 🕊️',
   'timeline.label': 'Historique du suivi', 'timeline.syncing': 'Synchronisation en cours',
   'progress.step': 'Étape {{step}} sur {{total}} : {{stage}}', 'progress.empty': 'Aucune mise à jour de suivi',
-  'status.syncing': 'Synchronisation en cours', 'status.failed': 'Échec de la synchronisation',
+  'status.syncing': 'Synchronisation en cours', 'status.pending': 'Suivi en attente', 'status.failed': 'Échec de la synchronisation',
   'status.unsupported': 'Synchronisation automatique indisponible', 'status.unannounced': 'Pas encore annoncé',
   'stage.pending': 'Suivi ajouté', 'stage.registered': 'Annoncé', 'stage.accepted': 'Déposé', 'stage.in_transit': 'En transit',
   'stage.customs': 'À la douane', 'stage.out_for_delivery': 'En livraison', 'stage.failed_attempt': 'Tentative de livraison',
@@ -496,6 +509,10 @@ const fr: Messages = {
   'notifications.quietHours': 'Heures silencieuses', 'notifications.quietDescription': 'Retenir les alertes la nuit et les livrer ensuite.',
   'notifications.from': 'De', 'notifications.until': 'À', 'notifications.save': 'Enregistrer les préférences',
   'notifications.saving': 'Enregistrement…', 'notifications.saved': 'Préférences enregistrées',
+  'notifications.error.unavailable': 'Les paramètres de notification sont indisponibles',
+  'notifications.error.enable': 'Impossible d’activer les notifications',
+  'notifications.error.disable': 'Impossible de désactiver les notifications',
+  'notifications.error.welcome': 'Notifications activées. L’alerte de bienvenue n’a pas pu être envoyée, mais les mises à jour réessaieront.',
   'notifications.error.preferences': 'Impossible de charger les préférences', 'notifications.error.save': 'Impossible d’enregistrer les préférences',
   'account.options': 'Options du compte de {{email}}', 'account.signedIn': 'Connecté en tant que',
   'account.deleteQuestion': 'Supprimer définitivement ce compte ?',
@@ -503,6 +520,7 @@ const fr: Messages = {
   'account.typeToConfirm': 'Saisissez {{email}} pour confirmer', 'account.deletePermanent': 'Supprimer définitivement',
   'account.deleting': 'Suppression…', 'account.export': 'Télécharger mes données', 'account.exporting': 'Préparation de l’export…',
   'account.signOut': 'Se déconnecter', 'account.signingOut': 'Déconnexion…', 'account.privacy': 'Avis de confidentialité', 'account.delete': 'Supprimer le compte',
+  'account.actionFailed': 'Impossible d’effectuer cette action sur le compte',
   'auth.title': 'Connectez-vous pour suivre vos colis Post.CH, UPS, DHL, ... !',
   'auth.configTitle': 'L’authentification doit être configurée.', 'auth.codeIntro': 'Saisissez le code à six chiffres envoyé à {{email}}.',
   'auth.code': 'Code de connexion', 'auth.signingIn': 'Connexion…', 'auth.openBox': 'Ouvrir ma boîte de livraison',
@@ -511,11 +529,15 @@ const fr: Messages = {
   'auth.email': 'Adresse e-mail', 'auth.sending': 'Envoi du code…', 'auth.send': 'M’envoyer un code',
   'auth.privacy': 'Les numéros de suivi et l’historique restent privés dans votre compte.',
   'auth.readPrivacy': 'Lire l’avis de confidentialité.', 'auth.loading': 'Ouverture de votre boîte de livraison sécurisée…',
+  'auth.googleFailed': 'Impossible de démarrer la connexion avec Google',
+  'auth.sendFailed': 'Impossible d’envoyer le code de connexion',
+  'auth.verifyFailed': 'Impossible de vérifier le code de connexion',
 };
 
 const it: Messages = {
-  ...en,
-  'language.label': 'Lingua', 'app.eyebrow': 'Tutti i tuoi pacchi', 'app.nextUp': 'Prossimo', 'app.refresh': 'Aggiorna il tracciamento',
+  'language.label': 'Lingua', 'language.en': 'English', 'language.de': 'Deutsch',
+  'language.fr': 'Français', 'language.it': 'Italiano',
+  'app.eyebrow': 'Tutti i tuoi pacchi', 'app.title': 'Swiss Delivery Tracker', 'app.nextUp': 'Prossimo', 'app.refresh': 'Aggiorna il tracciamento',
   'app.refreshing': 'Pianificazione dei controlli', 'app.parcel.one': 'pacco', 'app.parcel.many': 'pacchi', 'app.onTheWay': 'in arrivo',
   'app.opening': 'Apertura della tua casella consegne…', 'app.loadFailed': 'Impossibile caricare la tua casella consegne',
   'app.noneOnWay': 'Nessun pacco in arrivo al momento',
@@ -543,6 +565,7 @@ const it: Messages = {
   'attention.ready_for_pickup': 'Pronto per il ritiro', 'attention.customs': 'Fermo in dogana',
   'attention.stalled': 'Nessun aggiornamento da quattro giorni', 'attention.not_announced': 'Non ancora annunciato dopo due giorni',
   'parcel.expectedToday': 'Previsto oggi', 'parcel.expected': 'Previsto {{date}}', 'parcel.updated': 'Aggiornato {{date}}', 'parcel.syncAttention': 'Sincronizzazione da controllare',
+  'parcel.aria': '{{name}} — {{status}}', 'parcel.ariaExpected': '{{name}} — {{status}} — previsto {{date}}',
   'parcel.onDate': 'il {{date}}',
   'parcel.archive': 'Archivia', 'parcel.archiveAria': 'Archivia {{name}}',
   'common.parcel': 'Pacco', 'common.close': 'Chiudi', 'common.cancel': 'Annulla', 'common.retry': 'Riprova', 'common.restoring': 'Ripristino…',
@@ -586,7 +609,7 @@ const it: Messages = {
   'timeline.empty': 'Il corriere non ha ancora annunciato questa spedizione — torna presto! 🕊️',
   'timeline.label': 'Cronologia del tracciamento', 'timeline.syncing': 'Sincronizzazione in corso',
   'progress.step': 'Fase {{step}} di {{total}}: {{stage}}', 'progress.empty': 'Ancora nessun aggiornamento',
-  'status.syncing': 'Sincronizzazione in corso', 'status.failed': 'Sincronizzazione non riuscita',
+  'status.syncing': 'Sincronizzazione in corso', 'status.pending': 'Tracciamento in attesa', 'status.failed': 'Sincronizzazione non riuscita',
   'status.unsupported': 'Sincronizzazione automatica non disponibile', 'status.unannounced': 'Non ancora annunciato',
   'stage.pending': 'Tracciato', 'stage.registered': 'Annunciato', 'stage.accepted': 'Spedito', 'stage.in_transit': 'In transito',
   'stage.customs': 'In dogana', 'stage.out_for_delivery': 'In consegna', 'stage.failed_attempt': 'Tentativo di consegna',
@@ -612,6 +635,10 @@ const it: Messages = {
   'notifications.quietHours': 'Ore silenziose', 'notifications.quietDescription': 'Trattiene gli avvisi di notte e li consegna dopo.',
   'notifications.from': 'Dalle', 'notifications.until': 'Alle', 'notifications.save': 'Salva preferenze',
   'notifications.saving': 'Salvataggio…', 'notifications.saved': 'Preferenze salvate',
+  'notifications.error.unavailable': 'Le impostazioni delle notifiche non sono disponibili',
+  'notifications.error.enable': 'Impossibile attivare le notifiche',
+  'notifications.error.disable': 'Impossibile disattivare le notifiche',
+  'notifications.error.welcome': 'Notifiche attivate. Non è stato possibile inviare l’avviso di benvenuto, ma gli aggiornamenti riproveranno.',
   'notifications.error.preferences': 'Impossibile caricare le preferenze', 'notifications.error.save': 'Impossibile salvare le preferenze',
   'account.options': 'Opzioni account per {{email}}', 'account.signedIn': 'Accesso eseguito come',
   'account.deleteQuestion': 'Eliminare definitivamente questo account?',
@@ -619,6 +646,7 @@ const it: Messages = {
   'account.typeToConfirm': 'Digita {{email}} per confermare', 'account.deletePermanent': 'Elimina definitivamente',
   'account.deleting': 'Eliminazione…', 'account.export': 'Scarica i miei dati', 'account.exporting': 'Preparazione esportazione…',
   'account.signOut': 'Esci', 'account.signingOut': 'Uscita…', 'account.privacy': 'Informativa sulla privacy', 'account.delete': 'Elimina account',
+  'account.actionFailed': 'Impossibile completare l’azione sull’account',
   'auth.title': 'Accedi per tracciare i tuoi pacchi Post.CH, UPS, DHL, ...!',
   'auth.configTitle': 'L’autenticazione deve essere configurata.', 'auth.codeIntro': 'Inserisci il codice a sei cifre inviato a {{email}}.',
   'auth.code': 'Codice di accesso', 'auth.signingIn': 'Accesso…', 'auth.openBox': 'Apri la mia casella consegne',
@@ -627,6 +655,9 @@ const it: Messages = {
   'auth.email': 'Indirizzo e-mail', 'auth.sending': 'Invio del codice…', 'auth.send': 'Inviami un codice',
   'auth.privacy': 'I numeri di tracciamento e la cronologia restano privati nel tuo account.',
   'auth.readPrivacy': 'Leggi l’informativa sulla privacy.', 'auth.loading': 'Apertura della tua casella consegne sicura…',
+  'auth.googleFailed': 'Impossibile avviare l’accesso con Google',
+  'auth.sendFailed': 'Impossibile inviare il codice di accesso',
+  'auth.verifyFailed': 'Impossibile verificare il codice di accesso',
 };
 
 const dictionaries: Record<Locale, Messages> = { en, de, fr, it };
@@ -722,6 +753,7 @@ export function LanguageControl({ className = '' }: { className?: string }) {
 export function localizedRelativeTime(
   iso: string,
   t: Translate,
+  languageTag: string,
   now: number = Date.now(),
 ): string {
   const then = new Date(iso).getTime();
@@ -733,17 +765,18 @@ export function localizedRelativeTime(
   if (hours < 24) return t('time.hoursAgo', { count: hours });
   const days = Math.floor(hours / 24);
   if (days < 7) return t('time.daysAgo', { count: days });
-  return new Intl.DateTimeFormat('de-CH').format(new Date(iso));
+  return new Intl.DateTimeFormat(languageTag).format(new Date(iso));
 }
 
 export function localizedExpectedDelivery(
   value: string,
   t: Translate,
+  languageTag: string,
   now: number = Date.now(),
 ): string {
   const windowMatch = /^(\d{4}-\d{2}-\d{2})[ T]+(\d{2}:\d{2})(?:[–-](\d{2}:\d{2}))?$/.exec(value.trim());
   if (windowMatch) {
-    const date = localizedExpectedDelivery(windowMatch[1], t, now);
+    const date = localizedExpectedDelivery(windowMatch[1], t, languageTag, now);
     return `${date}, ${windowMatch[2]}${windowMatch[3] ? `–${windowMatch[3]}` : ''}`;
   }
   const expected = /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -755,5 +788,5 @@ export function localizedExpectedDelivery(
   if (dayKey(expected) === dayKey(today)) return t('time.today');
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   if (dayKey(expected) === dayKey(tomorrow)) return t('time.tomorrow');
-  return new Intl.DateTimeFormat('de-CH').format(expected);
+  return new Intl.DateTimeFormat(languageTag).format(expected);
 }

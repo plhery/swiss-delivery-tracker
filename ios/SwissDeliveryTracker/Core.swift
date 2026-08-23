@@ -100,6 +100,56 @@ final class Localizer: ObservableObject {
         return result
     }
 
+    func errorMessage(_ error: Error) -> String {
+        if let error = error as? DeliveryAPIError {
+            switch error {
+            case .authenticationExpired:
+                return text("native.error.authenticationExpired")
+            case .duplicateTracking:
+                return text("native.error.duplicateTracking")
+            case .invalidResponse:
+                return text("native.error.invalidResponse")
+            case .labelTooLong:
+                return text("native.error.labelTooLong")
+            case .notificationsDenied:
+                return text("native.notificationsDenied")
+            case .parcelMissing:
+                return text("native.parcelMissing")
+            case .pushTokenUnavailable:
+                return text("native.apnsTokenError")
+            case .refreshFailed:
+                return text("native.error.refreshFailed")
+            case .refreshTimeout:
+                return text("native.error.refreshTimeout")
+            case .service(let message):
+                return message
+            case .serviceFailed(let status):
+                return text("native.error.serviceFailed", ["status": status])
+            }
+        }
+        if let error = error as? AuthenticationError {
+            switch error {
+            case .notConfigured:
+                return text("native.auth.notConfigured")
+            case .invalidResponse:
+                return text("native.auth.invalidResponse")
+            case .missingSession:
+                return text("native.auth.missingSession")
+            case .oauthCancelled:
+                return text("native.auth.cancelled")
+            case .requestFailed(let status):
+                return text("native.auth.requestFailed", ["status": status])
+            case .secureRequestFailed:
+                return text("native.auth.secureRequest")
+            case .sessionSaveFailed:
+                return text("native.auth.saveSession")
+            case .server(let message):
+                return message
+            }
+        }
+        return error.localizedDescription
+    }
+
     func relativeTime(from value: String, now: Date = Date()) -> String {
         guard let date = DateParser.date(value) else { return "" }
         let seconds = now.timeIntervalSince(date)
@@ -174,182 +224,9 @@ final class Localizer: ObservableObject {
     }
 }
 
-enum CarrierID: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
-    case swissPost = "swiss-post"
-    case quickpac
-    case planzer
-    case aliexpress
-    case sunyou
-    case hermes
-    case springGDS = "spring-gds"
-    case postlogistics
-    case dachser
-    case dhl
-    case ups
-    case fedex
-    case dpd
-    case shipup
-    case internationalPost = "intl-post"
-    case unknown
-
-    var id: String { rawValue }
-}
-
-enum TrackingStage: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
-    case pending
-    case registered
-    case accepted
-    case inTransit = "in_transit"
-    case outForDelivery = "out_for_delivery"
-    case delivered
-    case customs
-    case failedAttempt = "failed_attempt"
-    case readyForPickup = "ready_for_pickup"
-    case returned
-
-    var id: String { rawValue }
-}
-
-enum SyncStatus: String, Codable, Hashable, Sendable {
-    case pending, syncing, ok, waiting, error, unsupported
-}
-
-struct TrackingEvent: Codable, Identifiable, Equatable, Hashable, Sendable {
-    let id: UUID
-    let packageID: UUID
-    let stage: TrackingStage
-    let description: String
-    let location: String?
-    let occurredAt: String
-
-    private enum CodingKeys: String, CodingKey {
-        case id, stage, description, location, occurredAt
-        // JSONDecoder converts package_id to packageId, not packageID.
-        case packageID = "packageId"
-    }
-}
-
-struct CarrierData: Codable, Equatable, Hashable, Sendable {
-    let activeTrackingCarrier: CarrierID?
-    let swissPostReady: Bool?
-}
-
-struct Parcel: Codable, Identifiable, Equatable, Hashable, Sendable {
-    let id: UUID
-    var trackingNumber: String
-    var label: String
-    var carrier: CarrierID
-    var createdAt: String
-    var expectedDelivery: String?
-    var lastStatusText: String?
-    var lastSyncedAt: String?
-    var syncStatus: SyncStatus
-    var syncError: String?
-    var trackingURL: String?
-    var dpdPostcode: String?
-    var carrierData: CarrierData?
-    var archivedAt: String?
-    var notificationsMuted: Bool
-    var trackingEvents: [TrackingEvent]
-
-    private enum CodingKeys: String, CodingKey {
-        case id, trackingNumber, label, carrier, createdAt, expectedDelivery
-        case lastStatusText, lastSyncedAt, syncStatus, syncError
-        // JSONDecoder converts tracking_url to trackingUrl, not trackingURL.
-        case trackingURL = "trackingUrl"
-        case dpdPostcode, carrierData, archivedAt, notificationsMuted, trackingEvents
-    }
-
-    var displayName: String { label.nonEmpty ?? "Parcel" }
+extension Parcel {
     var trackingSource: CarrierID? { carrierData?.activeTrackingCarrier }
     var swissPostReady: Bool { carrierData?.swissPostReady == true }
-}
-
-extension Parcel {
-    init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        id = try values.decode(UUID.self, forKey: .id)
-        trackingNumber = try values.decode(String.self, forKey: .trackingNumber)
-        label = try values.decode(String.self, forKey: .label)
-        carrier = try values.decode(CarrierID.self, forKey: .carrier)
-        createdAt = try values.decode(String.self, forKey: .createdAt)
-        expectedDelivery = try values.decodeIfPresent(String.self, forKey: .expectedDelivery)
-        lastStatusText = try values.decodeIfPresent(String.self, forKey: .lastStatusText)
-        lastSyncedAt = try values.decodeIfPresent(String.self, forKey: .lastSyncedAt)
-        syncStatus = try values.decode(SyncStatus.self, forKey: .syncStatus)
-        syncError = try values.decodeIfPresent(String.self, forKey: .syncError)
-        trackingURL = try values.decodeIfPresent(String.self, forKey: .trackingURL)
-        dpdPostcode = try values.decodeIfPresent(String.self, forKey: .dpdPostcode)
-        carrierData = try values.decodeIfPresent(CarrierData.self, forKey: .carrierData)
-        archivedAt = try values.decodeIfPresent(String.self, forKey: .archivedAt)
-        notificationsMuted = try values.decode(Bool.self, forKey: .notificationsMuted)
-        trackingEvents = try values.decodeIfPresent([TrackingEvent].self, forKey: .trackingEvents) ?? []
-    }
-}
-
-struct PackageListResponse: Codable, Sendable {
-    let packages: [Parcel]
-}
-
-struct CreatePackageResponse: Codable, Sendable {
-    let package: Parcel
-    let jobIds: [UUID]
-}
-
-struct NewParcelRequest: Codable, Sendable {
-    let trackingNumber: String
-    let label: String
-    let carrier: CarrierID
-    let trackingURL: String?
-    let dpdPostcode: String?
-
-    enum CodingKeys: String, CodingKey {
-        case trackingNumber, label, carrier, dpdPostcode
-        case trackingURL = "trackingUrl"
-    }
-}
-
-struct NotificationPreferences: Codable, Equatable, Sendable {
-    var enabledStages: [TrackingStage]
-    var quietHoursStart: String?
-    var quietHoursEnd: String?
-    var timezone: String
-}
-
-struct QueueResponse: Codable, Sendable {
-    let queued: Bool
-    let pending: Int
-    let jobIds: [UUID]
-}
-
-enum SyncJobStatus: String, Codable, Sendable {
-    case queued, running, succeeded, failed
-}
-
-struct SyncJobSummary: Codable, Equatable, Sendable {
-    let checked: Int?
-    let updated: Int?
-    let waiting: Int?
-    let errors: Int?
-    let unsupported: Int?
-    let notificationsSent: Int?
-    let notificationErrors: Int?
-    let subscriptionsExpired: Int?
-}
-
-struct SyncJobResponse: Codable, Sendable {
-    let id: UUID
-    let status: SyncJobStatus
-    let packageId: UUID?
-    let requestedAt: String
-    let startedAt: String?
-    let completedAt: String?
-    let result: SyncJobSummary?
-    let error: String?
-}
-
-struct OKResponse: Codable, Sendable {
-    let ok: Bool
 }
 
 enum DateParser {
