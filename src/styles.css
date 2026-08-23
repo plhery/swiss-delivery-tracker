@@ -103,32 +103,14 @@ button:disabled {
 }
 
 .app__brand-mark {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 43px;
-  height: 43px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
-  overflow: hidden;
-  border-radius: 12px;
-  background: var(--ink);
-}
-
-.app__brand-mark::before {
-  content: "";
-  width: 22px;
-  height: 15px;
-  border: 2px solid var(--yellow);
-  border-radius: 2px;
-}
-
-.app__brand-mark span {
-  position: absolute;
-  top: 15px;
-  width: 17px;
-  height: 9px;
-  border-bottom: 2px solid var(--yellow);
-  transform: rotate(-31deg);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .app__eyebrow,
@@ -2695,8 +2677,18 @@ button:disabled {
     padding-left: 15px;
   }
 
+  .app__brand {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .app__brand > div {
+    min-width: 0;
+  }
+
   .app__brand-mark {
-    display: none;
+    width: 30px;
+    height: 30px;
   }
 
   .app__header-actions {
