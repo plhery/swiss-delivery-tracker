@@ -33,6 +33,8 @@ notifications, and keep every tracking number private to your account.
 - Keeps search and filters tucked away until needed, and surfaces the next parcel and ETA.
 - Keeps delivery history in sync across your devices.
 - Sends optional browser and native iPhone notifications without putting tracking numbers in them.
+- Shows up to two delivery-day Live Activities only while parcels are out for delivery,
+  then keeps the final outcome visible briefly before dismissing it.
 - Includes a real SwiftUI iPhone app and Share extension, plus the installable PWA.
 - Uses Supabase Auth and Postgres row-level security to isolate every account.
 

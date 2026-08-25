@@ -254,27 +254,28 @@ struct NextDeliveryWidget: Widget {
 private struct DeliveryLiveActivityView: View {
     let state: DeliveryActivityAttributes.ContentState
 
-    private var copy: DeliveryWidgetLocalizer {
-        DeliveryWidgetLocalizer(languageCode: state.languageCode)
+    private var secondaryLine: String {
+        state.parcel.detail == state.parcel.status
+            ? state.parcel.carrier
+            : "\(state.parcel.carrier) · \(state.parcel.detail)"
     }
 
     var body: some View {
         HStack(spacing: 13) {
-            Image(systemName: state.parcel.isOutForDelivery ? "bicycle" : "shippingbox.fill")
+            Image(systemName: state.parcel.phase.symbol)
                 .font(.title3.weight(.bold))
                 .frame(width: 42, height: 42)
-                .background(WidgetPalette.accent, in: Circle())
+                .background(state.parcel.phase.tint, in: Circle())
                 .foregroundStyle(WidgetPalette.ink)
             VStack(alignment: .leading, spacing: 3) {
-                Text(copy.text(state.parcel.isOutForDelivery
-                    ? "stage.out_for_delivery" : "app.nextUp"))
+                Text(state.parcel.status)
                     .font(.caption2.weight(.heavy))
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
                 Text(state.parcel.label)
                     .font(.headline.weight(.bold))
                     .lineLimit(1)
-                Text("\(state.parcel.carrier) · \(state.parcel.detail)")
+                Text(secondaryLine)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -297,19 +298,18 @@ struct DeliveryLiveActivityWidget: Widget {
         ActivityConfiguration(for: DeliveryActivityAttributes.self) { context in
             DeliveryLiveActivityView(state: context.state)
         } dynamicIsland: { context in
-            let copy = DeliveryWidgetLocalizer(languageCode: context.state.languageCode)
             let parcel = context.state.parcel
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label(
-                        copy.text(parcel.isOutForDelivery ? "stage.out_for_delivery" : "app.nextUp"),
-                        systemImage: parcel.isOutForDelivery ? "bicycle" : "shippingbox.fill"
+                        parcel.status,
+                        systemImage: parcel.phase.symbol
                     )
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(WidgetPalette.accentBright)
+                    .foregroundStyle(parcel.phase.tint)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(parcel.detail)
+                    Text(parcel.supplementalDetail)
                         .font(.caption.weight(.bold))
                         .lineLimit(1)
                 }
@@ -318,26 +318,58 @@ struct DeliveryLiveActivityWidget: Widget {
                         Text(parcel.label)
                             .font(.headline.weight(.bold))
                             .lineLimit(1)
-                        Text("\(parcel.carrier) · \(parcel.trackingNumber)")
-                            .font(.caption.monospaced())
+                        Text(parcel.detail == parcel.status
+                            ? parcel.carrier
+                            : "\(parcel.carrier) · \(parcel.detail)")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } compactLeading: {
-                Image(systemName: parcel.isOutForDelivery ? "bicycle" : "shippingbox.fill")
-                    .foregroundStyle(WidgetPalette.accentBright)
+                Image(systemName: parcel.phase.symbol)
+                    .foregroundStyle(parcel.phase.tint)
             } compactTrailing: {
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(WidgetPalette.accentBright)
+                Text(parcel.supplementalDetail)
+                    .font(.caption2.weight(.bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .foregroundStyle(parcel.phase.tint)
             } minimal: {
-                Image(systemName: parcel.isOutForDelivery ? "bicycle" : "shippingbox.fill")
-                    .foregroundStyle(WidgetPalette.accentBright)
+                Image(systemName: parcel.phase.symbol)
+                    .foregroundStyle(parcel.phase.tint)
             }
             .widgetURL(parcel.deepLink)
-            .keylineTint(WidgetPalette.accent)
+            .keylineTint(parcel.phase.tint)
         }
+    }
+}
+
+private extension DeliveryActivityPhase {
+    var symbol: String {
+        switch self {
+        case .outForDelivery: "bicycle"
+        case .delivered: "checkmark.circle.fill"
+        case .failedAttempt: "exclamationmark.triangle.fill"
+        case .readyForPickup: "storefront.fill"
+        case .returned: "arrow.uturn.backward.circle.fill"
+        case .ended: "shippingbox.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .delivered: .green
+        case .failedAttempt, .readyForPickup, .returned: .orange
+        case .outForDelivery, .ended: WidgetPalette.accentBright
+        }
+    }
+}
+
+private extension DeliveryActivityParcel {
+    var supplementalDetail: String {
+        detail == status ? carrier : detail
     }
 }
 

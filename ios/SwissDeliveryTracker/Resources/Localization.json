@@ -159,6 +159,9 @@
     "language.fr": "Français",
     "language.it": "Italiano",
     "language.label": "Language",
+    "liveActivity.settingDescription": "Automatically show parcels while they are out for delivery on the Lock Screen and Dynamic Island.",
+    "liveActivity.settingTitle": "Live Activities",
+    "liveActivity.systemDisabled": "Live Activities are disabled for this app in iPhone Settings.",
     "native.account": "Account",
     "native.apnsTokenError": "Apple did not return a notification token. Try again on a signed development build.",
     "native.auth.cancelled": "Sign-in was cancelled.",
@@ -310,12 +313,12 @@
     "welcome.signInInstead": "Sign in instead",
     "welcome.subtitle": "Follow every delivery across the web and this iPhone.",
     "welcome.title": "All your parcels in one place",
-    "widget.disabledDescription": "Enable it in Account settings to see your next delivery.",
+    "widget.disabledDescription": "Enable Home Screen widget sharing in Account settings to see your next delivery.",
     "widget.disabledTitle": "Widget turned off",
     "widget.galleryDescription": "See out-for-delivery parcels and your next arrival at a glance.",
     "widget.galleryName": "Next delivery",
-    "widget.settingDescription": "Show out-for-delivery and next-up parcel details on the Home Screen, Lock Screen, and Dynamic Island. Turning it off removes shared parcel data and ends the Live Activity.",
-    "widget.settingTitle": "Widget & Live Activity"
+    "widget.settingDescription": "Share out-for-delivery and next-up parcel details with Home Screen widgets you add.",
+    "widget.settingTitle": "Home Screen widgets"
   },
   "de": {
     "account.actionFailed": "Die Kontoaktion konnte nicht abgeschlossen werden",
@@ -477,6 +480,9 @@
     "language.fr": "Français",
     "language.it": "Italiano",
     "language.label": "Sprache",
+    "liveActivity.settingDescription": "Zeige Pakete automatisch auf dem Sperrbildschirm und in der Dynamic Island, während sie in Zustellung sind.",
+    "liveActivity.settingTitle": "Live-Aktivitäten",
+    "liveActivity.systemDisabled": "Live-Aktivitäten sind für diese App in den iPhone-Einstellungen deaktiviert.",
     "native.account": "Konto",
     "native.apnsTokenError": "Apple hat kein Benachrichtigungstoken zurückgegeben. Versuche es erneut mit einem signierten Entwicklungs-Build.",
     "native.auth.cancelled": "Die Anmeldung wurde abgebrochen.",
@@ -628,12 +634,12 @@
     "welcome.signInInstead": "Stattdessen anmelden",
     "welcome.subtitle": "Verfolge jede Lieferung im Web und auf diesem iPhone.",
     "welcome.title": "Alle deine Pakete an einem Ort",
-    "widget.disabledDescription": "Aktiviere es in den Kontoeinstellungen, um deine nächste Lieferung zu sehen.",
+    "widget.disabledDescription": "Aktiviere die Freigabe für Home-Bildschirm-Widgets in den Kontoeinstellungen, um deine nächste Lieferung zu sehen.",
     "widget.disabledTitle": "Widget ausgeschaltet",
     "widget.galleryDescription": "Pakete in Zustellung und deine nächste Sendung auf einen Blick.",
     "widget.galleryName": "Nächste Lieferung",
-    "widget.settingDescription": "Zeige Details zu Paketen in Zustellung und zur nächsten Sendung auf dem Home- und Sperrbildschirm sowie in der Dynamic Island. Beim Ausschalten werden geteilte Paketdaten entfernt und die Live-Aktivität beendet.",
-    "widget.settingTitle": "Widget & Live-Aktivität"
+    "widget.settingDescription": "Teile Details zu Paketen in Zustellung und zur nächsten Sendung mit hinzugefügten Home-Bildschirm-Widgets.",
+    "widget.settingTitle": "Home-Bildschirm-Widgets"
   },
   "fr": {
     "account.actionFailed": "Impossible d’effectuer cette action sur le compte",
@@ -795,6 +801,9 @@
     "language.fr": "Français",
     "language.it": "Italiano",
     "language.label": "Langue",
+    "liveActivity.settingDescription": "Affiche automatiquement les colis sur l’écran verrouillé et dans la Dynamic Island pendant leur livraison.",
+    "liveActivity.settingTitle": "Activités en direct",
+    "liveActivity.systemDisabled": "Les activités en direct sont désactivées pour cette app dans les réglages de l’iPhone.",
     "native.account": "Compte",
     "native.apnsTokenError": "Apple n’a pas renvoyé de jeton de notification. Réessayez avec une version de développement signée.",
     "native.auth.cancelled": "La connexion a été annulée.",
@@ -946,12 +955,12 @@
     "welcome.signInInstead": "Se connecter à la place",
     "welcome.subtitle": "Suivez chaque livraison sur le web et sur cet iPhone.",
     "welcome.title": "Tous vos colis au même endroit",
-    "widget.disabledDescription": "Activez-le dans les réglages du compte pour voir votre prochaine livraison.",
+    "widget.disabledDescription": "Activez le partage des widgets d’écran d’accueil dans les réglages du compte pour voir votre prochaine livraison.",
     "widget.disabledTitle": "Widget désactivé",
     "widget.galleryDescription": "Consultez les colis en livraison et votre prochaine arrivée en un coup d’œil.",
     "widget.galleryName": "Prochaine livraison",
-    "widget.settingDescription": "Affichez les colis en livraison et le prochain colis sur l’écran d’accueil, l’écran verrouillé et la Dynamic Island. Le désactiver supprime les données partagées et termine l’activité en direct.",
-    "widget.settingTitle": "Widget et activité en direct"
+    "widget.settingDescription": "Partagez les détails des colis en livraison et du prochain colis avec les widgets d’écran d’accueil que vous ajoutez.",
+    "widget.settingTitle": "Widgets d’écran d’accueil"
   },
   "it": {
     "account.actionFailed": "Impossibile completare l’azione sull’account",
@@ -1113,6 +1122,9 @@
     "language.fr": "Français",
     "language.it": "Italiano",
     "language.label": "Lingua",
+    "liveActivity.settingDescription": "Mostra automaticamente i pacchi nella schermata di blocco e nella Dynamic Island mentre sono in consegna.",
+    "liveActivity.settingTitle": "Attività in tempo reale",
+    "liveActivity.systemDisabled": "Le attività in tempo reale sono disattivate per questa app nelle impostazioni di iPhone.",
     "native.account": "Account",
     "native.apnsTokenError": "Apple non ha restituito un token di notifica. Riprova con una build di sviluppo firmata.",
     "native.auth.cancelled": "L’accesso è stato annullato.",
@@ -1264,11 +1276,11 @@
     "welcome.signInInstead": "Accedi invece",
     "welcome.subtitle": "Segui ogni consegna sul web e su questo iPhone.",
     "welcome.title": "Tutti i tuoi pacchi in un unico posto",
-    "widget.disabledDescription": "Attivalo nelle impostazioni dell’account per vedere la prossima consegna.",
+    "widget.disabledDescription": "Attiva la condivisione dei widget della schermata Home nelle impostazioni dell’account per vedere la prossima consegna.",
     "widget.disabledTitle": "Widget disattivato",
     "widget.galleryDescription": "Controlla i pacchi in consegna e il prossimo arrivo a colpo d’occhio.",
     "widget.galleryName": "Prossima consegna",
-    "widget.settingDescription": "Mostra i pacchi in consegna e il prossimo pacco nella schermata Home, nella schermata di blocco e nella Dynamic Island. Disattivandolo, i dati condivisi vengono rimossi e l’attività in tempo reale termina.",
-    "widget.settingTitle": "Widget e attività in tempo reale"
+    "widget.settingDescription": "Condividi i dettagli dei pacchi in consegna e del prossimo pacco con i widget della schermata Home che aggiungi.",
+    "widget.settingTitle": "Widget schermata Home"
   }
 }

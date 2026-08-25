@@ -258,7 +258,7 @@ export function startBackgroundServices(): BackgroundRuntime | null {
   const service = new TrackingSyncService(
     client,
     undefined,
-    notifier.web || notifier.native ? notifier : null,
+    notifier.web || notifier.native || notifier.liveActivities ? notifier : null,
   );
   const worker = new SyncJobWorker(service, state);
   const scheduler = new ScheduledSync(client, worker, state);
@@ -270,6 +270,7 @@ export function startBackgroundServices(): BackgroundRuntime | null {
     sync_enabled: true,
     web_push_enabled: Boolean(notifier.web),
     native_push_enabled: Boolean(notifier.native),
+    live_activity_push_enabled: Boolean(notifier.liveActivities),
   });
   return runtime;
 }

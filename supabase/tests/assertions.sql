@@ -117,6 +117,13 @@ begin
       or has_table_privilege('anon', 'public.native_push_devices', 'SELECT') then
     raise exception 'public database roles can access native push credentials';
   end if;
+  if has_table_privilege('authenticated', 'public.live_activity_devices', 'SELECT')
+      or has_table_privilege('authenticated', 'public.live_activity_devices', 'INSERT')
+      or has_table_privilege('authenticated', 'public.live_activity_update_tokens', 'SELECT')
+      or has_table_privilege('authenticated', 'public.live_activity_event_deliveries', 'SELECT')
+      or has_table_privilege('anon', 'public.pending_live_activity_events', 'SELECT') then
+    raise exception 'public database roles can access ActivityKit credentials';
+  end if;
   if has_table_privilege('authenticated', 'public.sync_jobs', 'SELECT')
       or has_table_privilege('authenticated', 'public.sync_jobs', 'INSERT')
       or has_table_privilege('anon', 'public.sync_jobs', 'SELECT')
@@ -871,6 +878,314 @@ begin
   ) then
     raise exception 'acknowledged native push event remained pending';
   end if;
+end;
+$$;
+
+-- Delivery-day activities start only when a parcel goes out for delivery,
+-- continue through the per-activity update token, and end on a terminal event.
+-- A successful ActivityKit delivery is also visible to the matching native
+-- device so the ordinary alert dispatcher can avoid duplicate banners.
+update public.native_push_devices
+set installation_id = 'd0000000-0000-0000-0000-000000000001'
+where id = 'a0000000-0000-0000-0000-000000000001';
+
+insert into public.live_activity_devices (
+  id, user_id, installation_id, token, environment, locale, subscribed_at
+) values (
+  'c0000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000002',
+  'd0000000-0000-0000-0000-000000000001',
+  repeat('ef', 32),
+  'development',
+  'de',
+  '2000-01-01T00:00:00Z'
+);
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.pending_live_activity_events
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'a Live Activity started before out for delivery';
+  end if;
+end;
+$$;
+
+insert into public.packages (
+  id, user_id, tracking_number, label, carrier, current_stage, expected_delivery
+) values (
+  '71000000-0000-0000-0000-000000000008',
+  '20000000-0000-0000-0000-000000000002',
+  'LIVEACTIVITY8',
+  'Later delivery',
+  'planzer',
+  'out_for_delivery',
+  '2099-01-03'
+), (
+  '72000000-0000-0000-0000-000000000009',
+  '20000000-0000-0000-0000-000000000002',
+  'LIVEACTIVITY9',
+  'Latest delivery',
+  'planzer',
+  'out_for_delivery',
+  '2099-01-04'
+);
+
+insert into public.tracking_events (
+  id, package_id, stage, description, provider_event_id
+) values (
+  'b4000000-0000-0000-0000-000000000004',
+  '71000000-0000-0000-0000-000000000008',
+  'out_for_delivery',
+  'Later courier is on the way',
+  'provider:live-cap-1'
+), (
+  'b5000000-0000-0000-0000-000000000005',
+  '72000000-0000-0000-0000-000000000009',
+  'out_for_delivery',
+  'Latest courier is on the way',
+  'provider:live-cap-2'
+);
+
+update public.packages
+set current_stage = 'out_for_delivery'
+where id = '70000000-0000-0000-0000-000000000007';
+
+insert into public.tracking_events (
+  id, package_id, stage, description, provider_event_id
+) values (
+  'b1000000-0000-0000-0000-000000000001',
+  '70000000-0000-0000-0000-000000000007',
+  'out_for_delivery',
+  'Courier is on the way',
+  'provider:live-start'
+);
+
+do $$
+begin
+  if (
+    select count(*)
+    from public.pending_live_activity_events
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+  ) <> 2 then
+    raise exception 'Live Activity queue did not cap delivery-day starts at two';
+  end if;
+  if not exists (
+    select 1
+    from public.pending_live_activity_events
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+      and event_id = 'b1000000-0000-0000-0000-000000000001'
+      and update_token is null
+      and stage = 'out_for_delivery'
+  ) then
+    raise exception 'out-for-delivery event did not queue a push-to-start activity';
+  end if;
+  if exists (
+    select 1
+    from public.pending_live_activity_events
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+      and package_id = '72000000-0000-0000-0000-000000000009'
+  ) then
+    raise exception 'Live Activity queue included a third delivery-day parcel';
+  end if;
+end;
+$$;
+
+insert into public.live_activity_event_deliveries (
+  device_id, event_id, package_id, delivery_kind, event_created_at
+)
+select
+  'c0000000-0000-0000-0000-000000000001',
+  id,
+  package_id,
+  'start',
+  created_at
+from public.tracking_events
+where id = 'b1000000-0000-0000-0000-000000000001';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from public.pending_native_push_notifications
+    where device_id = 'a0000000-0000-0000-0000-000000000001'
+      and event_id = 'b1000000-0000-0000-0000-000000000001'
+      and installation_id = 'd0000000-0000-0000-0000-000000000001'
+      and live_activity_delivered
+  ) then
+    raise exception 'native queue did not expose the matching Live Activity delivery';
+  end if;
+end;
+$$;
+
+insert into public.live_activity_update_tokens (
+  id, device_id, package_id, activity_id, token, environment, locale, started_at
+)
+select
+  'c1000000-0000-0000-0000-000000000001',
+  'c0000000-0000-0000-0000-000000000001',
+  package_id,
+  'activity-1',
+  repeat('12', 32),
+  'development',
+  'de',
+  created_at
+from public.tracking_events
+where id = 'b1000000-0000-0000-0000-000000000001';
+
+update public.live_activity_update_tokens
+set locale = 'it', started_at = '2100-01-01T00:00:00Z'
+where id = 'c1000000-0000-0000-0000-000000000001';
+
+do $$
+begin
+  if (
+    select started_at
+    from public.live_activity_update_tokens
+    where id = 'c1000000-0000-0000-0000-000000000001'
+  ) is distinct from (
+    select created_at
+    from public.tracking_events
+    where id = 'b1000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'routine Live Activity token refresh advanced its event cursor';
+  end if;
+  if (
+    select locale
+    from public.live_activity_update_tokens
+    where id = 'c1000000-0000-0000-0000-000000000001'
+  ) <> 'it' then
+    raise exception 'routine Live Activity token metadata refresh was not applied';
+  end if;
+end;
+$$;
+
+insert into public.tracking_events (
+  id, package_id, stage, description, provider_event_id
+) values (
+  'b2000000-0000-0000-0000-000000000002',
+  '70000000-0000-0000-0000-000000000007',
+  'out_for_delivery',
+  'Two stops away',
+  'provider:live-update'
+);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from public.pending_live_activity_events
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+      and event_id = 'b2000000-0000-0000-0000-000000000002'
+      and update_token_id = 'c1000000-0000-0000-0000-000000000001'
+      and activity_id = 'activity-1'
+  ) then
+    raise exception 'an active Live Activity did not receive its update event';
+  end if;
+end;
+$$;
+
+insert into public.live_activity_event_deliveries (
+  device_id, event_id, package_id, delivery_kind, event_created_at
+)
+select
+  'c0000000-0000-0000-0000-000000000001',
+  id,
+  package_id,
+  'update',
+  created_at
+from public.tracking_events
+where id = 'b2000000-0000-0000-0000-000000000002';
+
+update public.packages
+set current_stage = 'delivered'
+where id = '70000000-0000-0000-0000-000000000007';
+
+insert into public.tracking_events (
+  id, package_id, stage, description, provider_event_id
+) values (
+  'b3000000-0000-0000-0000-000000000003',
+  '70000000-0000-0000-0000-000000000007',
+  'delivered',
+  'Delivered',
+  'provider:live-end'
+);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from public.pending_live_activity_events
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+      and event_id = 'b3000000-0000-0000-0000-000000000003'
+      and update_token_id = 'c1000000-0000-0000-0000-000000000001'
+      and stage = 'delivered'
+  ) then
+    raise exception 'terminal event did not queue an end for the active Live Activity';
+  end if;
+end;
+$$;
+
+insert into public.live_activity_devices (
+  user_id, installation_id, token, environment, locale
+) values (
+  '10000000-0000-0000-0000-000000000001',
+  'd0000000-0000-0000-0000-000000000001',
+  repeat('34', 32),
+  'production',
+  'fr'
+)
+on conflict (installation_id) do update set
+  user_id = excluded.user_id,
+  token = excluded.token,
+  environment = excluded.environment,
+  locale = excluded.locale,
+  disabled_at = null;
+
+do $$
+begin
+  if (
+    select user_id
+    from public.live_activity_devices
+    where installation_id = 'd0000000-0000-0000-0000-000000000001'
+  ) <> '10000000-0000-0000-0000-000000000001'::uuid then
+    raise exception 'Live Activity installation did not move to its current account';
+  end if;
+  if exists (
+    select 1
+    from public.live_activity_update_tokens
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+  ) or exists (
+    select 1
+    from public.live_activity_event_deliveries
+    where device_id = 'c0000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'Live Activity state survived an account rebind';
+  end if;
+  if (
+    select subscribed_at
+    from public.live_activity_devices
+    where id = 'c0000000-0000-0000-0000-000000000001'
+  ) < now() - interval '1 minute' then
+    raise exception 'Live Activity account rebind retained a stale delivery cursor';
+  end if;
+  begin
+    insert into public.live_activity_update_tokens (
+      device_id, package_id, activity_id, token, environment, locale
+    ) values (
+      'c0000000-0000-0000-0000-000000000001',
+      '70000000-0000-0000-0000-000000000007',
+      'cross-account-activity',
+      repeat('56', 32),
+      'production',
+      'fr'
+    );
+    raise exception 'a Live Activity token crossed account ownership';
+  exception when check_violation then
+    null;
+  end;
 end;
 $$;
 

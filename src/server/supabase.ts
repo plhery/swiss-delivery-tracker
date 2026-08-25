@@ -295,6 +295,7 @@ export class SupabaseClient {
     token: string,
     environment: string,
     locale: string,
+    installationId?: string | null,
     deviceName?: string | null,
   ): Promise<JsonObject> {
     const now = new Date().toISOString();
@@ -307,6 +308,7 @@ export class SupabaseClient {
         token,
         environment,
         locale,
+        installation_id: installationId ?? null,
         device_name: deviceName ?? null,
         subscribed_at: now,
         disabled_at: null,
@@ -327,6 +329,127 @@ export class SupabaseClient {
     });
   }
 
+  async upsertLiveActivityDevice(
+    userId: string,
+    installationId: string,
+    token: string,
+    environment: string,
+    locale: string,
+  ): Promise<JsonObject> {
+    const now = new Date().toISOString();
+    const result = rows(await this.request(`/rest/v1/live_activity_devices?${query({
+      on_conflict: 'installation_id',
+    })}`, {
+      method: 'POST',
+      body: {
+        user_id: userId,
+        installation_id: installationId,
+        token,
+        environment,
+        locale,
+        disabled_at: null,
+        last_error: null,
+        updated_at: now,
+      },
+      prefer: 'resolution=merge-duplicates,return=representation',
+    }));
+    if (!result[0]) throw new SupabaseError('Supabase did not return the Live Activity device');
+    return result[0];
+  }
+
+  async getLiveActivityDevice(
+    userId: string,
+    installationId: string,
+  ): Promise<JsonObject | null> {
+    const params = query({
+      user_id: `eq.${userId}`,
+      installation_id: `eq.${installationId}`,
+      disabled_at: 'is.null',
+      limit: '1',
+    });
+    return rows(await this.request(`/rest/v1/live_activity_devices?${params}`))[0] ?? null;
+  }
+
+  async deleteLiveActivityDevice(userId: string, installationId: string): Promise<void> {
+    const params = query({
+      user_id: `eq.${userId}`,
+      installation_id: `eq.${installationId}`,
+    });
+    await this.request(`/rest/v1/live_activity_devices?${params}`, {
+      method: 'DELETE',
+      prefer: 'return=minimal',
+    });
+  }
+
+  async upsertLiveActivityUpdateToken(values: {
+    deviceId: string;
+    packageId: string;
+    activityId: string;
+    token: string;
+    environment: string;
+    locale: string;
+  }): Promise<JsonObject> {
+    const starts = rows(await this.request(`/rest/v1/live_activity_event_deliveries?${query({
+      device_id: `eq.${values.deviceId}`,
+      package_id: `eq.${values.packageId}`,
+      delivery_kind: 'eq.start',
+      select: 'event_created_at',
+      order: 'event_created_at.desc',
+      limit: '1',
+    })}`));
+    let startedAt = typeof starts[0]?.event_created_at === 'string'
+      ? starts[0].event_created_at
+      : null;
+    if (!startedAt) {
+      const events = rows(await this.request(`/rest/v1/tracking_events?${query({
+        package_id: `eq.${values.packageId}`,
+        stage: 'eq.out_for_delivery',
+        select: 'created_at',
+        order: 'created_at.desc',
+        limit: '1',
+      })}`));
+      startedAt = typeof events[0]?.created_at === 'string'
+        ? events[0].created_at
+        : new Date().toISOString();
+    }
+    const result = rows(await this.request(`/rest/v1/live_activity_update_tokens?${query({
+      on_conflict: 'device_id,package_id',
+    })}`, {
+      method: 'POST',
+      body: {
+        device_id: values.deviceId,
+        package_id: values.packageId,
+        activity_id: values.activityId,
+        token: values.token,
+        environment: values.environment,
+        locale: values.locale,
+        started_at: startedAt,
+        last_error: null,
+        updated_at: new Date().toISOString(),
+      },
+      prefer: 'resolution=merge-duplicates,return=representation',
+    }));
+    if (!result[0]) throw new SupabaseError('Supabase did not return the Live Activity update token');
+    return result[0];
+  }
+
+  async deleteLiveActivityUpdateToken(
+    userId: string,
+    installationId: string,
+    activityId: string,
+  ): Promise<void> {
+    const device = await this.getLiveActivityDevice(userId, installationId);
+    if (typeof device?.id !== 'string') return;
+    const params = query({
+      device_id: `eq.${device.id}`,
+      activity_id: `eq.${activityId}`,
+    });
+    await this.request(`/rest/v1/live_activity_update_tokens?${params}`, {
+      method: 'DELETE',
+      prefer: 'return=minimal',
+    });
+  }
+
   async listPendingPushNotifications(): Promise<JsonObject[]> {
     const params = query({ select: '*', order: 'event_created_at.asc', limit: '1000' });
     return rows(await this.request(`/rest/v1/pending_push_notifications?${params}`));
@@ -335,6 +458,11 @@ export class SupabaseClient {
   async listPendingNativePushNotifications(): Promise<JsonObject[]> {
     const params = query({ select: '*', order: 'event_created_at.asc', limit: '1000' });
     return rows(await this.request(`/rest/v1/pending_native_push_notifications?${params}`));
+  }
+
+  async listPendingLiveActivityEvents(): Promise<JsonObject[]> {
+    const params = query({ select: '*', order: 'event_created_at.asc', limit: '1000' });
+    return rows(await this.request(`/rest/v1/pending_live_activity_events?${params}`));
   }
 
   async recordPushDeliveries(subscriptionId: string, eventIds: string[]): Promise<void> {
@@ -359,6 +487,29 @@ export class SupabaseClient {
     });
   }
 
+  async recordLiveActivityDeliveries(values: Array<{
+    deviceId: string;
+    eventId: string;
+    packageId: string;
+    deliveryKind: string;
+    eventCreatedAt: string;
+  }>): Promise<void> {
+    if (values.length === 0) return;
+    await this.request(`/rest/v1/live_activity_event_deliveries?${query({
+      on_conflict: 'device_id,event_id',
+    })}`, {
+      method: 'POST',
+      body: values.map((value) => ({
+        device_id: value.deviceId,
+        event_id: value.eventId,
+        package_id: value.packageId,
+        delivery_kind: value.deliveryKind,
+        event_created_at: value.eventCreatedAt,
+      })),
+      prefer: 'resolution=ignore-duplicates,return=minimal',
+    });
+  }
+
   async updatePushSubscription(subscriptionId: string, values: JsonObject): Promise<void> {
     await this.request(`/rest/v1/push_subscriptions?${query({ id: `eq.${subscriptionId}` })}`, {
       method: 'PATCH',
@@ -371,6 +522,29 @@ export class SupabaseClient {
     await this.request(`/rest/v1/native_push_devices?${query({ id: `eq.${deviceId}` })}`, {
       method: 'PATCH',
       body: { ...values, updated_at: new Date().toISOString() },
+      prefer: 'return=minimal',
+    });
+  }
+
+  async updateLiveActivityDevice(deviceId: string, values: JsonObject): Promise<void> {
+    await this.request(`/rest/v1/live_activity_devices?${query({ id: `eq.${deviceId}` })}`, {
+      method: 'PATCH',
+      body: { ...values, updated_at: new Date().toISOString() },
+      prefer: 'return=minimal',
+    });
+  }
+
+  async updateLiveActivityToken(tokenId: string, values: JsonObject): Promise<void> {
+    await this.request(`/rest/v1/live_activity_update_tokens?${query({ id: `eq.${tokenId}` })}`, {
+      method: 'PATCH',
+      body: { ...values, updated_at: new Date().toISOString() },
+      prefer: 'return=minimal',
+    });
+  }
+
+  async deleteLiveActivityTokenById(tokenId: string): Promise<void> {
+    await this.request(`/rest/v1/live_activity_update_tokens?${query({ id: `eq.${tokenId}` })}`, {
+      method: 'DELETE',
       prefer: 'return=minimal',
     });
   }

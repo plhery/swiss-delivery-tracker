@@ -5,6 +5,7 @@ import { createPrivateKey, type KeyObject } from 'node:crypto';
 import { SignJWT } from 'jose';
 import { DateTime, IANAZone } from 'luxon';
 import webpush from 'web-push';
+import { CARRIER_CAPABILITIES } from '../generated/apiContract';
 import type { SupabaseServiceClient } from './supabase';
 import { errorMessage, isRecord, type JsonObject } from './types';
 
@@ -111,6 +112,14 @@ export function notificationText(value: unknown, limit: number): string {
 
 function stringField(row: JsonObject, name: string): string {
   return typeof row[name] === 'string' ? row[name] : '';
+}
+
+function carrierDisplayName(value: unknown): string {
+  const carrier = typeof value === 'string' ? value : '';
+  if (Object.hasOwn(CARRIER_CAPABILITIES, carrier)) {
+    return CARRIER_CAPABILITIES[carrier as keyof typeof CARRIER_CAPABILITIES].displayName;
+  }
+  return carrier || 'Carrier';
 }
 
 const NOTIFICATION_LANGUAGE_TAGS: Record<string, string> = {
@@ -398,6 +407,13 @@ export class NativePushNotificationService {
         ),
       )[0]!;
       const deviceId = stringField(newest, 'device_id');
+      if (newest.live_activity_delivered === true) {
+        await this.client.recordNativePushDeliveries(
+          deviceId,
+          events.map((event) => stringField(event, 'event_id')).filter(Boolean),
+        );
+        continue;
+      }
       summary.attempted += 1;
       try {
         await this.send(newest);
@@ -511,15 +527,191 @@ export class NativePushNotificationService {
   }
 }
 
+type LiveActivityDeliveryKind = 'start' | 'update' | 'end';
+
+const LIVE_ACTIVITY_PHASES = new Set([
+  'out_for_delivery',
+  'delivered',
+  'failed_attempt',
+  'ready_for_pickup',
+  'returned',
+]);
+
+export class DeliveryLiveActivityNotificationService {
+  constructor(
+    readonly client: SupabaseServiceClient,
+    readonly apns: NativePushNotificationService,
+  ) {}
+
+  async dispatch(): Promise<PushSummary> {
+    const grouped = new Map<string, JsonObject[]>();
+    for (const row of await this.client.listPendingLiveActivityEvents()) {
+      const key = JSON.stringify([stringField(row, 'device_id'), stringField(row, 'package_id')]);
+      grouped.set(key, [...(grouped.get(key) ?? []), row]);
+    }
+    const summary = emptySummary();
+    for (const events of grouped.values()) {
+      const newest = [...events].sort(
+        (left, right) => stringField(right, 'event_created_at').localeCompare(
+          stringField(left, 'event_created_at'),
+        ),
+      )[0]!;
+      const kind = this.deliveryKind(newest);
+      if (!kind) continue;
+      const deviceId = stringField(newest, 'device_id');
+      const updateTokenId = stringField(newest, 'update_token_id');
+      summary.attempted += 1;
+      try {
+        await this.send(newest, kind);
+        await this.client.recordLiveActivityDeliveries(events.map((event) => ({
+          deviceId,
+          eventId: stringField(event, 'event_id'),
+          packageId: stringField(event, 'package_id'),
+          deliveryKind: kind,
+          eventCreatedAt: stringField(event, 'event_created_at'),
+        })));
+        if (kind === 'end' && updateTokenId) {
+          await this.client.deleteLiveActivityTokenById(updateTokenId);
+        } else if (updateTokenId) {
+          await this.client.updateLiveActivityToken(updateTokenId, {
+            last_success_at: new Date().toISOString(),
+            last_error: null,
+          });
+        } else {
+          await this.client.updateLiveActivityDevice(deviceId, {
+            last_success_at: new Date().toISOString(),
+            last_error: null,
+          });
+        }
+        summary.sent += 1;
+      } catch (error) {
+        if (this.apns.isExpired(error)) {
+          if (updateTokenId) await this.client.deleteLiveActivityTokenById(updateTokenId);
+          else {
+            await this.client.updateLiveActivityDevice(deviceId, {
+              disabled_at: new Date().toISOString(),
+              last_error: 'ActivityKit token expired',
+            });
+          }
+          summary.expired += 1;
+        } else {
+          if (updateTokenId) {
+            await this.client.updateLiveActivityToken(updateTokenId, {
+              last_error: 'Live Activity delivery failed',
+            });
+          } else {
+            await this.client.updateLiveActivityDevice(deviceId, {
+              last_error: 'Live Activity delivery failed',
+            });
+          }
+          summary.failed += 1;
+        }
+      }
+    }
+    return summary;
+  }
+
+  deliveryKind(row: JsonObject): LiveActivityDeliveryKind | null {
+    const hasUpdateToken = Boolean(stringField(row, 'update_token'));
+    if (stringField(row, 'stage') === 'out_for_delivery') {
+      return hasUpdateToken ? 'update' : 'start';
+    }
+    return hasUpdateToken ? 'end' : null;
+  }
+
+  async send(row: JsonObject, kind = this.deliveryKind(row)): Promise<void> {
+    if (!kind) return;
+    const environment = stringField(row, 'environment') || 'production';
+    const host = environment === 'development'
+      ? 'api.sandbox.push.apple.com'
+      : 'api.push.apple.com';
+    const token = kind === 'start'
+      ? stringField(row, 'push_to_start_token')
+      : stringField(row, 'update_token');
+    const response = await postApns(
+      host,
+      `/3/device/${token}`,
+      {
+        authorization: `bearer ${await this.apns.providerToken()}`,
+        'apns-topic': `${this.apns.bundleId}.push-type.liveactivity`,
+        'apns-push-type': 'liveactivity',
+        'apns-priority': '10',
+        'apns-expiration': String(Math.floor(this.apns.now()) + 3_600),
+        'content-type': 'application/json',
+      },
+      this.payload(row, kind),
+      15_000,
+    );
+    if (response.status !== 200) throw new APNsError(response.status, response.reason);
+  }
+
+  payload(row: JsonObject, kind: LiveActivityDeliveryKind): JsonObject {
+    const timestamp = Math.floor(this.apns.now());
+    const parcelId = stringField(row, 'package_id');
+    const locale = this.apns.locale(row);
+    const copy = this.apns.copy(row);
+    const stage = stringField(row, 'stage');
+    const status = copy[stage] ?? copy.update!;
+    const expected = notificationExpectedDelivery(
+      row.expected_delivery,
+      locale,
+      stringField(row, 'timezone') || 'Europe/Zurich',
+      timestamp * 1_000,
+    );
+    const phase = LIVE_ACTIVITY_PHASES.has(stage) ? stage : 'ended';
+    const contentState: JsonObject = {
+      parcel: {
+        id: parcelId,
+        label: notificationText(row.label || copy.update, 80),
+        carrier: notificationText(carrierDisplayName(row.carrier), 80),
+        status: notificationText(status, 80),
+        detail: notificationText(stage === 'out_for_delivery' && expected ? expected : status, 100),
+        phase,
+      },
+      languageCode: locale,
+    };
+    const aps: JsonObject = {
+      timestamp,
+      event: kind,
+      'content-state': contentState,
+      'relevance-score': stage === 'out_for_delivery' ? 0.8 : 1,
+    };
+    if (kind === 'start') {
+      aps['attributes-type'] = 'DeliveryActivityAttributes';
+      aps.attributes = { parcelID: parcelId };
+      aps['input-push-token'] = 1;
+      aps['stale-date'] = timestamp + 30 * 60;
+      aps.alert = {
+        title: notificationText(row.label || copy.update, 80),
+        body: notificationBody(row, status, copy, locale, timestamp * 1_000),
+      };
+    } else if (kind === 'update') {
+      aps['stale-date'] = timestamp + 30 * 60;
+    } else {
+      const graceSeconds = stage === 'failed_attempt' || stage === 'ready_for_pickup'
+        ? 60 * 60
+        : LIVE_ACTIVITY_PHASES.has(stage) ? 30 * 60 : -1;
+      aps['dismissal-date'] = timestamp + graceSeconds;
+      const location = notificationText(row.location, 100);
+      aps.alert = {
+        title: notificationText(row.label || copy.update, 80),
+        body: notificationText(location ? `${status} · ${location}` : status, 180),
+      };
+    }
+    return { aps };
+  }
+}
+
 export class CompositePushNotificationService {
   constructor(
     readonly web: WebPushNotificationService | null,
     readonly native: NativePushNotificationService | null,
+    readonly liveActivities: DeliveryLiveActivityNotificationService | null,
   ) {}
 
   async dispatch(): Promise<PushSummary> {
     const combined = emptySummary();
-    for (const service of [this.web, this.native]) {
+    for (const service of [this.liveActivities, this.web, this.native]) {
       if (!service) continue;
       const summary = await service.dispatch();
       combined.attempted += summary.attempted;
@@ -596,7 +788,11 @@ export function pushServices(client: SupabaseServiceClient): CompositePushNotifi
     globalPush.__deliveryPushRuntime = {
       signature,
       client,
-      service: new CompositePushNotificationService(web, native),
+      service: new CompositePushNotificationService(
+        web,
+        native,
+        native ? new DeliveryLiveActivityNotificationService(client, native) : null,
+      ),
     };
   }
   return globalPush.__deliveryPushRuntime.service;

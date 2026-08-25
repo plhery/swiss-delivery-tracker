@@ -12,6 +12,7 @@ import { SupabaseAuthError, SupabaseAuthenticator } from './auth';
 import { fetchBounded, parseJsonBytes } from './boundedFetch';
 import { RateLimiter } from './rateLimit';
 import {
+  DeliveryLiveActivityNotificationService,
   NativePushNotificationService,
   notificationExpectedDelivery,
   notificationText,
@@ -26,6 +27,10 @@ import {
 } from './runtime';
 import { SupabaseClient } from './supabase';
 import {
+  deleteLiveActivityDevice,
+  deleteLiveActivityUpdateToken,
+  liveActivityDevice,
+  liveActivityUpdateToken,
   nativePushDevice,
   newPackageValues,
   notificationPreferences,
@@ -320,12 +325,57 @@ describe('input validation', () => {
 
     expect(nativePushDevice({
       token: 'AB'.repeat(32),
+      installationId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
       environment: 'development',
       locale: 'de',
       deviceName: '  iPhone  ',
       sendTest: true,
-    })).toMatchObject({ token: 'ab'.repeat(32), locale: 'de', deviceName: 'iPhone' });
+    })).toMatchObject({
+      token: 'ab'.repeat(32),
+      installationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      locale: 'de',
+      deviceName: 'iPhone',
+    });
     expect(() => nativePushDevice({ token: 'xyz' }, false)).toThrow('APNs');
+
+    expect(liveActivityDevice({
+      installationId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+      token: 'CD'.repeat(32),
+      environment: 'production',
+      locale: 'fr',
+    })).toEqual({
+      installationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      token: 'cd'.repeat(32),
+      environment: 'production',
+      locale: 'fr',
+    });
+    expect(liveActivityUpdateToken({
+      installationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      activityId: 'activity-123',
+      parcelId: 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB',
+      token: 'EF'.repeat(32),
+      environment: 'development',
+      locale: 'it',
+    })).toMatchObject({
+      activityId: 'activity-123',
+      parcelId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      token: 'ef'.repeat(32),
+    });
+    expect(deleteLiveActivityDevice({
+      installationId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+    })).toEqual({ installationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
+    expect(deleteLiveActivityUpdateToken({
+      installationId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+      activityId: 'activity-123',
+    })).toMatchObject({ activityId: 'activity-123' });
+    expect(() => liveActivityUpdateToken({
+      installationId: 'nope',
+      activityId: '../activity',
+      parcelId: 'nope',
+      token: '00',
+      environment: 'development',
+      locale: 'en',
+    })).toThrow(HttpError);
   });
 
   it('rejects incomplete quiet hours, duplicates, and invalid timezones', () => {
@@ -456,6 +506,187 @@ describe('native notification boundaries', () => {
 
     expect(body).toMatch(/^Paket unterwegs · Z+… · Neue Lieferprognose: morgen$/);
     expect([...body].length).toBeLessThanOrEqual(220);
+  });
+
+  it('builds parcel-stable ActivityKit start, update, and graceful end payloads', () => {
+    const now = Date.UTC(2026, 7, 25, 12) / 1_000;
+    const native = new NativePushNotificationService(
+      {} as never,
+      'TEAM',
+      'KEY',
+      privateKey('prime256v1'),
+      'com.example.delivery',
+      () => now,
+    );
+    const live = new DeliveryLiveActivityNotificationService({} as never, native);
+    const row = {
+      locale: 'de',
+      label: 'Laufschuhe',
+      package_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      carrier: 'swiss-post',
+      stage: 'out_for_delivery',
+      location: 'Zürich',
+      expected_delivery: '2026-08-25 14:00–16:00',
+      timezone: 'Europe/Zurich',
+    };
+
+    expect(live.deliveryKind({ ...row, update_token: '' })).toBe('start');
+    expect(live.deliveryKind({ ...row, update_token: 'ab'.repeat(32) })).toBe('update');
+    expect(live.deliveryKind({ ...row, stage: 'delivered', update_token: 'ab'.repeat(32) }))
+      .toBe('end');
+
+    const start = live.payload(row, 'start');
+    expect(start).toMatchObject({
+      aps: {
+        timestamp: now,
+        event: 'start',
+        'relevance-score': 0.8,
+        'attributes-type': 'DeliveryActivityAttributes',
+        attributes: { parcelID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+        'input-push-token': 1,
+        'stale-date': now + 1_800,
+        'content-state': {
+          languageCode: 'de',
+          parcel: {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            label: 'Laufschuhe',
+            carrier: 'Swiss Post',
+            status: 'In Zustellung',
+            detail: 'heute, 14:00–16:00',
+            phase: 'out_for_delivery',
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(start)).not.toContain('trackingNumber');
+
+    const delivered = live.payload({ ...row, stage: 'delivered' }, 'end');
+    expect(delivered).toMatchObject({
+      aps: {
+        event: 'end',
+        'relevance-score': 1,
+        'dismissal-date': now + 1_800,
+        alert: { title: 'Laufschuhe', body: 'Zugestellt · Zürich' },
+        'content-state': {
+          parcel: { status: 'Zugestellt', detail: 'Zugestellt', phase: 'delivered' },
+        },
+      },
+    });
+  });
+
+  it('collapses superseded ActivityKit events into the newest state and acknowledges all', async () => {
+    const rows = [
+      {
+        device_id: 'device-1',
+        package_id: 'package-1',
+        event_id: 'event-1',
+        event_created_at: '2026-08-25T12:00:00.000Z',
+        update_token_id: 'token-1',
+        update_token: 'ab'.repeat(32),
+        stage: 'out_for_delivery',
+      },
+      {
+        device_id: 'device-1',
+        package_id: 'package-1',
+        event_id: 'event-2',
+        event_created_at: '2026-08-25T12:05:00.000Z',
+        update_token_id: 'token-1',
+        update_token: 'ab'.repeat(32),
+        stage: 'out_for_delivery',
+      },
+    ];
+    const client = {
+      listPendingLiveActivityEvents: vi.fn().mockResolvedValue(rows),
+      recordLiveActivityDeliveries: vi.fn().mockResolvedValue(undefined),
+      updateLiveActivityToken: vi.fn().mockResolvedValue(undefined),
+    };
+    const native = new NativePushNotificationService(
+      client as never,
+      'TEAM',
+      'KEY',
+      privateKey('prime256v1'),
+      'com.example.delivery',
+    );
+    const live = new DeliveryLiveActivityNotificationService(client as never, native);
+    const send = vi.spyOn(live, 'send').mockResolvedValue(undefined);
+
+    await expect(live.dispatch()).resolves.toEqual({
+      attempted: 1,
+      sent: 1,
+      failed: 0,
+      expired: 0,
+    });
+    expect(send).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledWith(rows[1], 'update');
+    expect(client.recordLiveActivityDeliveries).toHaveBeenCalledWith([
+      {
+        deviceId: 'device-1',
+        eventId: 'event-1',
+        packageId: 'package-1',
+        deliveryKind: 'update',
+        eventCreatedAt: '2026-08-25T12:00:00.000Z',
+      },
+      {
+        deviceId: 'device-1',
+        eventId: 'event-2',
+        packageId: 'package-1',
+        deliveryKind: 'update',
+        eventCreatedAt: '2026-08-25T12:05:00.000Z',
+      },
+    ]);
+  });
+
+  it('suppresses only the native alert that a Live Activity successfully replaced', async () => {
+    const liveRow = {
+      device_id: 'device-1',
+      package_id: 'package-1',
+      event_id: 'event-1',
+      event_created_at: '2026-08-25T12:00:00.000Z',
+      stage: 'out_for_delivery',
+      live_activity_delivered: true,
+    };
+    const suppressedClient = {
+      listPendingNativePushNotifications: vi.fn().mockResolvedValue([liveRow]),
+      recordNativePushDeliveries: vi.fn().mockResolvedValue(undefined),
+    };
+    const suppressed = new NativePushNotificationService(
+      suppressedClient as never,
+      'TEAM',
+      'KEY',
+      privateKey('prime256v1'),
+      'com.example.delivery',
+    );
+    const suppressedSend = vi.spyOn(suppressed, 'send').mockResolvedValue(undefined);
+
+    await expect(suppressed.dispatch()).resolves.toEqual({
+      attempted: 0,
+      sent: 0,
+      failed: 0,
+      expired: 0,
+    });
+    expect(suppressedSend).not.toHaveBeenCalled();
+    expect(suppressedClient.recordNativePushDeliveries)
+      .toHaveBeenCalledWith('device-1', ['event-1']);
+
+    const fallbackClient = {
+      listPendingNativePushNotifications: vi.fn().mockResolvedValue([{
+        ...liveRow,
+        live_activity_delivered: false,
+      }]),
+      recordNativePushDeliveries: vi.fn().mockResolvedValue(undefined),
+      updateNativePushDevice: vi.fn().mockResolvedValue(undefined),
+    };
+    const fallback = new NativePushNotificationService(
+      fallbackClient as never,
+      'TEAM',
+      'KEY',
+      privateKey('prime256v1'),
+      'com.example.delivery',
+    );
+    const fallbackSend = vi.spyOn(fallback, 'send').mockResolvedValue(undefined);
+
+    await expect(fallback.dispatch()).resolves.toMatchObject({ attempted: 1, sent: 1 });
+    expect(fallbackSend).toHaveBeenCalledOnce();
   });
 
   it('rejects incomplete Web Push credentials during service startup', () => {

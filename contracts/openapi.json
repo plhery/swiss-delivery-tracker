@@ -999,6 +999,146 @@
         }
       }
     },
+    "/api/live-activities/devices": {
+      "post": {
+        "operationId": "upsertLiveActivityDevice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveActivityDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Live Activity push-to-start device stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteLiveActivityDevice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteLiveActivityDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Live Activity device removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/api/live-activities/activities": {
+      "post": {
+        "operationId": "upsertLiveActivityUpdateToken",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveActivityUpdateTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Live Activity update token stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteLiveActivityUpdateToken",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteLiveActivityUpdateTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Live Activity update token removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "operationId": "getHealth",
@@ -1625,6 +1765,22 @@
           }
         }
       },
+      "NativePushEnvironment": {
+        "type": "string",
+        "enum": [
+          "development",
+          "production"
+        ]
+      },
+      "NativePushLocale": {
+        "type": "string",
+        "enum": [
+          "en",
+          "de",
+          "fr",
+          "it"
+        ]
+      },
       "NativePushDeviceRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -1641,21 +1797,15 @@
             "maxLength": 512,
             "pattern": "^[0-9A-Fa-f]+$"
           },
-          "environment": {
+          "installationId": {
             "type": "string",
-            "enum": [
-              "development",
-              "production"
-            ]
+            "format": "uuid"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/NativePushEnvironment"
           },
           "locale": {
-            "type": "string",
-            "enum": [
-              "en",
-              "de",
-              "fr",
-              "it"
-            ]
+            "$ref": "#/components/schemas/NativePushLocale"
           },
           "deviceName": {
             "type": "string",
@@ -1678,6 +1828,107 @@
             "minLength": 32,
             "maxLength": 512,
             "pattern": "^[0-9A-Fa-f]+$"
+          }
+        }
+      },
+      "LiveActivityDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installationId",
+          "token",
+          "environment",
+          "locale"
+        ],
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 512,
+            "pattern": "^[0-9A-Fa-f]+$"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/NativePushEnvironment"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/NativePushLocale"
+          }
+        }
+      },
+      "DeleteLiveActivityDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installationId"
+        ],
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "LiveActivityUpdateTokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installationId",
+          "activityId",
+          "parcelId",
+          "token",
+          "environment",
+          "locale"
+        ],
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "activityId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9-]+$"
+          },
+          "parcelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 512,
+            "pattern": "^[0-9A-Fa-f]+$"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/NativePushEnvironment"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/NativePushLocale"
+          }
+        }
+      },
+      "DeleteLiveActivityUpdateTokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installationId",
+          "activityId"
+        ],
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "activityId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9-]+$"
           }
         }
       },

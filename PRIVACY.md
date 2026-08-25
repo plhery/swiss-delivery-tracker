@@ -1,6 +1,6 @@
 # Swiss Delivery Tracker privacy notice
 
-Effective: 5 August 2026
+Effective: 25 August 2026
 
 This notice describes the official Swiss Delivery Tracker service. A third
 party running a fork controls its own deployment and must publish its own
@@ -14,8 +14,10 @@ notice.
   timestamps, optional Planzer shared and Dachser Customer Iberia capability
   URLs, and the delivery postcode supplied for a DPD parcel.
 - Web Push subscription endpoints, encryption keys, browser user agent, native
-  iPhone APNs device token, optional device name and locale, delivery
-  acknowledgements, and notification errors when you enable notifications.
+  iPhone APNs device token, optional device name and locale, a random local
+  installation identifier, ActivityKit push-to-start and per-activity update
+  tokens, delivery acknowledgements, and delivery errors when you enable the
+  corresponding notification or Live Activity setting.
 - Technical request data processed by the hosting, reverse-proxy, Auth, and mail
   infrastructure, such as IP address, timestamp, and user agent. The Swiss
   Delivery Tracker application does not intentionally retain access logs or add
@@ -35,7 +37,10 @@ the parcel's supplied postcode for recipient verification, and Planzer receives
 the supplied shared-link capability. Dachser receives its supplied capability
 URL; the application discards sender, recipient, address, contact and document
 fields from Dachser's response. Browser push services receive encrypted Web Push
-messages; Apple processes native notification payloads through APNs.
+messages; Apple processes native notification and Live Activity payloads through
+APNs. Those Apple payloads can contain a parcel label, carrier, status, location,
+and expected delivery text, but Swiss Delivery Tracker does not put the tracking
+number in them.
 
 Swiss Delivery Tracker does not sell personal data, serve advertising, or
 include third-party behavioral analytics.
@@ -43,10 +48,12 @@ include third-party behavioral analytics.
 ## Retention and control
 
 Parcel data remains until you delete the account. Archiving a parcel only hides
-it from the active list and retains its history. Disabled browser endpoints,
-native device registrations, and delivery acknowledgements may remain until
-account deletion or operational cleanup. Infrastructure backups and security
-logs may persist for the limited retention configured by their operator.
+it from the active list and retains its history. Turning off Live Activities or
+signing out removes that installation's ActivityKit tokens; disabled browser
+endpoints, ordinary native device registrations, and delivery acknowledgements
+may remain until account deletion or operational cleanup. Infrastructure backups
+and security logs may persist for the limited retention configured by their
+operator.
 
 Use **Download my data** in the account menu for a machine-readable export. Use
 **Delete account** to permanently delete the Auth user and cascade-delete their
@@ -59,9 +66,12 @@ The browser stores the Supabase session, application preferences, an offline
 application shell, and an account-scoped offline parcel snapshot. The iPhone app
 stores its session in Keychain and a protected account-scoped parcel snapshot;
 it requests a current APNs token from Apple instead of persisting that token
-locally. Either snapshot can include tracking history, a carrier capability URL,
-and a DPD postcode. Signing out clears account-scoped local state. Browser or
-operating-system controls can clear app data and notification permissions.
+locally. It stores a random installation identifier and the independent Home
+Screen widget and Live Activity preferences on the device. Either snapshot can
+include tracking history, a carrier capability URL, and a DPD postcode. Signing
+out clears account-scoped local state and ends Live Activities. Browser or
+operating-system controls can clear app data, Live Activities, and notification
+permissions.
 
 ## Security and contact
 

@@ -41,6 +41,17 @@ extension TrackingStage {
 
     var localizationKey: String { "stage.\(rawValue)" }
     var isFinal: Bool { self == .delivered || self == .returned }
+
+    var deliveryActivityPhase: DeliveryActivityPhase? {
+        switch self {
+        case .outForDelivery: .outForDelivery
+        case .delivered: .delivered
+        case .failedAttempt: .failedAttempt
+        case .readyForPickup: .readyForPickup
+        case .returned: .returned
+        default: nil
+        }
+    }
 }
 
 extension Parcel {

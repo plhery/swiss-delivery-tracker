@@ -218,16 +218,92 @@ struct PushSubscriptionResponse: Codable, Equatable, Hashable, Sendable {
     var testSent: Bool
 }
 
+enum NativePushEnvironment: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
+    case development
+    case production
+
+    var id: String { rawValue }
+}
+
+enum NativePushLocale: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
+    case en
+    case de
+    case fr
+    case it
+
+    var id: String { rawValue }
+}
+
 struct NativePushDeviceRequest: Codable, Equatable, Hashable, Sendable {
     var token: String
+    var installationID: UUID? = nil
     var environment: NativePushEnvironment
     var locale: NativePushLocale
     var deviceName: String? = nil
     var sendTest: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case token
+        case installationID = "installationId"
+        case environment
+        case locale
+        case deviceName
+        case sendTest
+    }
 }
 
 struct DeleteNativePushDeviceRequest: Codable, Equatable, Hashable, Sendable {
     var token: String
+}
+
+struct LiveActivityDeviceRequest: Codable, Equatable, Hashable, Sendable {
+    var installationID: UUID
+    var token: String
+    var environment: NativePushEnvironment
+    var locale: NativePushLocale
+
+    private enum CodingKeys: String, CodingKey {
+        case installationID = "installationId"
+        case token
+        case environment
+        case locale
+    }
+}
+
+struct DeleteLiveActivityDeviceRequest: Codable, Equatable, Hashable, Sendable {
+    var installationID: UUID
+
+    private enum CodingKeys: String, CodingKey {
+        case installationID = "installationId"
+    }
+}
+
+struct LiveActivityUpdateTokenRequest: Codable, Equatable, Hashable, Sendable {
+    var installationID: UUID
+    var activityID: String
+    var parcelID: UUID
+    var token: String
+    var environment: NativePushEnvironment
+    var locale: NativePushLocale
+
+    private enum CodingKeys: String, CodingKey {
+        case installationID = "installationId"
+        case activityID = "activityId"
+        case parcelID = "parcelId"
+        case token
+        case environment
+        case locale
+    }
+}
+
+struct DeleteLiveActivityUpdateTokenRequest: Codable, Equatable, Hashable, Sendable {
+    var installationID: UUID
+    var activityID: String
+
+    private enum CodingKeys: String, CodingKey {
+        case installationID = "installationId"
+        case activityID = "activityId"
+    }
 }
 
 enum SyncJobStatus: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
@@ -284,22 +360,6 @@ struct AccountExportAccount: Codable, Equatable, Hashable, Sendable, Identifiabl
 struct CarrierData: Codable, Equatable, Hashable, Sendable {
     var activeTrackingCarrier: CarrierID? = nil
     var swissPostReady: Bool? = nil
-}
-
-enum NativePushEnvironment: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
-    case development
-    case production
-
-    var id: String { rawValue }
-}
-
-enum NativePushLocale: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
-    case en
-    case de
-    case fr
-    case it
-
-    var id: String { rawValue }
 }
 
 extension Parcel {

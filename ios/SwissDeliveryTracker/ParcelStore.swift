@@ -7,7 +7,7 @@ import WidgetKit
 @MainActor
 final class ParcelStore: ObservableObject {
     @Published private(set) var parcels: [Parcel] = [] {
-        didSet { publishDeliveryWidget() }
+        didSet { publishDeliverySurfaces() }
     }
     @Published private(set) var loading = false
     @Published private(set) var refreshing = false
@@ -19,6 +19,8 @@ final class ParcelStore: ObservableObject {
     @Published private(set) var notificationPreferences: NotificationPreferences?
     @Published private(set) var notificationError: String?
     @Published private(set) var deliveryWidgetEnabled = true
+    @Published private(set) var deliveryLiveActivitiesEnabled = true
+    @Published private(set) var deliveryLiveActivityError: String?
     @Published var undoParcel: Parcel?
 
     let configuration: AppConfiguration
@@ -31,19 +33,29 @@ final class ParcelStore: ObservableObject {
     private var pollingTask: Task<Void, Never>?
     private var jobMonitoringTask: Task<Void, Never>?
     private var deliveryActivityTask: Task<Void, Never>?
+    private var deliveryPushToStartTask: Task<Void, Never>?
+    private var deliveryActivityUpdatesTask: Task<Void, Never>?
+    private var deliveryActivityPushTokenTasks: [String: Task<Void, Never>] = [:]
+    private var deliveryActivityStateTasks: [String: Task<Void, Never>] = [:]
     private var pendingJobIDs = Set<UUID>()
     private var isActive = true
     private var lastStartedAsDemo: Bool?
     private var notificationEnableInProgress = false
     private var nativePushGeneration = 0
+    private var deliveryLiveActivityGeneration = 0
+    private var deliveryLiveActivitySystemDisabled = false
+    private var deliveryLiveActivityRegistrationRemovalPending = false
+    private let installationID: UUID
     private let notificationOptOutKey = "sdt.notificationsDeviceOptOut"
     private let nativePushRegisteredKey = "sdt.notificationsNativePushRegistered.v1"
     private let demoNotificationsKey = "sdt.demoNotificationsEnabled"
+    private static let installationIDKey = "sdt.installationID.v1"
 
     init(configuration: AppConfiguration = .current, session: SessionStore, localizer: Localizer) {
         self.configuration = configuration
         self.session = session
         self.localizer = localizer
+        installationID = Self.installationIdentifier()
         deliveryWidgetStore = DeliveryWidgetSharedStore(
             appGroupIdentifier: configuration.appGroupIdentifier,
             fallbackToStandard: true
@@ -51,6 +63,9 @@ final class ParcelStore: ObservableObject {
         api = DeliveryAPIClient(configuration: configuration, session: session)
         demo = DemoRepository()
         deliveryWidgetEnabled = deliveryWidgetStore?.isEnabled ?? true
+        deliveryLiveActivitiesEnabled = deliveryWidgetStore?.liveActivitiesEnabled ?? true
+        deliveryLiveActivityRegistrationRemovalPending = !deliveryLiveActivitiesEnabled
+        deliveryWidgetStore?.setLiveActivitiesEnabled(deliveryLiveActivitiesEnabled)
     }
 
     var isDemo: Bool { session.isDemo }
@@ -66,15 +81,32 @@ final class ParcelStore: ObservableObject {
         publishDeliveryWidget()
     }
 
-    func refreshDeliveryWidget() {
-        publishDeliveryWidget()
+    func setDeliveryLiveActivitiesEnabled(_ enabled: Bool) {
+        guard deliveryLiveActivitiesEnabled != enabled else { return }
+        deliveryLiveActivitiesEnabled = enabled
+        deliveryWidgetStore?.setLiveActivitiesEnabled(enabled)
+        deliveryLiveActivitySystemDisabled = false
+        deliveryLiveActivityRegistrationRemovalPending = !enabled
+        deliveryLiveActivityError = nil
+        if enabled {
+            startDeliveryLiveActivityObservers()
+        } else {
+            stopDeliveryLiveActivityObservers()
+        }
+        scheduleDeliveryLiveActivities()
     }
 
-    func clearDeliveryWidget() {
+    func refreshDeliverySurfaces() {
+        publishDeliverySurfaces()
+        registerCurrentDeliveryPushToStartToken()
+        registerCurrentDeliveryActivityUpdateTokens()
+    }
+
+    func clearDeliverySurfaces() {
         deliveryWidgetStore?.setLanguageCode(localizer.language.rawValue)
         deliveryWidgetStore?.clearSnapshot()
         WidgetCenter.shared.reloadTimelines(ofKind: DeliveryWidgetSharedStore.kind)
-        scheduleDeliveryLiveActivity(snapshot: nil)
+        scheduleDeliveryLiveActivities(forceEnd: true)
     }
 
     func start() async {
@@ -96,6 +128,7 @@ final class ParcelStore: ObservableObject {
         }
         await load(showSpinner: true)
         await refreshNotificationState()
+        startDeliveryLiveActivityObservers()
         if !isDemo {
             await loadNotificationPreferences()
             beginPolling()
@@ -104,7 +137,11 @@ final class ParcelStore: ObservableObject {
 
     func setActive(_ active: Bool) {
         isActive = active
-        if active && session.isAuthenticated { Task { await load(showSpinner: false) } }
+        if active && session.isAuthenticated {
+            registerCurrentDeliveryPushToStartToken()
+            registerCurrentDeliveryActivityUpdateTokens()
+            Task { await load(showSpinner: false) }
+        }
     }
 
     func load(showSpinner: Bool = false) async {
@@ -244,12 +281,17 @@ final class ParcelStore: ObservableObject {
         guard !isDemo else {
             demo.reset()
             parcels = []
+            await endAllDeliveryLiveActivities()
             return
         }
         nativePushGeneration += 1
+        deliveryLiveActivityGeneration += 1
+        deliveryLiveActivityRegistrationRemovalPending = true
+        stopDeliveryLiveActivityObservers()
         jobMonitoringTask?.cancel()
         pendingJobIDs.removeAll()
         try await api.deleteAccount(confirmation: confirmation)
+        await endAllDeliveryLiveActivities()
         UIApplication.shared.unregisterForRemoteNotifications()
         AppDelegate.clearDeviceToken()
         UserDefaults.standard.set(true, forKey: notificationOptOutKey)
@@ -264,11 +306,16 @@ final class ParcelStore: ObservableObject {
 
     func signOut() async throws {
         nativePushGeneration += 1
+        deliveryLiveActivityGeneration += 1
+        deliveryLiveActivityRegistrationRemovalPending = true
         jobMonitoringTask?.cancel()
         pendingJobIDs.removeAll()
         if let token = AppDelegate.currentDeviceToken, !isDemo {
             try? await api.unregisterNativePushToken(token)
         }
+        if !isDemo { try? await api.unregisterLiveActivityDevice(installationID: installationID) }
+        stopDeliveryLiveActivityObservers()
+        await endAllDeliveryLiveActivities()
         UIApplication.shared.unregisterForRemoteNotifications()
         AppDelegate.clearDeviceToken()
         UserDefaults.standard.set(true, forKey: notificationOptOutKey)
@@ -320,6 +367,7 @@ final class ParcelStore: ObservableObject {
         }
         let sent = try await api.registerNativePushToken(
             token,
+            installationID: installationID,
             language: language,
             sendTest: true
         )
@@ -383,6 +431,7 @@ final class ParcelStore: ObservableObject {
         do {
             _ = try await api.registerNativePushToken(
                 token,
+                installationID: installationID,
                 language: language,
                 sendTest: false
             )
@@ -408,6 +457,11 @@ final class ParcelStore: ObservableObject {
     private func upsert(_ parcel: Parcel) {
         if let index = parcels.firstIndex(where: { $0.id == parcel.id }) { parcels[index] = parcel }
         else { parcels.append(parcel) }
+    }
+
+    private func publishDeliverySurfaces() {
+        publishDeliveryWidget()
+        scheduleDeliveryLiveActivities()
     }
 
     private func publishDeliveryWidget() {
@@ -448,47 +502,392 @@ final class ParcelStore: ObservableObject {
             deliveryWidgetStore?.clearSnapshot()
         }
         WidgetCenter.shared.reloadTimelines(ofKind: DeliveryWidgetSharedStore.kind)
-        scheduleDeliveryLiveActivity(snapshot: snapshot)
     }
 
-    private func scheduleDeliveryLiveActivity(snapshot: DeliveryWidgetSnapshot?) {
+    private func scheduleDeliveryLiveActivities(forceEnd: Bool = false) {
         deliveryActivityTask?.cancel()
         deliveryActivityTask = Task { [weak self] in
             guard let self else { return }
-            await self.updateDeliveryLiveActivity(snapshot: snapshot)
+            if forceEnd {
+                await self.endAllDeliveryLiveActivities()
+            } else {
+                await self.updateDeliveryLiveActivities(parcels: self.parcels)
+            }
         }
     }
 
-    private func updateDeliveryLiveActivity(snapshot: DeliveryWidgetSnapshot?) async {
+    private func updateDeliveryLiveActivities(parcels: [Parcel]) async {
         let activities = Activity<DeliveryActivityAttributes>.activities
-        guard deliveryWidgetEnabled,
-              let parcel = snapshot?.parcels.first else {
-            for activity in activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
+        guard deliveryLiveActivitiesEnabled else {
+            await endAllDeliveryLiveActivities()
+            await unregisterDeliveryLiveActivityDevice()
             return
         }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            deliveryLiveActivitySystemDisabled = true
+            deliveryLiveActivityError = localizer.text("liveActivity.systemDisabled")
+            return
+        }
+        if deliveryLiveActivitySystemDisabled {
+            deliveryLiveActivitySystemDisabled = false
+            deliveryLiveActivityError = nil
+        }
 
-        let state = DeliveryActivityAttributes.ContentState(
-            parcel: parcel,
-            languageCode: snapshot?.languageCode ?? localizer.language.rawValue
-        )
-        let content = ActivityContent(
-            state: state,
-            staleDate: Date().addingTimeInterval(30 * 60)
-        )
-        if let current = activities.first {
-            await current.update(content)
-            for extra in activities.dropFirst() {
-                await extra.end(nil, dismissalPolicy: .immediate)
+        let parcelsByID = Dictionary(uniqueKeysWithValues: parcels.map { ($0.id, $0) })
+        var primaryActivityByParcel: [UUID: Activity<DeliveryActivityAttributes>] = [:]
+        var duplicateActivityIDs = Set<String>()
+        for activity in activities {
+            let parcelID = activity.attributes.parcelID
+            if primaryActivityByParcel[parcelID] == nil {
+                primaryActivityByParcel[parcelID] = activity
+            } else {
+                duplicateActivityIDs.insert(activity.id)
             }
-        } else if ActivityAuthorizationInfo().areActivitiesEnabled {
-            _ = try? Activity.request(
-                attributes: DeliveryActivityAttributes(activityID: UUID()),
+        }
+
+        let orderedOutForDelivery = ParcelOrganizer.visible(
+            parcels,
+            query: "",
+            status: .active,
+            carrier: nil,
+            sort: .priority
+        ).filter { $0.currentStage == .outForDelivery }
+        var desiredParcelIDs: [UUID] = []
+        for activity in activities where !duplicateActivityIDs.contains(activity.id) {
+            let parcelID = activity.attributes.parcelID
+            guard parcelsByID[parcelID]?.currentStage == .outForDelivery else { continue }
+            if !desiredParcelIDs.contains(parcelID) && desiredParcelIDs.count < 2 {
+                desiredParcelIDs.append(parcelID)
+            }
+        }
+        for parcel in orderedOutForDelivery
+        where desiredParcelIDs.count < 2 && !desiredParcelIDs.contains(parcel.id) {
+            desiredParcelIDs.append(parcel.id)
+        }
+        let desired = Set(desiredParcelIDs)
+
+        for activity in activities {
+            if duplicateActivityIDs.contains(activity.id) {
+                await endDeliveryLiveActivity(activity)
+                continue
+            }
+            guard let parcel = parcelsByID[activity.attributes.parcelID], !parcel.isArchived else {
+                await endDeliveryLiveActivity(activity)
+                continue
+            }
+            if parcel.currentStage == .outForDelivery && desired.contains(parcel.id) {
+                let relevance = desiredParcelIDs.firstIndex(of: parcel.id) == 0 ? 1.0 : 0.8
+                await activity.update(deliveryActivityContent(
+                    for: parcel,
+                    phase: .outForDelivery,
+                    relevanceScore: relevance
+                ))
+                observeDeliveryLiveActivity(activity)
+            } else if let phase = parcel.currentStage?.deliveryActivityPhase,
+                      phase != .outForDelivery {
+                let content = deliveryActivityContent(
+                    for: parcel,
+                    phase: phase,
+                    staleDate: nil,
+                    relevanceScore: 1
+                )
+                let grace: TimeInterval = phase == .failedAttempt || phase == .readyForPickup
+                    ? 60 * 60
+                    : 30 * 60
+                await activity.end(
+                    content,
+                    dismissalPolicy: .after(Date().addingTimeInterval(grace))
+                )
+                await unregisterDeliveryLiveActivity(activityID: activity.id)
+            } else {
+                await endDeliveryLiveActivity(activity)
+            }
+        }
+
+        let existingParcelIDs = Set(
+            Activity<DeliveryActivityAttributes>.activities.map(\.attributes.parcelID)
+        )
+        for parcelID in desiredParcelIDs where !existingParcelIDs.contains(parcelID) {
+            guard let parcel = parcelsByID[parcelID] else { continue }
+            let relevance = desiredParcelIDs.firstIndex(of: parcelID) == 0 ? 1.0 : 0.8
+            startDeliveryLiveActivity(for: parcel, relevanceScore: relevance)
+        }
+    }
+
+    private func startDeliveryLiveActivity(for parcel: Parcel, relevanceScore: Double) {
+        let attributes = DeliveryActivityAttributes(parcelID: parcel.id)
+        let content = deliveryActivityContent(
+            for: parcel,
+            phase: .outForDelivery,
+            relevanceScore: relevanceScore
+        )
+        let activity: Activity<DeliveryActivityAttributes>?
+        do {
+            activity = try Activity.request(
+                attributes: attributes,
+                content: content,
+                pushType: .token
+            )
+        } catch {
+            activity = try? Activity.request(
+                attributes: attributes,
                 content: content,
                 pushType: nil
             )
         }
+        if let activity { observeDeliveryLiveActivity(activity) }
+    }
+
+    private func deliveryActivityContent(
+        for parcel: Parcel,
+        phase: DeliveryActivityPhase,
+        staleDate: Date? = Date().addingTimeInterval(30 * 60),
+        relevanceScore: Double = 0
+    ) -> ActivityContent<DeliveryActivityAttributes.ContentState> {
+        let status = localizer.text(parcel.displayStatus.key)
+        let detail = phase == .outForDelivery
+            ? parcel.expectedDelivery.map { localizer.expectedDelivery($0) } ?? status
+            : status
+        let activityParcel = DeliveryActivityParcel(
+            id: parcel.id,
+            label: parcel.label.nonEmpty ?? localizer.text("common.parcel"),
+            carrier: CarrierCatalog.shared.info(for: parcel.carrier).displayName,
+            status: status,
+            detail: detail,
+            phase: phase
+        )
+        return ActivityContent(
+            state: DeliveryActivityAttributes.ContentState(
+                parcel: activityParcel,
+                languageCode: localizer.language.rawValue
+            ),
+            staleDate: staleDate,
+            relevanceScore: relevanceScore
+        )
+    }
+
+    private func endDeliveryLiveActivity(
+        _ activity: Activity<DeliveryActivityAttributes>
+    ) async {
+        await activity.end(nil, dismissalPolicy: .immediate)
+        await unregisterDeliveryLiveActivity(activityID: activity.id)
+    }
+
+    private func endAllDeliveryLiveActivities() async {
+        for activity in Activity<DeliveryActivityAttributes>.activities {
+            await endDeliveryLiveActivity(activity)
+        }
+    }
+
+    private func startDeliveryLiveActivityObservers() {
+        stopDeliveryLiveActivityObservers()
+        guard deliveryLiveActivitiesEnabled, !isDemo, session.isAuthenticated else { return }
+        deliveryLiveActivityRegistrationRemovalPending = false
+        let generation = deliveryLiveActivityGeneration
+
+        for activity in Activity<DeliveryActivityAttributes>.activities {
+            observeDeliveryLiveActivity(activity)
+        }
+        deliveryPushToStartTask = Task { [weak self] in
+            guard let self else { return }
+            if let token = Activity<DeliveryActivityAttributes>.pushToStartToken {
+                await self.registerDeliveryPushToStartToken(token, generation: generation)
+            }
+            for await token in Activity<DeliveryActivityAttributes>.pushToStartTokenUpdates {
+                if Task.isCancelled { return }
+                await self.registerDeliveryPushToStartToken(token, generation: generation)
+            }
+        }
+        deliveryActivityUpdatesTask = Task { [weak self] in
+            guard let self else { return }
+            for await activity in Activity<DeliveryActivityAttributes>.activityUpdates {
+                if Task.isCancelled { return }
+                self.observeDeliveryLiveActivity(activity)
+                await self.trimExcessDeliveryLiveActivities()
+            }
+        }
+    }
+
+    private func stopDeliveryLiveActivityObservers() {
+        deliveryLiveActivityGeneration += 1
+        deliveryPushToStartTask?.cancel()
+        deliveryPushToStartTask = nil
+        deliveryActivityUpdatesTask?.cancel()
+        deliveryActivityUpdatesTask = nil
+        deliveryActivityPushTokenTasks.values.forEach { $0.cancel() }
+        deliveryActivityPushTokenTasks.removeAll()
+        deliveryActivityStateTasks.values.forEach { $0.cancel() }
+        deliveryActivityStateTasks.removeAll()
+    }
+
+    private func observeDeliveryLiveActivity(
+        _ activity: Activity<DeliveryActivityAttributes>
+    ) {
+        guard deliveryLiveActivitiesEnabled,
+              !deliveryLiveActivityRegistrationRemovalPending,
+              !isDemo,
+              session.isAuthenticated else { return }
+        let activityID = activity.id
+        let generation = deliveryLiveActivityGeneration
+        if deliveryActivityPushTokenTasks[activityID] == nil {
+            deliveryActivityPushTokenTasks[activityID] = Task { [weak self] in
+                guard let self else { return }
+                if let token = activity.pushToken {
+                    await self.registerDeliveryActivityUpdateToken(
+                        token,
+                        activity: activity,
+                        generation: generation
+                    )
+                }
+                for await token in activity.pushTokenUpdates {
+                    if Task.isCancelled { return }
+                    await self.registerDeliveryActivityUpdateToken(
+                        token,
+                        activity: activity,
+                        generation: generation
+                    )
+                }
+            }
+        }
+        if deliveryActivityStateTasks[activityID] == nil {
+            deliveryActivityStateTasks[activityID] = Task { [weak self] in
+                guard let self else { return }
+                for await state in activity.activityStateUpdates {
+                    if Task.isCancelled { return }
+                    guard state == .ended || state == .dismissed else { continue }
+                    await self.unregisterDeliveryLiveActivity(activityID: activityID)
+                    self.deliveryActivityPushTokenTasks[activityID]?.cancel()
+                    self.deliveryActivityPushTokenTasks[activityID] = nil
+                    self.deliveryActivityStateTasks[activityID] = nil
+                    return
+                }
+            }
+        }
+    }
+
+    private func registerCurrentDeliveryPushToStartToken() {
+        guard let token = Activity<DeliveryActivityAttributes>.pushToStartToken else { return }
+        let generation = deliveryLiveActivityGeneration
+        Task { [weak self] in
+            await self?.registerDeliveryPushToStartToken(token, generation: generation)
+        }
+    }
+
+    private func registerCurrentDeliveryActivityUpdateTokens() {
+        let generation = deliveryLiveActivityGeneration
+        for activity in Activity<DeliveryActivityAttributes>.activities {
+            guard let token = activity.pushToken else { continue }
+            Task { [weak self] in
+                await self?.registerDeliveryActivityUpdateToken(
+                    token,
+                    activity: activity,
+                    generation: generation
+                )
+            }
+        }
+    }
+
+    private func registerDeliveryPushToStartToken(
+        _ token: Data,
+        generation: Int
+    ) async {
+        guard generation == deliveryLiveActivityGeneration,
+              deliveryLiveActivitiesEnabled,
+              !deliveryLiveActivityRegistrationRemovalPending,
+              !isDemo,
+              session.isAuthenticated else { return }
+        do {
+            try await api.registerLiveActivityDevice(
+                token: token.hexadecimalString,
+                installationID: installationID,
+                language: localizer.language
+            )
+            guard generation == deliveryLiveActivityGeneration else {
+                if deliveryLiveActivityRegistrationRemovalPending {
+                    try? await api.unregisterLiveActivityDevice(installationID: installationID)
+                } else {
+                    registerCurrentDeliveryPushToStartToken()
+                }
+                return
+            }
+            deliveryLiveActivityError = nil
+        } catch {
+            if generation == deliveryLiveActivityGeneration {
+                deliveryLiveActivityError = localizer.errorMessage(error)
+            }
+        }
+    }
+
+    private func registerDeliveryActivityUpdateToken(
+        _ token: Data,
+        activity: Activity<DeliveryActivityAttributes>,
+        generation: Int
+    ) async {
+        guard generation == deliveryLiveActivityGeneration,
+              deliveryLiveActivitiesEnabled,
+              !deliveryLiveActivityRegistrationRemovalPending,
+              !isDemo,
+              session.isAuthenticated else { return }
+        do {
+            try await api.registerLiveActivityUpdateToken(
+                activityID: activity.id,
+                parcelID: activity.attributes.parcelID,
+                token: token.hexadecimalString,
+                installationID: installationID,
+                language: localizer.language
+            )
+            if generation == deliveryLiveActivityGeneration {
+                deliveryLiveActivityError = nil
+            }
+        } catch {
+            if generation == deliveryLiveActivityGeneration {
+                deliveryLiveActivityError = localizer.errorMessage(error)
+            }
+        }
+    }
+
+    private func unregisterDeliveryLiveActivity(activityID: String) async {
+        guard !isDemo, session.isAuthenticated else { return }
+        try? await api.unregisterLiveActivityUpdateToken(
+            activityID: activityID,
+            installationID: installationID
+        )
+    }
+
+    private func unregisterDeliveryLiveActivityDevice() async {
+        guard !isDemo, session.isAuthenticated else { return }
+        do {
+            try await api.unregisterLiveActivityDevice(installationID: installationID)
+            deliveryLiveActivityError = nil
+        } catch {
+            deliveryLiveActivityError = localizer.errorMessage(error)
+        }
+    }
+
+    private func trimExcessDeliveryLiveActivities() async {
+        var seen = Set<UUID>()
+        var retained = 0
+        for activity in Activity<DeliveryActivityAttributes>.activities {
+            let parcelID = activity.attributes.parcelID
+            guard activity.content.state.parcel.phase == .outForDelivery else { continue }
+            if seen.contains(parcelID) || retained >= 2 {
+                await endDeliveryLiveActivity(activity)
+            } else {
+                seen.insert(parcelID)
+                retained += 1
+            }
+        }
+    }
+
+    private static func installationIdentifier(
+        defaults: UserDefaults = .standard
+    ) -> UUID {
+        if let raw = defaults.string(forKey: installationIDKey), let value = UUID(uuidString: raw) {
+            return value
+        }
+        let value = UUID()
+        defaults.set(value.uuidString, forKey: installationIDKey)
+        return value
     }
 
     private func beginPolling() {
@@ -539,6 +938,12 @@ private struct DemoExport: Encodable {
     let exportedAt: String
     let mode: String
     let packages: [Parcel]
+}
+
+private extension Data {
+    var hexadecimalString: String {
+        map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 private struct ParcelCache {

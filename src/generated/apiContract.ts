@@ -599,16 +599,46 @@ export interface ApiPushSubscriptionResponse {
   "testSent": boolean;
 }
 
+export type ApiNativePushEnvironment = "development" | "production";
+
+export type ApiNativePushLocale = "en" | "de" | "fr" | "it";
+
 export interface ApiNativePushDeviceRequest {
   "token": string;
-  "environment": "development" | "production";
-  "locale": "en" | "de" | "fr" | "it";
+  "installationId"?: string;
+  "environment": ApiNativePushEnvironment;
+  "locale": ApiNativePushLocale;
   "deviceName"?: string;
   "sendTest": boolean;
 }
 
 export interface ApiDeleteNativePushDeviceRequest {
   "token": string;
+}
+
+export interface ApiLiveActivityDeviceRequest {
+  "installationId": string;
+  "token": string;
+  "environment": ApiNativePushEnvironment;
+  "locale": ApiNativePushLocale;
+}
+
+export interface ApiDeleteLiveActivityDeviceRequest {
+  "installationId": string;
+}
+
+export interface ApiLiveActivityUpdateTokenRequest {
+  "installationId": string;
+  "activityId": string;
+  "parcelId": string;
+  "token": string;
+  "environment": ApiNativePushEnvironment;
+  "locale": ApiNativePushLocale;
+}
+
+export interface ApiDeleteLiveActivityUpdateTokenRequest {
+  "installationId": string;
+  "activityId": string;
 }
 
 export type ApiSyncJobStatus = "queued" | "running" | "succeeded" | "failed";

@@ -54,18 +54,26 @@ requests the current opaque device token from Apple at launch and forwards it
 over the authenticated API; it does not persist that token locally. Debug
 builds register against APNs sandbox and Release builds use production.
 
+Live Activities are a separate account setting and do not depend on alert
+notification permission. When enabled, the app registers ActivityKit's opaque
+push-to-start token and each active activity's update token with the authenticated
+service. This lets the server start, update, and end the delivery surface while
+the app is closed. Signing out, deleting the account, or turning the setting off
+ends local activities and removes that installation's ActivityKit registration.
+
 The Delivery Widget shows the next active parcel and prioritizes up to two
 out-for-delivery parcels. Its small card and each parcel in its medium card open
-the corresponding parcel in the app. The same target supplies a Lock Screen and
-Dynamic Island Live Activity for the highest-priority parcel. Account settings
-can disable both surfaces, clear their shared parcel snapshot, and end the Live
-Activity.
+the corresponding parcel in the app. The same target supplies separate Lock
+Screen and Dynamic Island Live Activities for up to two parcels. An activity
+appears only at `out_for_delivery`, stays tied to that parcel, and shows a
+delivered, failed-attempt, pickup, or return outcome briefly before dismissal.
+Home Screen widget sharing and Live Activities have independent toggles.
 
 The repository's `scripts/refresh-ios-app.sh` helper can install with a free
 Personal Team. Apple does not allow App Groups or push notifications for that
 signing mode, so the installed personal build supports the Live Activity but
-cannot share parcel data with the Home Screen widget. A paid-team build enables
-both.
+cannot share parcel data with the Home Screen widget or receive server-driven
+ActivityKit updates while closed. A paid-team build enables both.
 
 ## Feature parity
 

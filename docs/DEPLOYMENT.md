@@ -12,7 +12,8 @@ Supabase Auth.
 - A public HTTPS hostname. The official deployment uses
   `https://delivery.plhery.com`.
 - Stable VAPID keys if Web Push is enabled.
-- An Apple App ID, APNs key, and signing team if native iPhone notifications are enabled.
+- An Apple App ID, APNs key, and signing team if native iPhone notifications or
+  server-driven Live Activities are enabled.
 - Database backups and a tested restore path.
 
 Review [AUTHENTICATION.md](AUTHENTICATION.md) before configuring Auth. Never put
@@ -109,6 +110,9 @@ Add the stable VAPID key pair and `VAPID_SUBJECT` only when browser push is
 enabled. For native push, set `APNS_TEAM_ID`, `APNS_KEY_ID`, the complete
 `APNS_PRIVATE_KEY` `.p8` value, and `APNS_BUNDLE_ID`; partial VAPID or APNs
 configuration is rejected at startup. See `.env.example` for the complete inventory.
+The same APNs key sends ordinary alerts and ActivityKit pushes; the app bundle
+ID is used directly for alerts and with Apple's `.push-type.liveactivity` topic
+suffix for Live Activities.
 
 This application includes a durable in-process scheduler, so run the standalone
 Next.js server as a continuously running container or process. A request-only
@@ -129,7 +133,10 @@ container behind HTTPS. The public health response intentionally contains only
 3. Claim legacy parcels using step 2 and confirm they appear only for that user.
 4. Test with a second disposable account and verify cross-account isolation.
 5. Exercise add, sync, archive, restore, browser and native push opt-in, export,
-   sign-out, and account deletion. Confirm API rate limits return `429` and
+   sign-out, and account deletion. Separately enable Live Activities, move a
+   disposable parcel to out for delivery, verify it starts while the app is
+   closed without a duplicate ordinary banner, and verify its terminal state
+   dismisses after the grace period. Confirm API rate limits return `429` and
    `Retry-After` when exceeded.
 6. Remove the Cloudflare Access application/policy for the app hostname, but
    retain Cloudflare proxying, TLS, WAF, and origin restrictions as desired.

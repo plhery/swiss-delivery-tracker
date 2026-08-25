@@ -127,6 +127,25 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(pushJSON["environment"] as? String, "production")
         XCTAssertEqual(pushJSON["locale"] as? String, "fr")
         XCTAssertEqual(pushJSON["sendTest"] as? Bool, true)
+
+        let installationID = UUID()
+        let parcelID = UUID()
+        let liveRequest = LiveActivityUpdateTokenRequest(
+            installationID: installationID,
+            activityID: "activity-1",
+            parcelID: parcelID,
+            token: "ab".repeated(32),
+            environment: .development,
+            locale: .de
+        )
+        let liveJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.deliveryTracker.encode(liveRequest)
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(liveJSON["installationId"] as? String, installationID.uuidString)
+        XCTAssertEqual(liveJSON["parcelId"] as? String, parcelID.uuidString)
+        XCTAssertEqual(liveJSON["activityId"] as? String, "activity-1")
     }
 
     func testWidgetPrioritizesOutForDeliveryThenKeepsNextUp() {
@@ -168,14 +187,58 @@ final class ParcelLogicTests: XCTestCase {
 
         XCTAssertTrue(store.isEnabled)
         store.setLanguageCode("fr")
+        store.setLiveActivitiesEnabled(true)
         XCTAssertTrue(store.save(snapshot))
         XCTAssertEqual(store.snapshot, snapshot)
 
         store.setEnabled(false)
 
         XCTAssertFalse(store.isEnabled)
+        XCTAssertTrue(store.liveActivitiesEnabled)
         XCTAssertNil(store.snapshot)
         XCTAssertEqual(store.languageCode, "fr")
+    }
+
+    func testDeliveryLiveActivityOnlyStartsForDeliveryDay() {
+        XCTAssertNil(TrackingStage.pending.deliveryActivityPhase)
+        XCTAssertNil(TrackingStage.registered.deliveryActivityPhase)
+        XCTAssertNil(TrackingStage.accepted.deliveryActivityPhase)
+        XCTAssertNil(TrackingStage.inTransit.deliveryActivityPhase)
+        XCTAssertNil(TrackingStage.customs.deliveryActivityPhase)
+        XCTAssertEqual(TrackingStage.outForDelivery.deliveryActivityPhase, .outForDelivery)
+        XCTAssertEqual(TrackingStage.delivered.deliveryActivityPhase, .delivered)
+        XCTAssertEqual(TrackingStage.failedAttempt.deliveryActivityPhase, .failedAttempt)
+        XCTAssertEqual(TrackingStage.readyForPickup.deliveryActivityPhase, .readyForPickup)
+        XCTAssertEqual(TrackingStage.returned.deliveryActivityPhase, .returned)
+    }
+
+    func testLiveActivityPayloadUsesParcelAsStableIdentity() throws {
+        let parcelID = UUID()
+        let attributes = DeliveryActivityAttributes(parcelID: parcelID)
+        let state = DeliveryActivityAttributes.ContentState(
+            parcel: DeliveryActivityParcel(
+                id: parcelID,
+                label: "Running shoes",
+                carrier: "Swiss Post",
+                status: "Out for delivery",
+                detail: "Today, 14:00–16:00",
+                phase: .outForDelivery
+            ),
+            languageCode: "en"
+        )
+        let attributesJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(attributes)) as? [String: Any]
+        )
+        let stateJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(state)) as? [String: Any]
+        )
+        let parcelJSON = try XCTUnwrap(stateJSON["parcel"] as? [String: Any])
+
+        XCTAssertEqual(attributesJSON["parcelID"] as? String, parcelID.uuidString)
+        XCTAssertEqual(parcelJSON["id"] as? String, parcelID.uuidString)
+        XCTAssertEqual(parcelJSON["phase"] as? String, "out_for_delivery")
+        XCTAssertEqual(stateJSON["languageCode"] as? String, "en")
+        XCTAssertNil(parcelJSON["trackingNumber"])
     }
 
     func testPendingEventDoesNotOverrideCarrierProgress() {
@@ -281,5 +344,11 @@ final class ParcelLogicTests: XCTestCase {
             detail: "Today",
             isOutForDelivery: outForDelivery
         )
+    }
+}
+
+private extension String {
+    func repeated(_ count: Int) -> String {
+        String(repeating: self, count: count)
     }
 }

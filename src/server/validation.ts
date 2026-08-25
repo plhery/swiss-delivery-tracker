@@ -1,5 +1,5 @@
 import { CARRIER_IDS } from '../generated/apiContract';
-import { HttpError } from './api';
+import { HttpError, parseUuid } from './api';
 import { normalizeCarrierInputs } from './carriers';
 import type { JsonObject } from './types';
 
@@ -154,36 +154,77 @@ export function pushSubscription(payload: JsonObject): {
 
 export interface NativePushDeviceValues {
   token: string;
+  installationId: string | null;
   environment: 'development' | 'production';
   locale: 'en' | 'de' | 'fr' | 'it';
   deviceName: string | null;
   sendTest: boolean;
 }
 
+type NativePushEnvironment = NativePushDeviceValues['environment'];
+type NativePushLocale = NativePushDeviceValues['locale'];
+
+function apnsToken(value: unknown, label = 'APNs device token'): string {
+  if (typeof value !== 'string') throw new HttpError(400, `Send a valid ${label}`);
+  const token = value.trim().toLowerCase();
+  if (
+    token.length < 32
+    || token.length > 512
+    || token.length % 2 !== 0
+    || !/^[0-9a-f]+$/.test(token)
+  ) throw new HttpError(400, `Send a valid ${label}`);
+  return token;
+}
+
+function nativePushEnvironment(value: unknown): NativePushEnvironment {
+  if (value !== 'development' && value !== 'production') {
+    throw new HttpError(400, 'Choose a valid APNs environment');
+  }
+  return value;
+}
+
+function nativePushLocale(value: unknown): NativePushLocale {
+  if (!['en', 'de', 'fr', 'it'].includes(String(value))) {
+    throw new HttpError(400, 'Choose a supported notification locale');
+  }
+  return value as NativePushLocale;
+}
+
+function installationId(value: unknown): string {
+  if (typeof value !== 'string') throw new HttpError(400, 'Send a valid installation id');
+  return parseUuid(value, 'installation id');
+}
+
+function liveActivityId(value: unknown): string {
+  if (
+    typeof value !== 'string'
+    || value.length < 1
+    || value.length > 128
+    || !/^[A-Za-z0-9-]+$/.test(value)
+  ) throw new HttpError(400, 'Send a valid Live Activity id');
+  return value;
+}
+
 export function nativePushDevice(
   payload: JsonObject,
   registration = true,
 ): NativePushDeviceValues {
-  if (typeof payload.token !== 'string') throw new HttpError(400, 'Send a valid APNs device token');
-  const token = payload.token.trim().toLowerCase();
-  if (token.length < 32 || token.length > 512 || token.length % 2 !== 0 || !/^[0-9a-f]+$/.test(token)) {
-    throw new HttpError(400, 'Send a valid APNs device token');
-  }
+  const token = apnsToken(payload.token);
   if (!registration) {
     return {
       token,
+      installationId: null,
       environment: 'production',
       locale: 'en',
       deviceName: null,
       sendTest: false,
     };
   }
-  if (payload.environment !== 'development' && payload.environment !== 'production') {
-    throw new HttpError(400, 'Choose a valid APNs environment');
-  }
-  if (!['en', 'de', 'fr', 'it'].includes(String(payload.locale))) {
-    throw new HttpError(400, 'Choose a supported notification locale');
-  }
+  const environment = nativePushEnvironment(payload.environment);
+  const locale = nativePushLocale(payload.locale);
+  const parsedInstallationId = payload.installationId == null
+    ? null
+    : installationId(payload.installationId);
   if (typeof payload.sendTest !== 'boolean') throw new HttpError(400, 'SendTest must be true or false');
   if (payload.deviceName != null && typeof payload.deviceName !== 'string') {
     throw new HttpError(400, 'Device name must be text');
@@ -194,10 +235,55 @@ export function nativePushDevice(
   }
   return {
     token,
-    environment: payload.environment,
-    locale: payload.locale as NativePushDeviceValues['locale'],
+    installationId: parsedInstallationId,
+    environment,
+    locale,
     deviceName: deviceName || null,
     sendTest: payload.sendTest,
+  };
+}
+
+export interface LiveActivityDeviceValues {
+  installationId: string;
+  token: string;
+  environment: NativePushEnvironment;
+  locale: NativePushLocale;
+}
+
+export function liveActivityDevice(payload: JsonObject): LiveActivityDeviceValues {
+  return {
+    installationId: installationId(payload.installationId),
+    token: apnsToken(payload.token, 'Live Activity push-to-start token'),
+    environment: nativePushEnvironment(payload.environment),
+    locale: nativePushLocale(payload.locale),
+  };
+}
+
+export function deleteLiveActivityDevice(payload: JsonObject): { installationId: string } {
+  return { installationId: installationId(payload.installationId) };
+}
+
+export interface LiveActivityUpdateTokenValues extends LiveActivityDeviceValues {
+  activityId: string;
+  parcelId: string;
+}
+
+export function liveActivityUpdateToken(payload: JsonObject): LiveActivityUpdateTokenValues {
+  if (typeof payload.parcelId !== 'string') throw new HttpError(400, 'Invalid parcel id');
+  return {
+    ...liveActivityDevice(payload),
+    activityId: liveActivityId(payload.activityId),
+    parcelId: parseUuid(payload.parcelId, 'parcel id'),
+  };
+}
+
+export function deleteLiveActivityUpdateToken(payload: JsonObject): {
+  installationId: string;
+  activityId: string;
+} {
+  return {
+    installationId: installationId(payload.installationId),
+    activityId: liveActivityId(payload.activityId),
   };
 }
 

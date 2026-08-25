@@ -60,7 +60,7 @@ struct RootView: View {
                 showingNotificationOnboarding = false
                 switch session.state {
                 case .loading: break
-                default: parcels.clearDeliveryWidget()
+                default: parcels.clearDeliverySurfaces()
                 }
                 return
             }
@@ -81,7 +81,7 @@ struct RootView: View {
             }
         }
         .onChange(of: localizer.language) { _, language in
-            parcels.refreshDeliveryWidget()
+            parcels.refreshDeliverySurfaces()
             guard let token = AppDelegate.currentDeviceToken else { return }
             Task { await parcels.forwardNativePushToken(token, language: language) }
         }

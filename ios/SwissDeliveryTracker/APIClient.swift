@@ -124,6 +124,7 @@ final class DeliveryAPIClient {
 
     func registerNativePushToken(
         _ token: String,
+        installationID: UUID,
         language: AppLanguage,
         sendTest: Bool
     ) async throws -> Bool {
@@ -137,6 +138,7 @@ final class DeliveryAPIClient {
             method: "POST",
             body: NativePushDeviceRequest(
                 token: token,
+                installationID: installationID,
                 environment: environment,
                 locale: NativePushLocale(rawValue: language.rawValue) ?? .en,
                 deviceName: UIDevice.current.name,
@@ -151,6 +153,76 @@ final class DeliveryAPIClient {
             "/api/push/devices",
             method: "DELETE",
             body: DeleteNativePushDeviceRequest(token: token)
+        )
+    }
+
+    func registerLiveActivityDevice(
+        token: String,
+        installationID: UUID,
+        language: AppLanguage
+    ) async throws {
+        #if DEBUG
+        let environment = NativePushEnvironment.development
+        #else
+        let environment = NativePushEnvironment.production
+        #endif
+        let _: OKResponse = try await request(
+            "/api/live-activities/devices",
+            method: "POST",
+            body: LiveActivityDeviceRequest(
+                installationID: installationID,
+                token: token,
+                environment: environment,
+                locale: NativePushLocale(rawValue: language.rawValue) ?? .en
+            )
+        )
+    }
+
+    func unregisterLiveActivityDevice(installationID: UUID) async throws {
+        let _: OKResponse = try await request(
+            "/api/live-activities/devices",
+            method: "DELETE",
+            body: DeleteLiveActivityDeviceRequest(installationID: installationID)
+        )
+    }
+
+    func registerLiveActivityUpdateToken(
+        activityID: String,
+        parcelID: UUID,
+        token: String,
+        installationID: UUID,
+        language: AppLanguage
+    ) async throws {
+        #if DEBUG
+        let environment = NativePushEnvironment.development
+        #else
+        let environment = NativePushEnvironment.production
+        #endif
+        let _: OKResponse = try await request(
+            "/api/live-activities/activities",
+            method: "POST",
+            body: LiveActivityUpdateTokenRequest(
+                installationID: installationID,
+                activityID: activityID,
+                parcelID: parcelID,
+                token: token,
+                environment: environment,
+                locale: NativePushLocale(rawValue: language.rawValue) ?? .en
+            )
+        )
+    }
+
+    func unregisterLiveActivityUpdateToken(
+        activityID: String,
+        installationID: UUID
+    ) async throws {
+        let _: OKResponse = try await request(
+            "/api/live-activities/activities",
+            method: "DELETE",
+            body: DeleteLiveActivityUpdateTokenRequest(
+                installationID: installationID,
+                activityID: activityID
+            )
         )
     }
 

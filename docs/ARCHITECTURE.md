@@ -34,8 +34,11 @@ Next.js route handlers -- user token -----> PostgREST + Postgres RLS
   durable, deduplicated queue; the Node.js worker claims jobs with database
   leases so deploys, crashes, and multiple replicas do not lose or double-run
   active work. This is the only workflow that needs cross-account access.
-- `src/server/push.ts` delivers Web Push and APNs notifications only to devices
-  owned by the package's account.
+- `src/server/push.ts` delivers Web Push, ordinary APNs alerts, and ActivityKit
+  start/update/end pushes only to installations owned by the package's account.
+  ActivityKit is dispatched first, so a successful delivery-day surface can
+  replace the matching ordinary banner while APNs failure retains the alert as
+  a fallback.
 - `supabase/migrations/` is the append-only database history;
   `supabase/tests/assertions.sql` exercises the RLS boundary in PostgreSQL.
 - `contracts/openapi.json` generates the TypeScript and Swift contract types.
@@ -66,9 +69,11 @@ Next.js route handlers -- user token -----> PostgREST + Postgres RLS
 - The service worker caches only the public application shell and static assets.
   Same-origin APIs, health checks, Supabase Auth, and all other cross-origin
   requests use a network-only strategy and never enter browser Cache Storage.
-- Native device tokens are accepted only as bounded hexadecimal opaque values,
-  never exposed to database client roles, and forwarded only to Apple's fixed
-  production or sandbox APNs hosts over HTTP/2.
+- Native device, ActivityKit push-to-start, and per-activity update tokens are
+  accepted only as bounded hexadecimal opaque values, never exposed to database
+  client roles, and forwarded only to Apple's fixed production or sandbox APNs
+  hosts over HTTP/2. A random installation identifier safely correlates the two
+  APNs paths and is rebound atomically when the iPhone changes accounts.
 - Cloudflare may provide TLS, proxying, and abuse protection, but Cloudflare
   Access is not part of the public application's identity model.
 - Forwarded client addresses are used only when `TRUST_PROXY_HEADERS=true` and
@@ -88,7 +93,14 @@ poll the small owner-checked job resource, then reload the parcel collection
 once at completion. Carrier events inherit privacy through their package.
 Archiving retains the parcel and history. Account deletion removes the Supabase
 Auth user; foreign-key cascades remove packages, jobs, events, browser
-subscriptions, native devices, and delivery acknowledgements.
+subscriptions, native devices, ActivityKit tokens, and delivery acknowledgements.
+
+Live Activities are intentionally narrower than Home Screen widgets. The
+delivery-day queue starts one only for an `out_for_delivery` event, updates the
+same parcel identity, and ends it on delivery, failed attempt, pickup readiness,
+return, archive, sign-out, or opt-out. The iPhone keeps at most two. Successful
+server deliveries are acknowledged durably before the ordinary APNs dispatcher
+decides whether its matching banner is redundant.
 
 The PWA Web Share Target submits with `POST`. Its service worker places the
 bounded draft in a private, one-time Cache Storage entry and redirects using

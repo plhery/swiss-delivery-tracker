@@ -22,6 +22,7 @@ export const POST = apiRoute(async (context) => {
     values.token,
     values.environment,
     values.locale,
+    values.installationId,
     values.deviceName,
   );
   let testSent = false;

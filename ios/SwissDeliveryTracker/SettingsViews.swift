@@ -228,6 +228,22 @@ struct AccountView: View {
                 }
 
                 Section {
+                    Toggle(isOn: Binding(
+                        get: { store.deliveryLiveActivitiesEnabled },
+                        set: { store.setDeliveryLiveActivitiesEnabled($0) }
+                    )) {
+                        Label(localizer.text("liveActivity.settingTitle"), systemImage: "wave.3.right.circle")
+                    }
+                } footer: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(localizer.text("liveActivity.settingDescription"))
+                        if let error = store.deliveryLiveActivityError {
+                            Text(error).foregroundStyle(.red)
+                        }
+                    }
+                }
+
+                Section {
                     Button(localizer.text("account.export"), systemImage: "square.and.arrow.up") {
                         run {
                             exportURL = try await store.exportAccount()
