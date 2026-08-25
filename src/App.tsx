@@ -529,7 +529,7 @@ export default function App({
 
         {!loading && prioritized.onTheWay.length > 0 && (
           <section
-            className="parcel-section"
+            className="parcel-section parcel-section--wide"
             aria-labelledby="active-parcels-title"
           >
             <div className="parcel-section__heading">
