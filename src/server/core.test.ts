@@ -11,7 +11,13 @@ import {
 import { SupabaseAuthError, SupabaseAuthenticator } from './auth';
 import { fetchBounded, parseJsonBytes } from './boundedFetch';
 import { RateLimiter } from './rateLimit';
-import { NativePushNotificationService, notificationText, pushServices } from './push';
+import {
+  NativePushNotificationService,
+  notificationExpectedDelivery,
+  notificationText,
+  pushServices,
+  WebPushNotificationService,
+} from './push';
 import {
   authConfiguration,
   deliveryServiceConfigured,
@@ -390,6 +396,66 @@ describe('native notification boundaries', () => {
 
   it('bounds notification text by Unicode characters', () => {
     expect(notificationText(`  ${'😀'.repeat(5)}  `, 4)).toBe('😀😀😀…');
+  });
+
+  it('always keeps the current ETA in tracking notifications and marks changes', () => {
+    const now = Date.UTC(2026, 7, 25, 12);
+    const web = new WebPushNotificationService(
+      {} as never,
+      'public-key',
+      'private-key',
+      'https://delivery.example',
+      () => now,
+    );
+    const row = {
+      label: 'Coffee grinder',
+      package_id: 'package-1',
+      stage: 'in_transit',
+      location: 'Zürich',
+      expected_delivery: '2026-08-26',
+      expected_delivery_changed: true,
+      timezone: 'Europe/Zurich',
+    };
+
+    expect(web.payload(row)).toMatchObject({
+      body: 'Parcel in transit · Zürich · New ETA: tomorrow',
+    });
+    expect(web.payload({ ...row, expected_delivery_changed: false })).toMatchObject({
+      body: 'Parcel in transit · Zürich · ETA tomorrow',
+    });
+    expect(notificationExpectedDelivery(
+      '2026-08-26 09:00–12:00',
+      'fr',
+      'Europe/Zurich',
+      now,
+    )).toBe('demain, 09:00–12:00');
+  });
+
+  it('localizes native ETA copy and preserves it after a long location', () => {
+    const now = Date.UTC(2026, 7, 25, 12);
+    const native = new NativePushNotificationService(
+      {} as never,
+      'TEAM',
+      'KEY',
+      privateKey('prime256v1'),
+      'com.example.delivery',
+      () => now / 1_000,
+    );
+    const payload = native.eventPayload({
+      locale: 'de',
+      label: 'Paket',
+      package_id: 'package-1',
+      stage: 'in_transit',
+      location: 'Z'.repeat(300),
+      expected_delivery: '2026-08-26',
+      expected_delivery_changed: true,
+      timezone: 'Europe/Zurich',
+    });
+    const alert = (payload.aps as Record<string, unknown>).alert as Record<string, unknown>;
+    const body = String(alert.body);
+
+    expect(body).toMatch(/^Paket unterwegs · Z+… · Neue Lieferprognose: morgen$/);
+    expect([...body].length).toBeLessThanOrEqual(220);
   });
 
   it('rejects incomplete Web Push credentials during service startup', () => {

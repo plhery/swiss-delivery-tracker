@@ -603,6 +603,36 @@ begin
 end;
 $$;
 
+update public.packages
+set expected_delivery = '2099-01-02'
+where id = '70000000-0000-0000-0000-000000000007';
+
+do $$
+declare
+  changed_at timestamptz;
+begin
+  select expected_delivery_changed_at into changed_at
+  from public.packages
+  where id = '70000000-0000-0000-0000-000000000007';
+
+  if changed_at is null then
+    raise exception 'delivery estimate change was not timestamped';
+  end if;
+
+  update public.packages
+  set expected_delivery = '2099-01-02'
+  where id = '70000000-0000-0000-0000-000000000007';
+
+  if (
+    select expected_delivery_changed_at
+    from public.packages
+    where id = '70000000-0000-0000-0000-000000000007'
+  ) is distinct from changed_at then
+    raise exception 'unchanged delivery estimate was marked as new';
+  end if;
+end;
+$$;
+
 insert into public.push_subscriptions (
   id, user_id, endpoint, p256dh, auth, subscribed_at
 ) values (
@@ -682,6 +712,17 @@ begin
     raise exception 'expected one pending provider event, found %', pending;
   end if;
 
+  if not exists (
+    select 1
+    from public.pending_push_notifications
+    where subscription_id = '60000000-0000-0000-0000-000000000006'
+      and expected_delivery = '2099-01-02'
+      and expected_delivery_changed
+      and timezone = 'Europe/Zurich'
+  ) then
+    raise exception 'browser push queue omitted the changed delivery estimate';
+  end if;
+
   if exists (
     select 1
     from public.pending_push_notifications
@@ -696,6 +737,17 @@ begin
   where device_id = 'a0000000-0000-0000-0000-000000000001';
   if pending <> 1 then
     raise exception 'expected one pending native event, found %', pending;
+  end if;
+
+  if not exists (
+    select 1
+    from public.pending_native_push_notifications
+    where device_id = 'a0000000-0000-0000-0000-000000000001'
+      and expected_delivery = '2099-01-02'
+      and expected_delivery_changed
+      and timezone = 'Europe/Zurich'
+  ) then
+    raise exception 'native push queue omitted the changed delivery estimate';
   end if;
 
   if exists (

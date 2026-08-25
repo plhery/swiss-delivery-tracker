@@ -3,6 +3,7 @@ import 'server-only';
 import { connect, constants as http2Constants } from 'node:http2';
 import { createPrivateKey, type KeyObject } from 'node:crypto';
 import { SignJWT } from 'jose';
+import { DateTime, IANAZone } from 'luxon';
 import webpush from 'web-push';
 import type { SupabaseServiceClient } from './supabase';
 import { errorMessage, isRecord, type JsonObject } from './types';
@@ -20,17 +21,25 @@ const STAGE_LABELS: Record<string, string> = {
   returned: 'Returning to sender',
 };
 
-const NATIVE_COPY: Record<string, Record<string, string>> = {
+const PUSH_COPY: Record<string, Record<string, string>> = {
   en: {
     test_title: 'Notifications are on',
     test_body: 'Swiss Delivery Tracker will alert this iPhone when tracking changes.',
     update: 'Parcel update',
+    eta: 'ETA {{date}}',
+    eta_changed: 'New ETA: {{date}}',
+    today: 'today',
+    tomorrow: 'tomorrow',
     ...STAGE_LABELS,
   },
   de: {
     test_title: 'Benachrichtigungen sind aktiv',
     test_body: 'Swiss Delivery Tracker meldet Änderungen an Sendungen auf diesem iPhone.',
     update: 'Paketaktualisierung',
+    eta: 'Voraussichtliche Zustellung: {{date}}',
+    eta_changed: 'Neue Lieferprognose: {{date}}',
+    today: 'heute',
+    tomorrow: 'morgen',
     pending: 'Noch nicht angekündigt',
     registered: 'Sendung angekündigt',
     accepted: 'Paket angenommen',
@@ -46,6 +55,10 @@ const NATIVE_COPY: Record<string, Record<string, string>> = {
     test_title: 'Les notifications sont activées',
     test_body: 'Swiss Delivery Tracker signalera les changements de suivi sur cet iPhone.',
     update: 'Mise à jour du colis',
+    eta: 'Livraison prévue : {{date}}',
+    eta_changed: 'Nouvelle date estimée : {{date}}',
+    today: 'aujourd’hui',
+    tomorrow: 'demain',
     pending: 'Pas encore annoncé',
     registered: 'Envoi annoncé',
     accepted: 'Colis accepté',
@@ -61,6 +74,10 @@ const NATIVE_COPY: Record<string, Record<string, string>> = {
     test_title: 'Le notifiche sono attive',
     test_body: 'Swiss Delivery Tracker segnalerà le modifiche di tracciamento su questo iPhone.',
     update: 'Aggiornamento del pacco',
+    eta: 'Consegna prevista: {{date}}',
+    eta_changed: 'Nuova data stimata: {{date}}',
+    today: 'oggi',
+    tomorrow: 'domani',
     pending: 'Non ancora annunciato',
     registered: 'Spedizione annunciata',
     accepted: 'Pacco accettato',
@@ -96,12 +113,85 @@ function stringField(row: JsonObject, name: string): string {
   return typeof row[name] === 'string' ? row[name] : '';
 }
 
+const NOTIFICATION_LANGUAGE_TAGS: Record<string, string> = {
+  en: 'en-CH',
+  de: 'de-CH',
+  fr: 'fr-CH',
+  it: 'it-CH',
+};
+
+function notificationLocale(value: unknown): string {
+  const locale = typeof value === 'string'
+    ? value.trim().split(/[-_]/, 1)[0]!.toLowerCase()
+    : 'en';
+  return PUSH_COPY[locale] ? locale : 'en';
+}
+
+export function notificationExpectedDelivery(
+  value: unknown,
+  locale = 'en',
+  timezone = 'Europe/Zurich',
+  now = Date.now(),
+): string {
+  const cleaned = notificationText(value, 100);
+  if (!cleaned) return '';
+  const language = notificationLocale(locale);
+  const copy = PUSH_COPY[language]!;
+  const languageTag = NOTIFICATION_LANGUAGE_TAGS[language]!;
+  const zone = IANAZone.isValidZone(timezone) ? timezone : 'Europe/Zurich';
+  const today = DateTime.fromMillis(now, { zone });
+
+  const formattedDay = (raw: string): string | null => {
+    const expected = DateTime.fromISO(raw, { zone });
+    if (!expected.isValid || !today.isValid) return null;
+    if (expected.toISODate() === today.toISODate()) return copy.today!;
+    if (expected.toISODate() === today.plus({ days: 1 }).toISODate()) return copy.tomorrow!;
+    return expected.setLocale(languageTag).toLocaleString(DateTime.DATE_SHORT);
+  };
+
+  const window = /^(\d{4}-\d{2}-\d{2})[ T]+(\d{2}:\d{2})(?:[–-](\d{2}:\d{2}))?$/.exec(
+    cleaned,
+  );
+  if (window) {
+    const day = formattedDay(window[1]!);
+    if (!day) return cleaned;
+    return `${day}, ${window[2]}${window[3] ? `–${window[3]}` : ''}`;
+  }
+  return formattedDay(cleaned) ?? cleaned;
+}
+
+function notificationBody(
+  row: JsonObject,
+  stage: string,
+  copy: Record<string, string>,
+  locale: string,
+  now: number,
+): string {
+  const location = notificationText(row.location, 140);
+  const primary = location ? `${stage} · ${location}` : stage;
+  const expected = notificationExpectedDelivery(
+    row.expected_delivery,
+    locale,
+    stringField(row, 'timezone') || 'Europe/Zurich',
+    now,
+  );
+  if (!expected) return notificationText(primary, 220);
+
+  const template = row.expected_delivery_changed === true ? copy.eta_changed : copy.eta;
+  const eta = notificationText((template ?? 'ETA {{date}}').replace('{{date}}', expected), 100);
+  const suffix = ` · ${eta}`;
+  const primaryLimit = 220 - [...suffix].length;
+  if (primaryLimit <= 0) return notificationText(eta, 220);
+  return `${notificationText(primary, primaryLimit)}${suffix}`;
+}
+
 export class WebPushNotificationService {
   constructor(
     readonly client: SupabaseServiceClient,
     readonly publicKey: string,
     readonly privateKey: string,
     readonly subject: string,
+    readonly now: () => number = () => Date.now(),
   ) {}
 
   async dispatch(): Promise<PushSummary> {
@@ -183,12 +273,12 @@ export class WebPushNotificationService {
   }
 
   payload(row: JsonObject): JsonObject {
-    const stage = STAGE_LABELS[stringField(row, 'stage')] ?? 'Tracking update';
-    const location = notificationText(row.location, 140);
+    const copy = PUSH_COPY.en!;
+    const stage = copy[stringField(row, 'stage')] ?? 'Tracking update';
     const packageId = stringField(row, 'package_id');
     return {
       title: notificationText(row.label || 'Parcel update', 80),
-      body: notificationText(location ? `${stage} · ${location}` : stage, 220),
+      body: notificationBody(row, stage, copy, 'en', this.now()),
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       tag: `parcel-${packageId}`,
@@ -369,12 +459,12 @@ export class NativePushNotificationService {
   }
 
   eventPayload(row: JsonObject): JsonObject {
+    const locale = this.locale(row);
     const copy = this.copy(row);
     const stage = copy[stringField(row, 'stage')] ?? copy.update!;
-    const location = notificationText(row.location, 140);
     return this.payload(
       notificationText(row.label || copy.update, 80),
-      notificationText(location ? `${stage} · ${location}` : stage, 220),
+      notificationBody(row, stage, copy, locale, this.now() * 1_000),
       stringField(row, 'package_id'),
     );
   }
@@ -394,8 +484,11 @@ export class NativePushNotificationService {
   }
 
   copy(row: JsonObject): Record<string, string> {
-    const locale = (stringField(row, 'locale') || 'en').split('-', 1)[0]!.toLowerCase();
-    return NATIVE_COPY[locale] ?? NATIVE_COPY.en!;
+    return PUSH_COPY[this.locale(row)] ?? PUSH_COPY.en!;
+  }
+
+  locale(row: JsonObject): string {
+    return notificationLocale(stringField(row, 'locale'));
   }
 
   async providerToken(): Promise<string> {
