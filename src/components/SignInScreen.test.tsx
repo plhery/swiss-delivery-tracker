@@ -14,7 +14,7 @@ describe('SignInScreen', () => {
 
     expect(screen.getByText('Swiss Delivery Tracker')).toBeInTheDocument();
     expect(screen.getByRole('heading', {
-      name: 'Sign in to start tracking your Post.CH, UPS, DHL, ... packages!',
+      name: 'Keep every delivery in one place',
     })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Read the privacy notice.' }))
       .toHaveAttribute('href', '/privacy.html');
@@ -58,6 +58,24 @@ describe('SignInScreen', () => {
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
     expect(signInWithGoogle).toHaveBeenCalledOnce();
+  });
+
+  it('keeps email secondary until the user asks for it', async () => {
+    const user = userEvent.setup();
+    render(
+      <SignInScreen
+        configured
+        googleEnabled
+        emailOtpEnabled
+        signInWithGoogle={vi.fn()}
+        sendCode={vi.fn()}
+        verifyCode={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Sign in with email' }));
+    expect(screen.getByLabelText('Email address')).toHaveFocus();
   });
 
   it('explains missing deployment configuration', () => {

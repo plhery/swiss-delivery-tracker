@@ -48,6 +48,8 @@ final class LocalizationTests: XCTestCase {
             "welcome.feature.track",
             "welcome.feature.alerts",
             "welcome.feature.private",
+            "auth.subtitle",
+            "auth.emailOption",
             "native.configurationHelp",
             "native.error.authenticationExpired",
             "native.auth.invalidResponse",

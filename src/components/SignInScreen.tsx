@@ -20,25 +20,27 @@ export function SignInScreen({
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
-  const [working, setWorking] = useState(false);
+  const [emailExpanded, setEmailExpanded] = useState(!googleEnabled);
+  const [working, setWorking] = useState<'google' | 'email' | 'code' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const emailVisible = emailOtpEnabled && (!googleEnabled || emailExpanded);
 
   async function startGoogleSignIn() {
     if (working || !signInWithGoogle) return;
-    setWorking(true);
+    setWorking('google');
     setError(null);
     try {
       await signInWithGoogle();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('auth.googleFailed'));
-      setWorking(false);
+      setWorking(null);
     }
   }
 
   async function requestCode(event: FormEvent) {
     event.preventDefault();
     if (working) return;
-    setWorking(true);
+    setWorking('email');
     setError(null);
     try {
       await sendCode(email.trim().toLowerCase());
@@ -46,35 +48,51 @@ export function SignInScreen({
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('auth.sendFailed'));
     } finally {
-      setWorking(false);
+      setWorking(null);
     }
   }
 
   async function submitCode(event: FormEvent) {
     event.preventDefault();
     if (working) return;
-    setWorking(true);
+    setWorking('code');
     setError(null);
     try {
       await verifyCode(email.trim().toLowerCase(), code.replace(/\s/g, ''));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('auth.verifyFailed'));
     } finally {
-      setWorking(false);
+      setWorking(null);
     }
   }
 
   return (
     <main className="auth-screen">
-      <section className="auth-card" aria-labelledby="sign-in-title">
-        <LanguageControl className="language-control--auth" />
-        <div className="auth-card__mark" aria-hidden="true"><span /></div>
-        <p className="auth-card__eyebrow">Swiss Delivery Tracker</p>
-        <h1 id="sign-in-title">
-          {t('auth.title')}
-        </h1>
+      <div className="auth-shell">
+        <header className="auth-header">
+          <div className="auth-header__brand">
+            <svg className="auth-header__mark" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 22V12" />
+              <path d="m16 17 2 2 4-4" />
+              <path d="M21 11.127V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l1.32-.753" />
+              <path d="M3.29 7 12 12l8.71-5" />
+              <path d="m7.5 4.27 8.997 5.148" />
+            </svg>
+            <div>
+              <p>{t('app.eyebrow')}</p>
+              <strong>{t('app.title')}</strong>
+            </div>
+          </div>
+          <LanguageControl className="language-control--auth" />
+        </header>
+
+        <section className="auth-flow" aria-labelledby="sign-in-title">
+          <div className="auth-flow__heading">
+            <h1 id="sign-in-title">{t('auth.title')}</h1>
+            <p>{t('auth.subtitle')}</p>
+          </div>
         {!configured ? (
-          <div className="auth-card__configuration" role="alert">
+          <div className="auth-flow__configuration" role="alert">
             <strong>{t('auth.configTitle')}</strong>
             <span>
               Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` when
@@ -82,8 +100,8 @@ export function SignInScreen({
             </span>
           </div>
         ) : codeSent && emailOtpEnabled ? (
-          <form onSubmit={(event) => void submitCode(event)}>
-            <p className="auth-card__intro">
+          <form className="auth-flow__form auth-flow__form--code" onSubmit={(event) => void submitCode(event)}>
+            <p className="auth-flow__intro">
               {t('auth.codeIntro', { email })}
             </p>
             <label htmlFor="sign-in-code">{t('auth.code')}</label>
@@ -100,30 +118,30 @@ export function SignInScreen({
               autoFocus
               required
             />
-            {error && <p className="auth-card__error" role="alert">{error}</p>}
-            <button className="button button--primary" type="submit" disabled={working}>
-              {working ? t('auth.signingIn') : t('auth.openBox')}
+            {error && <p className="auth-flow__error" role="alert">{error}</p>}
+            <button className="button button--primary" type="submit" disabled={Boolean(working)}>
+              {working === 'code' ? t('auth.signingIn') : t('auth.openBox')}
             </button>
             <button
-              className="auth-card__text-button"
+              className="auth-flow__text-button"
               type="button"
               onClick={() => {
                 setCodeSent(false);
                 setCode('');
                 setError(null);
               }}
-              disabled={working}
+              disabled={Boolean(working)}
             >
               {t('auth.differentEmail')}
             </button>
           </form>
         ) : (
-          <div className="auth-card__methods">
+          <div className="auth-flow__methods">
             {googleEnabled && signInWithGoogle && (
               <button
-                className="button auth-card__google"
+                className="button button--primary auth-flow__google"
                 type="button"
-                disabled={working}
+                disabled={Boolean(working)}
                 onClick={() => void startGoogleSignIn()}
               >
                 <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -132,15 +150,32 @@ export function SignInScreen({
                   <path fill="#fbbc05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.4H3.1a10 10 0 0 0 0 9.2l3.3-2.7Z" />
                   <path fill="#ea4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 3.1 7.4l3.3 2.7c.8-2.4 3-4.2 5.6-4.2Z" />
                 </svg>
-                {working ? t('auth.googleOpening') : t('auth.google')}
+                {working === 'google' ? t('auth.googleOpening') : t('auth.google')}
               </button>
             )}
-            {googleEnabled && emailOtpEnabled && (
-              <div className="auth-card__divider"><span>{t('auth.or')}</span></div>
+            {googleEnabled && emailOtpEnabled && !emailVisible && (
+              <button
+                className="button button--secondary auth-flow__email-option"
+                type="button"
+                disabled={Boolean(working)}
+                onClick={() => {
+                  setError(null);
+                  setEmailExpanded(true);
+                }}
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <path d="m4 7 8 6 8-6" />
+                </svg>
+                {t('auth.emailOption')}
+              </button>
             )}
-            {emailOtpEnabled && (
-              <form onSubmit={(event) => void requestCode(event)}>
-                <p className="auth-card__intro">
+            {googleEnabled && emailVisible && (
+              <div className="auth-flow__divider"><span>{t('auth.or')}</span></div>
+            )}
+            {emailVisible && (
+              <form className="auth-flow__form auth-flow__form--email" onSubmit={(event) => void requestCode(event)}>
+                <p className="auth-flow__intro">
                   {t('auth.emailIntro')}
                 </p>
                 <label htmlFor="sign-in-email">{t('auth.email')}</label>
@@ -152,25 +187,29 @@ export function SignInScreen({
                   placeholder="you@example.com"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  autoFocus={!googleEnabled}
+                  autoFocus
                   required
                 />
-                {error && <p className="auth-card__error" role="alert">{error}</p>}
-                <button className="button button--primary" type="submit" disabled={working}>
-                  {working ? t('auth.sending') : t('auth.send')}
+                <button className="button button--primary" type="submit" disabled={Boolean(working)}>
+                  {working === 'email' ? t('auth.sending') : t('auth.send')}
                 </button>
               </form>
             )}
-            {!emailOtpEnabled && error && (
-              <p className="auth-card__error" role="alert">{error}</p>
-            )}
+            {error && <p className="auth-flow__error" role="alert">{error}</p>}
           </div>
         )}
-        <p className="auth-card__privacy">
-          {t('auth.privacy')}{' '}
-          <a href="/privacy.html">{t('auth.readPrivacy')}</a>
-        </p>
-      </section>
+          <div className="auth-flow__privacy">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <rect x="5" y="10" width="14" height="11" rx="2" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+            <p>
+              {t('auth.privacy')}{' '}
+              <a href="/privacy.html">{t('auth.readPrivacy')}</a>
+            </p>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

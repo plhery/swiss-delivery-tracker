@@ -15,34 +15,18 @@ struct WelcomeView: View {
                         Spacer()
                         languageMenu
                     }
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 32)
 
-                    ParcelGlyph(size: 92)
-                        .shadow(color: Brand.ink.opacity(0.1), radius: 8, y: 4)
-                    Text("Swiss Delivery Tracker")
-                        .font(.caption.weight(.bold))
-                        .textCase(.uppercase)
-                        .tracking(1.4)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 20)
-                    Text(localizer.text("welcome.title"))
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 8)
-                    Text(localizer.text("welcome.subtitle"))
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 10)
-                        .padding(.horizontal, 8)
+                    AuthenticationIdentity(
+                        title: localizer.text("welcome.title"),
+                        subtitle: localizer.text("welcome.subtitle")
+                    )
 
                     VStack(spacing: 14) {
                         welcomeFeature("shippingbox.and.arrow.backward.fill", "welcome.feature.track")
                         welcomeFeature("bell.badge.fill", "welcome.feature.alerts")
                         welcomeFeature("lock.shield.fill", "welcome.feature.private")
                     }
-                    .padding(20)
-                    .parcelCardSurface()
                     .padding(.top, 28)
 
                     VStack(spacing: 12) {
@@ -76,7 +60,7 @@ struct WelcomeView: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
-                    .padding(.top, 24)
+                    .padding(.top, 30)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
@@ -123,9 +107,11 @@ struct SignInView: View {
     let configured: Bool
     @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var localizer: Localizer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var step: Step = .methods
     @State private var email = ""
     @State private var code = ""
+    @State private var emailExpanded = false
     @State private var working = false
     @State private var errorMessage: String?
 
@@ -148,21 +134,12 @@ struct SignInView: View {
                         Spacer()
                         languageMenu
                     }
-                    .padding(.bottom, 30)
+                    .padding(.bottom, 32)
 
-                    ParcelGlyph(size: 86)
-                        .shadow(color: Brand.ink.opacity(0.1), radius: 8, y: 4)
-                    Text("Swiss Delivery Tracker")
-                        .font(.caption.weight(.bold))
-                        .textCase(.uppercase)
-                        .tracking(1.4)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 18)
-                    Text(localizer.text("auth.title"))
-                        .font(.system(.title, design: .rounded, weight: .bold))
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 8)
-                        .padding(.horizontal, 10)
+                    AuthenticationIdentity(
+                        title: localizer.text("auth.title"),
+                        subtitle: localizer.text("auth.subtitle")
+                    )
 
                     if !configured {
                         configurationNotice.padding(.top, 28)
@@ -172,14 +149,7 @@ struct SignInView: View {
                         methods.padding(.top, 28)
                     }
 
-                    Text(localizer.text("auth.privacy"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 28)
-                    Link(localizer.text("auth.readPrivacy"), destination: session.configuration.privacyURL)
-                        .font(.caption.weight(.semibold))
-                        .padding(.top, 5)
+                    privacyNotice.padding(.top, 28)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
@@ -188,6 +158,26 @@ struct SignInView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+    }
+
+    private var privacyNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localizer.text("auth.privacy"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Link(localizer.text("auth.readPrivacy"), destination: session.configuration.privacyURL)
+                    .font(.caption.weight(.semibold))
+                    .tint(Brand.ink)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 18)
+        .overlay(alignment: .top) { Divider() }
     }
 
     private var languageMenu: some View {
@@ -217,7 +207,7 @@ struct SignInView: View {
     }
 
     private var methods: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             if session.configuration.googleAuthEnabled {
                 Button {
                     run { try await session.signInWithGoogle() }
@@ -232,13 +222,14 @@ struct SignInView: View {
                     .padding(.horizontal, 18)
                     .frame(height: 54)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.roundedRectangle(radius: 16))
-                .tint(.secondary)
+                .tint(Brand.ink)
+                .foregroundStyle(Brand.background)
                 .disabled(working)
             }
 
-            if session.configuration.googleAuthEnabled && session.configuration.emailOTPEnabled {
+            if session.configuration.googleAuthEnabled && emailFormVisible {
                 HStack {
                     Rectangle().frame(height: 0.5)
                     Text(localizer.text("auth.or")).font(.caption).foregroundStyle(.secondary)
@@ -247,43 +238,72 @@ struct SignInView: View {
                 .foregroundStyle(.secondary.opacity(0.35))
             }
 
-            if session.configuration.emailOTPEnabled {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(localizer.text("auth.emailIntro"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    TextField(localizer.text("auth.email"), text: $email)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 15)
-                        .frame(height: 52)
-                        .background(.background, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 15).stroke(.separator.opacity(0.7)))
-                    errorView
-                    Button {
-                        run {
-                            try await session.sendCode(to: email.cleanedEmail)
-                            step = .code
-                        }
-                    } label: {
-                        HStack {
-                            if working { ProgressView().tint(Brand.ink) }
-                            Text(working ? localizer.text("auth.sending") : localizer.text("auth.send"))
-                        }
+            if emailFormVisible {
+                emailForm
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            } else if session.configuration.emailOTPEnabled {
+                Button {
+                    errorMessage = nil
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                        emailExpanded = true
+                    }
+                } label: {
+                    Label(localizer.text("auth.emailOption"), systemImage: "envelope")
+                        .font(.headline)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: 16))
-                    .tint(Brand.accent)
-                    .foregroundStyle(Brand.onAccent)
-                    .disabled(working || !email.cleanedEmail.contains("@"))
                 }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 16))
+                .tint(Brand.ink)
+                .disabled(working)
+            }
+            if !emailFormVisible {
+                errorView
             }
         }
-        .padding(20)
+    }
+
+    private var emailFormVisible: Bool {
+        session.configuration.emailOTPEnabled
+            && (!session.configuration.googleAuthEnabled || emailExpanded)
+    }
+
+    private var emailForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(localizer.text("auth.emailIntro"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            TextField(localizer.text("auth.email"), text: $email)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 15)
+                .frame(height: 52)
+                .background(.background, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 15).stroke(.separator.opacity(0.7)))
+            errorView
+            Button {
+                run {
+                    try await session.sendCode(to: email.cleanedEmail)
+                    step = .code
+                }
+            } label: {
+                HStack {
+                    if working { ProgressView().tint(Brand.ink) }
+                    Text(working ? localizer.text("auth.sending") : localizer.text("auth.send"))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle(radius: 16))
+            .tint(Brand.accent)
+            .foregroundStyle(Brand.onAccent)
+            .disabled(working || !email.cleanedEmail.contains("@"))
+        }
+        .padding(18)
         .parcelCardSurface()
     }
 
@@ -557,5 +577,30 @@ struct NotificationOnboardingView: View {
 private extension String {
     var cleanedEmail: String {
         trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+private struct AuthenticationIdentity: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ParcelGlyph(size: 54)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Swiss Delivery Tracker")
+                    .font(.subheadline.weight(.bold))
+                Text(title)
+                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

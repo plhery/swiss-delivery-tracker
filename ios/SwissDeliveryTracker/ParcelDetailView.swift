@@ -6,6 +6,7 @@ struct ParcelDetailView: View {
     @EnvironmentObject private var store: ParcelStore
     @EnvironmentObject private var localizer: Localizer
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var editingTitle = false
     @State private var titleDraft = ""
     @State private var confirmingDelete = false
@@ -190,7 +191,11 @@ struct ParcelDetailView: View {
     }
 
     private func trackingTicket(_ parcel: Parcel) -> some View {
-        HStack(spacing: 12) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+
+        return layout {
             VStack(alignment: .leading, spacing: 5) {
                 Text(localizer.text("detail.trackingNumber"))
                     .font(.caption.weight(.semibold))
@@ -200,7 +205,9 @@ struct ParcelDetailView: View {
                     .lineLimit(2)
                     .textSelection(.enabled)
             }
-            Spacer(minLength: 6)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer(minLength: 6)
+            }
             Button {
                 copy(parcel.trackingNumber)
             } label: {
@@ -208,9 +215,12 @@ struct ParcelDetailView: View {
                     copied ? localizer.text("detail.copied") : localizer.text("detail.copy"),
                     systemImage: copied ? "checkmark" : "doc.on.doc"
                 )
+                .lineLimit(1)
+                .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : nil)
             }
             .font(.caption.weight(.bold))
             .buttonStyle(.bordered)
+            .tint(Brand.ink)
         }
         .padding(.vertical, 12)
         .overlay(alignment: .top) {
@@ -250,7 +260,7 @@ struct ParcelDetailView: View {
     private func notificationSetting(_ parcel: Parcel) -> some View {
         HStack(spacing: 14) {
             Image(systemName: parcel.notificationsMuted ? "bell.slash.fill" : "bell.fill")
-                .foregroundStyle(parcel.notificationsMuted ? .secondary : Brand.accent)
+                .foregroundStyle(parcel.notificationsMuted ? .secondary : Brand.ink)
                 .frame(width: 38, height: 38)
                 .background(.secondary.opacity(0.09), in: Circle())
             VStack(alignment: .leading, spacing: 3) {
@@ -387,10 +397,10 @@ private struct TimelineRow: View {
         HStack(alignment: .top, spacing: 13) {
             VStack(spacing: 0) {
                 ZStack {
-                    Circle().fill(event.stage.metadata.tone.color.opacity(0.17))
+                    Circle().fill(event.stage.metadata.tone.color.opacity(isCurrent ? 0.24 : 0.17))
                     Image(systemName: event.stage.metadata.symbol)
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(event.stage.metadata.tone.color)
+                        .foregroundStyle(Brand.ink)
                 }
                 .frame(width: 30, height: 30)
                 if !isLast {
@@ -404,12 +414,18 @@ private struct TimelineRow: View {
                     if isCurrent {
                         Text(localizer.text("native.latest"))
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(event.stage.metadata.tone.color)
+                            .foregroundStyle(Brand.ink)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                event.stage.metadata.tone.color.opacity(0.2),
+                                in: Capsule()
+                            )
                     }
                 }
                 Text(event.description).font(.subheadline).foregroundStyle(.secondary)
                 Text([event.location, localizer.dateTime(event.occurredAt)].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption2).foregroundStyle(.tertiary)
+                    .font(.caption2).foregroundStyle(.secondary)
             }
             .padding(.bottom, isLast ? 0 : 15)
             Spacer(minLength: 0)
