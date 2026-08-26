@@ -158,7 +158,7 @@ struct ParcelDetailView: View {
 
             let links = catalog.trackingLinks(for: parcel, language: localizer.language)
             if !links.isEmpty {
-                VStack(spacing: 8) {
+                VStack(spacing: 0) {
                     ForEach(links) { link in
                         Link(destination: link.url) {
                             HStack {
@@ -174,9 +174,11 @@ struct ParcelDetailView: View {
                                 }
                                 Spacer()
                             }
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, 2)
                             .frame(minHeight: 48)
-                            .background(.secondary.opacity(link.role == .active ? 0.1 : 0.055), in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(alignment: .bottom) {
+                                Divider().overlay(Brand.separator.opacity(0.7))
+                            }
                         }
                         .foregroundStyle(link.role == .active ? Brand.ink : .secondary)
                     }
@@ -199,28 +201,30 @@ struct ParcelDetailView: View {
                     .textSelection(.enabled)
             }
             Spacer(minLength: 6)
-            Button(copied ? localizer.text("detail.copied") : localizer.text("detail.copy")) {
+            Button {
                 copy(parcel.trackingNumber)
+            } label: {
+                Label(
+                    copied ? localizer.text("detail.copied") : localizer.text("detail.copy"),
+                    systemImage: copied ? "checkmark" : "doc.on.doc"
+                )
             }
             .font(.caption.weight(.bold))
             .buttonStyle(.bordered)
         }
-        .padding(14)
-        .background(Brand.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(style: StrokeStyle(lineWidth: 1, dash: [5, 4])).foregroundStyle(.secondary.opacity(0.25)))
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) {
+            Divider().overlay(Brand.separator.opacity(0.78))
+        }
+        .overlay(alignment: .bottom) {
+            Divider().overlay(Brand.separator.opacity(0.78))
+        }
     }
 
     private func journey(_ parcel: Parcel) -> some View {
         VStack(alignment: .leading, spacing: 17) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(localizer.text("detail.history"))
-                    .font(.caption.weight(.bold))
-                    .textCase(.uppercase)
-                    .tracking(1)
-                    .foregroundStyle(.secondary)
-                Text(localizer.text("detail.journey"))
-                    .font(.title2.weight(.bold))
-            }
+            Text(localizer.text("detail.journey"))
+                .font(.title2.weight(.bold))
             if parcel.sortedEvents.isEmpty {
                 Text(localizer.text(parcel.displayStatus.syncing ? "timeline.emptySyncing" : "timeline.empty"))
                     .font(.subheadline)
@@ -314,7 +318,7 @@ struct ParcelDetailView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Brand.accent)
-                .foregroundStyle(Brand.ink)
+                .foregroundStyle(Brand.onAccent)
             }
         }
         .frame(maxWidth: .infinity)
@@ -346,6 +350,7 @@ struct ParcelDetailView: View {
 
     private func copy(_ value: String) {
         UIPasteboard.general.string = value
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         copied = true
         Task {
             try? await Task.sleep(for: .seconds(2))

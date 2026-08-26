@@ -1,17 +1,18 @@
 import SwiftUI
 
 enum Brand {
-    static let accent = Color(hex: "#F4C900")
-    static let accentBright = Color(hex: "#FFD60A")
-    static let ink = Color(hex: "#171714")
-    static let cream = Color(hex: "#F7F3EA")
-    static let paper = Color(hex: "#FFFCF6")
-    static let warning = Color(hex: "#F28C28")
-    static let background = LinearGradient(
-        colors: [Color(hex: "#F7F3EA"), Color(hex: "#F2EEE7")],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    // The Swiss-yellow accent stays distinctive while the surrounding layers
+    // use semantic system colors so contrast, Dark Mode, and increased
+    // contrast all adapt with iOS.
+    static let accent = Color(uiColor: .systemYellow)
+    static let accentBright = Color(uiColor: .systemYellow)
+    static let onAccent = Color(hex: "#171714")
+    static let ink = Color(uiColor: .label)
+    static let cream = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let paper = Color(uiColor: .secondarySystemGroupedBackground)
+    static let warning = Color(uiColor: .systemOrange)
+    static let background = Color(uiColor: .systemGroupedBackground)
+    static let separator = Color(uiColor: .separator)
 }
 
 extension Color {
@@ -32,35 +33,35 @@ extension View {
             glassEffect(.regular, in: shape)
         } else {
             background(.ultraThinMaterial, in: shape)
-                .overlay(shape.stroke(.white.opacity(0.52), lineWidth: 0.7))
+                .overlay(shape.stroke(Brand.separator.opacity(0.72), lineWidth: 0.7))
         }
     }
 
     func parcelCardSurface(tone: ParcelTone = .normal) -> some View {
         background(
-            RoundedRectangle(cornerRadius: 21, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Brand.paper)
                 .overlay(alignment: .top) {
-                    tone.color.frame(height: 3)
+                    tone.color.frame(height: 2)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 21, style: .continuous)
-                        .stroke(Brand.ink.opacity(0.065), lineWidth: 0.7)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Brand.separator.opacity(0.62), lineWidth: 0.7)
                 )
-                .shadow(color: Brand.ink.opacity(0.055), radius: 11, y: 6)
         )
     }
 }
 
 struct TactileButtonStyle: ButtonStyle {
     var scale: CGFloat = 0.985
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? scale : 1)
             .opacity(configuration.isPressed ? 0.88 : 1)
-            .animation(.snappy(duration: 0.18), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -70,11 +71,10 @@ struct ParcelGlyph: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
-                .fill(Brand.accentBright)
+                .fill(Brand.accent)
             Image(systemName: "shippingbox.fill")
                 .font(.system(size: size * 0.43, weight: .semibold))
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(Brand.ink, Brand.paper)
+                .foregroundStyle(Brand.onAccent)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -106,6 +106,7 @@ struct StatusBadge: View {
 struct DeliveryProgress: View {
     let stage: TrackingStage?
     @EnvironmentObject private var localizer: Localizer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let position = stage?.metadata.progress ?? -1
@@ -114,7 +115,7 @@ struct DeliveryProgress: View {
                 Capsule()
                     .fill(index <= position ? (stage?.metadata.tone.color ?? Brand.accent) : Color.secondary.opacity(0.16))
                     .frame(height: index == position ? 5 : 3)
-                    .animation(.snappy, value: position)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: position)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -160,7 +161,9 @@ struct NoticeBanner: View {
                 .background(tint.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.semibold))
-                Text(message).font(.caption).foregroundStyle(.secondary)
+                if !message.isEmpty {
+                    Text(message).font(.caption).foregroundStyle(.secondary)
+                }
                 if let actionTitle, let action {
                     Button(actionTitle, action: action)
                         .font(.caption.weight(.semibold))
@@ -172,30 +175,47 @@ struct NoticeBanner: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
 struct InlineToast: View {
     let text: String
     let button: String?
+    let symbol: String
+    let tint: Color
     let action: (() -> Void)?
+
+    init(
+        text: String,
+        button: String?,
+        symbol: String = "checkmark.circle.fill",
+        tint: Color = .green,
+        action: (() -> Void)?
+    ) {
+        self.text = text
+        self.button = button
+        self.symbol = symbol
+        self.tint = tint
+        self.action = action
+    }
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: "archivebox.fill").foregroundStyle(Brand.accent)
+            Image(systemName: symbol).foregroundStyle(tint)
             Text(text).font(.subheadline.weight(.medium)).lineLimit(2)
             Spacer(minLength: 4)
             if let button, let action {
                 Button(button, action: action)
                     .font(.subheadline.weight(.bold))
-                    .foregroundStyle(Brand.accent)
+                    .foregroundStyle(tint)
             }
         }
         .padding(.horizontal, 17)
         .frame(minHeight: 54)
         .foregroundStyle(.primary)
-        .glassSurface(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
+        .glassSurface(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.13), radius: 8, y: 4)
+        .accessibilityElement(children: .combine)
     }
 }

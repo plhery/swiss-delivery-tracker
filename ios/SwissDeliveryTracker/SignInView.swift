@@ -18,7 +18,7 @@ struct WelcomeView: View {
                     .padding(.bottom, 24)
 
                     ParcelGlyph(size: 92)
-                        .shadow(color: Brand.accent.opacity(0.28), radius: 28, y: 12)
+                        .shadow(color: Brand.ink.opacity(0.1), radius: 8, y: 4)
                     Text("Swiss Delivery Tracker")
                         .font(.caption.weight(.bold))
                         .textCase(.uppercase)
@@ -57,7 +57,7 @@ struct WelcomeView: View {
                         .buttonStyle(.borderedProminent)
                         .buttonBorderShape(.roundedRectangle(radius: 17))
                         .tint(Brand.accent)
-                        .foregroundStyle(Brand.ink)
+                        .foregroundStyle(Brand.onAccent)
 
                         Button {
                             session.enterDemo()
@@ -151,7 +151,7 @@ struct SignInView: View {
                     .padding(.bottom, 30)
 
                     ParcelGlyph(size: 86)
-                        .shadow(color: Brand.accent.opacity(0.24), radius: 24, y: 10)
+                        .shadow(color: Brand.ink.opacity(0.1), radius: 8, y: 4)
                     Text("Swiss Delivery Tracker")
                         .font(.caption.weight(.bold))
                         .textCase(.uppercase)
@@ -278,7 +278,7 @@ struct SignInView: View {
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.roundedRectangle(radius: 16))
                     .tint(Brand.accent)
-                    .foregroundStyle(Brand.ink)
+                    .foregroundStyle(Brand.onAccent)
                     .disabled(working || !email.cleanedEmail.contains("@"))
                 }
             }
@@ -318,7 +318,7 @@ struct SignInView: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: 16))
             .tint(Brand.accent)
-            .foregroundStyle(Brand.ink)
+            .foregroundStyle(Brand.onAccent)
             .disabled(working || code.count != 6)
 
             Button(localizer.text("auth.differentEmail")) {
@@ -497,7 +497,7 @@ struct NotificationOnboardingView: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: 17))
             .tint(Brand.accent)
-            .foregroundStyle(Brand.ink)
+            .foregroundStyle(Brand.onAccent)
         } else if store.notificationStatus == .denied {
             Button {
                 UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
@@ -526,7 +526,7 @@ struct NotificationOnboardingView: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: 17))
             .tint(Brand.accent)
-            .foregroundStyle(Brand.ink)
+            .foregroundStyle(Brand.onAccent)
             .disabled(working)
         }
     }

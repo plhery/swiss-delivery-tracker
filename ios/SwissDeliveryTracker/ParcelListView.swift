@@ -4,6 +4,7 @@ struct ParcelListView: View {
     @EnvironmentObject private var store: ParcelStore
     @EnvironmentObject private var session: SessionStore
     @EnvironmentObject private var localizer: Localizer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var path: [UUID] = []
     @State private var query = ""
     @State private var statusFilter: ParcelStatusFilter = .all
@@ -27,7 +28,7 @@ struct ParcelListView: View {
                 parcelList
             }
             .navigationTitle(localizer.text("native.deliveries"))
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar { toolbar }
             .searchable(
                 text: $query,
@@ -95,7 +96,7 @@ struct ParcelListView: View {
 
     private var parcelList: some View {
         List {
-            Section { hero.listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16)) }
+            Section { hero.listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)) }
 
             if store.isDemo {
                 NoticeBanner(
@@ -186,6 +187,7 @@ struct ParcelListView: View {
             }
         }
         .listStyle(.plain)
+        .listSectionSpacing(.custom(12))
         .scrollContentBackground(.hidden)
         .refreshable {
             do {
@@ -205,72 +207,63 @@ struct ParcelListView: View {
     }
 
     private var hero: some View {
-        HStack(spacing: 18) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(localizer.text("app.eyebrow"))
-                    .font(.caption.weight(.bold))
-                    .textCase(.uppercase)
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.ink.opacity(0.62))
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(store.loading ? "—" : "\(store.activeCount)")
-                        .font(.system(size: 52, weight: .bold, design: .rounded))
-                        .contentTransition(.numericText())
-                    Text(localizer.text(store.activeCount == 1 ? "app.parcel.one" : "app.parcel.many"))
-                        .font(.headline)
-                }
-                Text(localizer.text("app.onTheWay"))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Brand.ink.opacity(0.68))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 11) {
+                Image(systemName: "shippingbox.fill")
+                    .font(.subheadline.weight(.bold))
+                    .frame(width: 34, height: 34)
+                    .background(Brand.onAccent.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(store.loading
+                    ? localizer.text("app.opening")
+                    : "\(store.activeCount) \(localizer.text(store.activeCount == 1 ? "app.parcel.one" : "app.parcel.many")) \(localizer.text("app.onTheWay"))")
+                    .font(.headline)
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 8)
+
+            Divider()
+                .overlay(Brand.onAccent.opacity(0.14))
+                .padding(.vertical, 13)
+
             if let nextParcel {
                 Button { path.append(nextParcel.id) } label: {
-                    VStack(alignment: .trailing, spacing: 5) {
-                        Text(localizer.text("app.nextUp"))
-                            .font(.caption2.weight(.bold))
-                            .textCase(.uppercase)
-                            .tracking(1)
-                            .foregroundStyle(Brand.ink.opacity(0.58))
-                        Text(nextParcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                            .font(.subheadline.weight(.bold))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.trailing)
-                        Text(nextParcel.expectedDelivery.map {
-                            localizer.expectedDelivery($0)
-                        } ?? localizer.text(nextParcel.displayStatus.key))
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(Brand.ink.opacity(0.68))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.trailing)
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(localizer.text("app.nextUp"))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Brand.onAccent.opacity(0.64))
+                            Text(nextParcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                                .font(.subheadline.weight(.bold))
+                                .lineLimit(1)
+                            Text(nextParcel.expectedDelivery.map {
+                                localizer.expectedDelivery($0)
+                            } ?? localizer.text(nextParcel.displayStatus.key))
+                                .font(.caption)
+                                .foregroundStyle(Brand.onAccent.opacity(0.68))
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Brand.onAccent.opacity(0.58))
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .frame(maxWidth: 150, alignment: .trailing)
+                .buttonStyle(TactileButtonStyle(scale: 0.99))
                 .accessibilityHint(localizer.text("detail.label"))
             } else {
-                ParcelGlyph(size: 70)
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Brand.ink.opacity(0.1)))
+                Text(localizer.text("app.noneOnWay"))
+                    .font(.subheadline)
+                    .foregroundStyle(Brand.onAccent.opacity(0.68))
             }
         }
-        .foregroundStyle(Brand.ink)
-        .padding(22)
-        .background(
-            LinearGradient(
-                colors: [Brand.accentBright, Brand.accent],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        .foregroundStyle(Brand.onAccent)
+        .padding(17)
+        .background(Brand.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Brand.onAccent.opacity(0.09), lineWidth: 0.7)
         )
-        .overlay(alignment: .topTrailing) {
-            Circle().stroke(Brand.ink.opacity(0.07), lineWidth: 24)
-                .frame(width: 150, height: 150).offset(x: 42, y: -62)
-                .allowsHitTesting(false)
-        }
-        .clipped()
-        .shadow(color: Brand.ink.opacity(0.08), radius: 13, y: 7)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
@@ -325,7 +318,9 @@ struct ParcelListView: View {
                     text: localizer.text("app.archivedToast", [
                         "name": parcel.label.nonEmpty ?? localizer.text("common.parcel"),
                     ]),
-                    button: localizer.text("app.undo")
+                    button: localizer.text("app.undo"),
+                    symbol: "archivebox.fill",
+                    tint: Brand.accent
                 ) {
                     Task {
                         do { try await store.restore(parcel) }
@@ -334,7 +329,13 @@ struct ParcelListView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let actionMessage {
-                InlineToast(text: actionMessage, button: nil, action: nil)
+                InlineToast(
+                    text: actionMessage,
+                    button: nil,
+                    symbol: "checkmark.circle.fill",
+                    tint: .green,
+                    action: nil
+                )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .task {
                         try? await Task.sleep(for: .seconds(4))
@@ -349,8 +350,8 @@ struct ParcelListView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 5)
-        .animation(.snappy, value: store.undoParcel?.id)
-        .animation(.snappy, value: actionMessage)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: store.undoParcel?.id)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: actionMessage)
     }
 
     @ViewBuilder
@@ -481,7 +482,7 @@ struct ParcelListView: View {
         }()
         Group {
             if section.kind == .archived {
-                Button { withAnimation(.snappy) { archivedExpanded.toggle() } } label: {
+                Button { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { archivedExpanded.toggle() } } label: {
                     HStack {
                         Text(title)
                         CountPill(count: section.parcels.count)
@@ -500,10 +501,11 @@ struct ParcelListView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
-        .background {
-            Brand.cream.padding(.horizontal, -16)
-        }
+        .font(.headline)
+        .textCase(nil)
+        .foregroundStyle(.primary)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
     }
 
     private func archive(_ parcel: Parcel) {
@@ -603,8 +605,11 @@ private struct ParcelCardView: View {
                             .foregroundStyle(.orange)
                             .lineLimit(2)
                     }
+                    if parcel.currentStage?.isFinal != true {
+                        DeliveryProgress(stage: parcel.currentStage)
+                    }
                 }
-                .padding(.vertical, 16)
+                .padding(.vertical, 14)
                 .padding(.leading, 16)
                 .padding(.trailing, onArchive == nil ? 16 : 5)
                 .frame(maxWidth: .infinity, alignment: .leading)

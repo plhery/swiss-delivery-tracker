@@ -36,6 +36,23 @@ import type { CarrierId, ParcelWithEvents } from './types';
 const DETAIL_HISTORY_KEY = 'parcelPostDetail';
 const PARCEL_VIEW_CONTROLS_ID = 'parcel-view-controls';
 
+function ToastMark({ kind }: { kind: 'archive' | 'success' }) {
+  return (
+    <span className={`toast-mark toast-mark--${kind}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        {kind === 'success' ? (
+          <path d="m7.5 12.5 3 3 6-7" />
+        ) : (
+          <>
+            <path d="M5 8h14v11H5z" />
+            <path d="M4 5h16v3H4zM9 12h6" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 const ATTENTION_LABELS: Record<ParcelAttention, MessageKey> = {
   sync_error: 'attention.sync_error',
   failed_attempt: 'attention.failed_attempt',
@@ -654,6 +671,7 @@ export default function App({
 
       {undoParcel && (
         <div className="undo-toast" role="status">
+          <ToastMark kind="archive" />
           <span className="undo-toast__message">
             <span>{t('app.archivedToast', { name: undoParcel.label || t('common.parcel') })}</span>
             {undoError && <small role="alert">{undoError}</small>}
@@ -665,7 +683,10 @@ export default function App({
       )}
 
       {refreshNotice && !undoParcel && (
-        <div className="action-toast" role="status">{refreshNotice}</div>
+        <div className="action-toast" role="status">
+          <ToastMark kind="success" />
+          <span>{refreshNotice}</span>
+        </div>
       )}
     </div>
   );

@@ -15,6 +15,7 @@ import {
 } from '../lib/parcelStatus';
 import { currentEvent, isFinal } from '../lib/stages';
 import type { ParcelWithEvents } from '../types';
+import { ProgressTrack } from './ProgressTrack';
 
 export function ParcelCard({
   parcel,
@@ -42,7 +43,6 @@ export function ParcelCard({
     : statusLabel;
   const parcelName = parcel.label || t('common.parcel');
   const dragStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
-  const actionsMenu = useRef<HTMLDetailsElement>(null);
   const suppressClick = useRef(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -50,7 +50,6 @@ export function ParcelCard({
 
   async function archive() {
     if (!onArchive || archiving) return;
-    if (actionsMenu.current) actionsMenu.current.open = false;
     setArchiving(true);
     setDragOffset(-88);
     try {
@@ -159,6 +158,7 @@ export function ParcelCard({
         {notice && parcel.syncStatus !== 'error' && (
           <p className="parcel-card__notice">{notice}</p>
         )}
+        {!final && <ProgressTrack stage={current?.stage ?? null} />}
       </div>
       </button>
       {onArchive && (
@@ -166,6 +166,7 @@ export function ParcelCard({
           type="button"
           className="parcel-card-swipe__archive"
           aria-label={t('parcel.archiveAria', { name: parcelName })}
+          aria-hidden="true"
           aria-busy={archiving}
           disabled={archiving}
           tabIndex={-1}
@@ -176,16 +177,20 @@ export function ParcelCard({
         </button>
       )}
       {onArchive && (
-        <details className="parcel-card-menu" ref={actionsMenu}>
-          <summary aria-label={`${t('detail.parcelActions')}: ${parcelName}`}>
-            <span aria-hidden="true">•••</span>
-          </summary>
-          <div>
-            <button type="button" disabled={archiving} onClick={() => void archive()}>
-              {archiving ? t('detail.archiving') : t('parcel.archive')}
-            </button>
-          </div>
-        </details>
+        <button
+          type="button"
+          className="parcel-card-menu"
+          aria-label={t('parcel.archiveAria', { name: parcelName })}
+          aria-busy={archiving}
+          disabled={archiving}
+          onClick={() => void archive()}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M4 5h16v4H4z" />
+            <path d="M6 9v10h12V9" />
+            <path d="M12 11v5m-2-2 2 2 2-2" />
+          </svg>
+        </button>
       )}
     </div>
   );

@@ -117,11 +117,6 @@ struct AddParcelView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(localizer.text("add.eyebrow"))
-                .font(.caption.weight(.bold))
-                .textCase(.uppercase)
-                .tracking(1.2)
-                .foregroundStyle(Brand.ink.opacity(0.62))
             Text(localizer.text("add.title"))
                 .font(.largeTitle.bold())
                 .foregroundStyle(Brand.ink)
@@ -141,7 +136,7 @@ struct AddParcelView: View {
             HStack(spacing: 13) {
                 Image(systemName: "shippingbox.fill")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(Brand.ink)
+                    .foregroundStyle(Brand.onAccent)
                     .frame(width: 42, height: 42)
                     .background(Brand.accentBright, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
 
@@ -500,7 +495,7 @@ struct AddParcelView: View {
             HStack(spacing: 10) {
                 if saving {
                     ProgressView()
-                        .tint(Brand.ink)
+                        .tint(Brand.onAccent)
                     Text(localizer.text("add.adding"))
                 } else {
                     Image(systemName: "shippingbox.fill")
@@ -509,7 +504,7 @@ struct AddParcelView: View {
                 }
             }
             .font(.headline)
-            .foregroundStyle(Brand.ink)
+            .foregroundStyle(Brand.onAccent)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 30)
             .contentTransition(.opacity)
@@ -612,13 +607,12 @@ struct AddParcelView: View {
 private extension View {
     func addParcelCardSurface() -> some View {
         background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Brand.paper)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Brand.ink.opacity(0.09), lineWidth: 0.8)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Brand.separator.opacity(0.68), lineWidth: 0.8)
                 )
-                .shadow(color: Brand.ink.opacity(0.06), radius: 12, y: 6)
         )
     }
 }
