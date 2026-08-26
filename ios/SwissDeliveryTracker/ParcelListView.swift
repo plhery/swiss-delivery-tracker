@@ -479,24 +479,30 @@ struct ParcelListView: View {
             case .archived: localizer.text("app.archived")
             }
         }()
-        if section.kind == .archived {
-            Button { withAnimation(.snappy) { archivedExpanded.toggle() } } label: {
+        Group {
+            if section.kind == .archived {
+                Button { withAnimation(.snappy) { archivedExpanded.toggle() } } label: {
+                    HStack {
+                        Text(title)
+                        CountPill(count: section.parcels.count)
+                        Spacer()
+                        Image(systemName: archivedExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.bold))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
                 HStack {
                     Text(title)
                     CountPill(count: section.parcels.count)
                     Spacer()
-                    Image(systemName: archivedExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption.weight(.bold))
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-        } else {
-            HStack {
-                Text(title)
-                CountPill(count: section.parcels.count)
-                Spacer()
-            }
+        }
+        .padding(.vertical, 8)
+        .background {
+            Brand.cream.padding(.horizontal, -16)
         }
     }
 
