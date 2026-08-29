@@ -26,6 +26,11 @@ enum CarrierID: String, Codable, CaseIterable, Hashable, Sendable, Identifiable 
     case ups
     case fedex
     case dpd
+    case laPoste = "la-poste"
+    case chronopost
+    case glsFr = "gls-fr"
+    case colisPrive = "colis-prive"
+    case geodis
     case shipup
     case internationalPost = "intl-post"
     case unknown

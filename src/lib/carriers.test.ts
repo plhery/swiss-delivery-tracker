@@ -103,6 +103,42 @@ describe('detectCarrier', () => {
     expect(detectCarrier('CN987654326US')).toBe('intl-post');
   });
 
+  it('recognises French postal and Chronopost identifiers', () => {
+    expect(detectCarrier('8G12345678901')).toBe('la-poste');
+    expect(detectCarrier('RA123456785FR')).toBe('la-poste');
+    expect(detectCarrier('12345678901234Q')).toBe('chronopost');
+    expect(detectCarrier('XU123456785FR')).toBe('chronopost');
+    expect(detectCarrier('XW123456785TS')).toBe('chronopost');
+    expect(detectCarrier('PZ123456785JF')).toBe('chronopost');
+  });
+
+  it('keeps ambiguous GLS France and combined Colis Privé shapes low-confidence', () => {
+    expect(detectCarrier('00AB12CD')).toBe('gls-fr');
+    expect(detectCarrierMatch('AB12CD34')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['gls-fr'],
+    });
+    expect(detectCarrierMatch('36631000001')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['gls-fr'],
+    });
+    expect(detectCarrierMatch('99112233445575012')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['colis-prive'],
+    });
+    expect(detectCarrierMatch('99112233445500000')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'none',
+      candidates: [],
+    });
+    expect(detectCarrier('00123456')).toBe('unknown');
+    expect(detectCarrier('DELIVERY')).toBe('unknown');
+    expect(detectCarrier('1G123GEODIS0')).toBe('geodis');
+  });
+
   it('rejects S10-shaped values with an invalid check digit', () => {
     expect(isValidS10TrackingNumber('RA123456785CH')).toBe(true);
     expect(isValidS10TrackingNumber('RA123456789CH')).toBe(false);
@@ -183,12 +219,27 @@ describe('parseTrackingInput', () => {
     ['ups', '1Z999AA10123456784'],
     ['fedex', '123456789012'],
     ['dpd', '01234567890123'],
+    ['la-poste', '8G12345678901'],
+    ['chronopost', '12345678901234Q'],
+    ['gls-fr', '00AB12CD'],
+    ['colis-prive', '99112233445575012'],
+    ['geodis', '1G123GEODIS0'],
   ] as const)('round-trips a generated %s tracking link', (carrier, trackingNumber) => {
     const link = CARRIERS[carrier].trackingUrl?.(trackingNumber);
     expect(link).toBeDefined();
     expect(parseTrackingInput(`Track it here: ${link}`)).toMatchObject({
       trackingNumber,
       carrier,
+      source: 'link',
+    });
+  });
+
+  it('trusts a broad GLS identifier only when it comes from the official domain', () => {
+    expect(parseTrackingInput('https://moncolis.gls-france.com/fr/AB12CD34')).toMatchObject({
+      trackingNumber: 'AB12CD34',
+      carrier: 'gls-fr',
+      confidence: 'high',
+      candidates: ['gls-fr'],
       source: 'link',
     });
   });
@@ -331,6 +382,16 @@ describe('carrier metadata', () => {
   it('excludes fallback carriers from the manual selector', () => {
     expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('unknown');
     expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('intl-post');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('la-poste');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('chronopost');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('gls-fr');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('colis-prive');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('geodis');
+    expect(tracksAutomatically('la-poste')).toBe(true);
+    expect(tracksAutomatically('chronopost')).toBe(true);
+    expect(tracksAutomatically('gls-fr')).toBe(true);
+    expect(tracksAutomatically('colis-prive')).toBe(true);
+    expect(tracksAutomatically('geodis')).toBe(true);
     expect(carrierInfo('planzer')).toBe(CARRIERS.planzer);
   });
 });

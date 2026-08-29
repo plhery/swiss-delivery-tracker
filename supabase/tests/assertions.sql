@@ -265,6 +265,26 @@ select public.create_owned_package(
 );
 
 select public.create_owned_package(
+  '8G12345678901', 'French postal parcel', 'la-poste', null, null
+);
+
+select public.create_owned_package(
+  'PZ123456785JF', 'Chronopost parcel', 'chronopost', null, null
+);
+
+select public.create_owned_package(
+  '00AB12CD', 'GLS France parcel', 'gls-fr', null, null
+);
+
+select public.create_owned_package(
+  '99112233445575012', 'Colis Prive parcel', 'colis-prive', null, null
+);
+
+select public.create_owned_package(
+  '1G1234567890', 'GEODIS parcel', 'geodis', null, null
+);
+
+select public.create_owned_package(
   '9010000001234',
   'Dachser parcel',
   'dachser',
@@ -306,6 +326,21 @@ begin
       and user_id = '10000000-0000-0000-0000-000000000001'
   ) then
     raise exception 'DPD postcode was not stored for its owner';
+  end if;
+
+  if (
+    select count(*)
+    from public.packages
+    where user_id = '10000000-0000-0000-0000-000000000001'
+      and (tracking_number, carrier) in (
+        ('8G12345678901', 'la-poste'),
+        ('PZ123456785JF', 'chronopost'),
+        ('00AB12CD', 'gls-fr'),
+        ('99112233445575012', 'colis-prive'),
+        ('1G1234567890', 'geodis')
+      )
+  ) <> 5 then
+    raise exception 'French carrier identifiers were not accepted by the package RPC';
   end if;
 
   if not exists (

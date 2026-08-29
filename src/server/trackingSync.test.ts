@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { secondsUntilNextSync, workerPollDelay } from './background';
 import type { CarrierResult } from './carrierResult';
+import { ColisPriveTracker, ColisPriveTrackingError } from './colisPrive';
+import { GeodisTracker } from './geodis';
+import { GLSFranceTracker } from './glsFrance';
+import { LaPosteTracker } from './laPoste';
 import type { SupabaseServiceClient } from './supabase';
 import {
+  CarrierTrackingAdapter,
   buildEvents,
   eventTimestamp,
   fairSyncPackages,
@@ -14,6 +19,34 @@ import {
   type TrackingAdapter,
 } from './trackingSync';
 import type { JsonObject } from './types';
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('French carrier dispatch', () => {
+  it('routes every hidden carrier to its isolated adapter', async () => {
+    const laPoste = vi.spyOn(LaPosteTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const glsFrance = vi.spyOn(GLSFranceTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const colisPrive = vi.spyOn(ColisPriveTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const geodis = vi.spyOn(GeodisTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const adapter = new CarrierTrackingAdapter();
+
+    await adapter.fetch('la-poste', '8G12345678901', null);
+    await adapter.fetch('chronopost', 'PZ123456785JF', null);
+    await adapter.fetch('gls-fr', '00AB12CD', null);
+    await adapter.fetch('colis-prive', '99112233445575012', null);
+    await adapter.fetch('geodis', '1G123GEODIS0', null);
+
+    expect(laPoste).toHaveBeenNthCalledWith(1, '8G12345678901');
+    expect(laPoste).toHaveBeenNthCalledWith(2, 'PZ123456785JF');
+    expect(glsFrance).toHaveBeenCalledWith('00AB12CD');
+    expect(colisPrive).toHaveBeenCalledWith('99112233445575012');
+    expect(geodis).toHaveBeenCalledWith('1G123GEODIS0');
+  });
+});
 
 describe('tracking event normalization', () => {
   it('prioritizes exception and final-stage phrases before broad delivery words', () => {
@@ -167,6 +200,33 @@ describe('TrackingSyncService', () => {
       last_synced_at: '2026-08-04T13:00:00.000Z',
       sync_status: 'waiting',
       sync_error: null,
+    });
+  });
+
+  it('preserves progressed shipment data when a carrier later reports not found', async () => {
+    const parcel = {
+      id: 'package-progressed',
+      carrier: 'colis-prive',
+      tracking_number: '99112233445575012',
+      current_stage: 'in_transit',
+      last_status_text: 'En cours d’acheminement',
+    };
+    const client = fakeClient();
+    const adapter: TrackingAdapter = {
+      fetch: vi.fn().mockRejectedValue(new ColisPriveTrackingError()),
+    };
+    const service = new TrackingSyncService(
+      client as unknown as SupabaseServiceClient,
+      adapter,
+      null,
+      () => new Date('2026-08-04T13:00:00Z'),
+    );
+
+    await expect(service.syncPackage(parcel)).resolves.toMatchObject({ errors: 1, waiting: 0 });
+    expect(client.updatePackage).toHaveBeenLastCalledWith('package-progressed', {
+      last_synced_at: '2026-08-04T13:00:00.000Z',
+      sync_status: 'error',
+      sync_error: 'Colis Privé could not locate the shipment',
     });
   });
 

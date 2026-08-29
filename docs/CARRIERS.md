@@ -15,6 +15,11 @@ Swiss Delivery Tracker can refresh these carriers automatically:
 | Dachser | Automatic for Customer Iberia shipments when the complete public detail URL is supplied. |
 | DPD Switzerland | Automatic through the myDPD guest flow. The parcel's delivery postcode unlocks verified scans and delivery windows. |
 | UPS | Automatic. Direct HTTP is tried first; a private TRAWL instance can handle browser challenges. |
+| La Poste / Colissimo | Automatic through La Poste's public unified tracking feed. |
+| Chronopost | Automatic through the same privacy-minimizing La Poste unified feed; the Chronopost SOAP scraper is intentionally not used. |
+| GLS France | Automatic through the public recipient-tracking JSON service. |
+| Colis Privé | Automatic when the tracking input contains the 12-character shipment number followed by the five-digit recipient postcode. |
+| GEODIS | Automatic for the official 12-character `1G…` recipient tracking format. |
 
 DHL, FedEx and International Post parcels are saved with a direct carrier link.
 ShipUp can be kept as a manual record.
@@ -24,6 +29,37 @@ detection rules are defined once in `contracts/openapi.json` under
 `x-carriers`, then generated for both the Next.js app and native iPhone app. Broad
 numeric formats are treated as suggestions and require manual confirmation;
 UPU S10 identifiers must pass their check digit before automatic detection.
+
+## French carrier rollout
+
+The French carriers are currently backend-only: their contract entries use
+`selectable: false`, so this release does not add them to either manual carrier
+picker. Recognized tracking links and distinctive number formats can still be
+classified, and API clients can store the carrier IDs directly. This lets the
+adapters gather real-world coverage before a later UI rollout.
+
+La Poste's unified response covers Colissimo, tracked mail and Chronopost. The
+adapter validates the returned shipment identifier and retains only normalized
+status, date, country and event-code fields. Chronopost therefore does not need
+the separate SOAP response, which exposes more consignment metadata and is not
+intended for automated extraction.
+
+GLS France and GEODIS responses can include recipient, sender, address, contact,
+delivery-instruction and document data. Their adapters build results from a
+small allowlist of status/timeline fields rather than copying upstream objects.
+GEODIS's anonymous request signature uses the public client key shipped in its
+recipient SPA; it is not an account secret, but it can rotate with a frontend
+deployment.
+Colis Privé's HTML adapter similarly removes the destination block before it
+reads the status banner and timeline. The Colis Privé combined credential ends
+in the recipient postcode, so treat it like a tracking secret and keep it out
+of logs and public issues.
+
+These frontend endpoints are undocumented and can change without notice. The
+adapters use bounded responses, timeouts, strict input and response-identity
+checks, and privacy-safe projections; failures remain visible for retry. La
+Poste's supported Okapi-key API is the preferred future production path when
+deployment credentials are available.
 
 ## AliExpress handoff to Swiss Post
 

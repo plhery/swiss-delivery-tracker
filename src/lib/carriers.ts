@@ -286,6 +286,7 @@ export function detectCarrier(raw: string): CarrierId {
 
 const TRACKING_CANDIDATE_PATTERNS = [
   /\b1Z[A-Z0-9]{16}\b/gi,
+  /\b1G[A-Z0-9]{10}\b/gi,
   /\b[A-Z]{2}\s*\d(?:[\s.-]?\d){8}\s*[A-Z]{2}\b/gi,
   /\b(?:JJD|JVGL)[A-Z0-9]{8,}\b/gi,
   /\b\d(?:[\s.-]?\d){9,19}\b/g,

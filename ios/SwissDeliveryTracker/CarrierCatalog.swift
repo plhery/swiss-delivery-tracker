@@ -273,6 +273,7 @@ final class CarrierCatalog: @unchecked Sendable {
     private func recognizedNumber(in text: String) -> String? {
         let patterns = [
             "\\b1Z[A-Z0-9]{16}\\b",
+            "\\b1G[A-Z0-9]{10}\\b",
             "\\b[A-Z]{2}\\s*\\d(?:[\\s.-]?\\d){8}\\s*[A-Z]{2}\\b",
             "\\b(?:JJD|JVGL)[A-Z0-9]{8,}\\b",
             "\\b\\d(?:[\\s.-]?\\d){9,19}\\b",

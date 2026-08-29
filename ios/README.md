@@ -81,7 +81,7 @@ ActivityKit updates while closed. A paid-team build enables both.
 | --- | --- |
 | Google OAuth, email OTP, session refresh, sign-out | Authentication Services, native OTP form, Keychain session |
 | Paste number, carrier URL, shipping text, or scan a barcode | Native add sheet with the shared carrier parser and camera scanner |
-| All 16 carriers and special Planzer, Dachser, DPD, S10, and handoff rules | Catalog generated from `contracts/openapi.json` |
+| All contract-defined carriers and special Planzer, Dachser, DPD, S10, and handoff rules | Catalog generated from `contracts/openapi.json` |
 | Authenticated API request/response models | Swift Codable models generated from every OpenAPI schema |
 | Search, status/carrier filters, priority/date sorting | Searchable native list, pickers, and sections |
 | Refresh all or one parcel and live updates | Pull to refresh, toolbar/detail actions, lightweight sync-job polling |

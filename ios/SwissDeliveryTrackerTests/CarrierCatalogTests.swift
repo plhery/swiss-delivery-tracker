@@ -15,6 +15,13 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertEqual(result.carrier, .unknown)
         XCTAssertEqual(result.confidence, .low)
         XCTAssertTrue(result.candidates.contains(.dpd))
+
+        for value in ["AB12CD34", "36631000001", "99112233445575012"] {
+            let frenchResult = catalog.detect(value)
+            XCTAssertEqual(frenchResult.carrier, .unknown)
+            XCTAssertEqual(frenchResult.confidence, .low)
+        }
+        XCTAssertEqual(catalog.detect("99112233445500000").confidence, .none)
     }
 
     func testParsesKnownCarrierLink() {
@@ -22,6 +29,18 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertEqual(parsed.trackingNumber, "1Z999AA10123456784")
         XCTAssertEqual(parsed.carrier, .ups)
         XCTAssertEqual(parsed.source, .link)
+    }
+
+    func testParsesGeodisHashLinkWithoutAddingFrenchCarriersToThePicker() {
+        let parsed = catalog.parse(
+            "https://espace-client.geodis.com/services/destinataires/#/fr/suivi/1G123GEODIS0"
+        )
+        XCTAssertEqual(parsed.trackingNumber, "1G123GEODIS0")
+        XCTAssertEqual(parsed.carrier, .geodis)
+        XCTAssertEqual(parsed.source, .link)
+        for carrier in [CarrierID.laPoste, .chronopost, .glsFr, .colisPrive, .geodis] {
+            XCTAssertFalse(catalog.selectableCarriers.contains(carrier))
+        }
     }
 
     func testPlanzerLinkKeepsQuickpacIdentityFor44Barcode() {

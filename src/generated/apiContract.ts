@@ -394,6 +394,190 @@ export const CARRIER_CAPABILITIES = {
       }
     ]
   },
+  "la-poste": {
+    "displayName": "La Poste / Colissimo",
+    "color": "#ffcf00",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "la-poste"
+    },
+    "canaryUrl": "https://www.laposte.fr/outils/suivre-vos-envois",
+    "trackingUrlTemplate": "https://www.laposte.fr/outils/suivre-vos-envois?code={trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "laposte.fr"
+        ],
+        "params": [
+          "code",
+          "idShip",
+          "idship"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^[68][A-Z0-9]\\d{11}$",
+        "confidence": "high"
+      },
+      {
+        "pattern": "^[A-Z0-9]{2}\\d{11}$",
+        "confidence": "low"
+      },
+      {
+        "pattern": "^(?!(?:PZ|XU|XW|XY))[A-Z]{2}\\d{9}FR$",
+        "confidence": "high",
+        "checksum": "s10"
+      }
+    ]
+  },
+  "chronopost": {
+    "displayName": "Chronopost",
+    "color": "#0056a7",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "la-poste"
+    },
+    "canaryUrl": "https://www.chronopost.fr/tracking-no-cms/suivi-page",
+    "trackingUrlTemplate": "https://www.chronopost.fr/tracking-no-cms/suivi-page?langue=fr&listeNumerosLT={trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "chronopost.fr",
+          "chronotrace.chronopost.fr",
+          "chronoshop2shop.fr"
+        ],
+        "params": [
+          "listeNumerosLT",
+          "listeNumeros",
+          "numeroLT"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^(?:PZ|XU|XW|XY)\\d{9}[A-Z]{2}$",
+        "confidence": "high",
+        "checksum": "s10"
+      },
+      {
+        "pattern": "^\\d{14}[A-Z]$",
+        "confidence": "high"
+      },
+      {
+        "pattern": "^[A-Z]{2}\\d{9}[A-Z]{2}$",
+        "confidence": "low"
+      }
+    ]
+  },
+  "gls-fr": {
+    "displayName": "GLS France",
+    "color": "#ffdd00",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "gls-france"
+    },
+    "canaryUrl": "https://moncolis.gls-france.com/fr/",
+    "trackingUrlTemplate": "https://moncolis.gls-france.com/fr/{trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "moncolis.gls-france.com",
+          "gls-france.com"
+        ],
+        "path": "^/fr/([^/?#]+)/?$"
+      },
+      {
+        "domains": [
+          "gls-group.com"
+        ],
+        "params": [
+          "match",
+          "parcelNumber",
+          "matchParcelNumber"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^00(?=[A-Z0-9]{6}$)(?=.*[A-Z])(?=.*\\d)[A-Z0-9]{6}$",
+        "confidence": "high"
+      },
+      {
+        "pattern": "^(?=[A-Z0-9]{8}$)(?=.*[A-Z])(?=.*\\d)[A-Z0-9]{8}$",
+        "confidence": "low"
+      },
+      {
+        "pattern": "^\\d{11}$",
+        "confidence": "low"
+      }
+    ]
+  },
+  "colis-prive": {
+    "displayName": "Colis Privé",
+    "color": "#e30613",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "colis-prive"
+    },
+    "canaryUrl": "https://colisprive.com/moncolis/pages/DetailColis.aspx",
+    "trackingUrlTemplate": "https://colisprive.com/moncolis/pages/DetailColis.aspx?numColis={trackingNumber}&lang=fr",
+    "linkRules": [
+      {
+        "domains": [
+          "colisprive.com",
+          "colisprive.fr"
+        ],
+        "params": [
+          "numColis"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^[A-Z0-9]{12}(?:0[1-9]|[1-8]\\d|9[0-5]|97|98)\\d{3}$",
+        "confidence": "low"
+      }
+    ]
+  },
+  "geodis": {
+    "displayName": "GEODIS",
+    "color": "#00549f",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "geodis"
+    },
+    "canaryUrl": "https://espace-client.geodis.com/services/destinataires/",
+    "trackingUrlTemplate": "https://espace-client.geodis.com/services/destinataires/#/fr/suivi/{trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "espace-client.geodis.com",
+          "geodis.com"
+        ],
+        "params": [
+          "noSuivi",
+          "trackingNumber"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^1G[A-Z0-9]{10}$",
+        "confidence": "high"
+      }
+    ]
+  },
   "shipup": {
     "displayName": "ShipUp",
     "color": "#5c4ee5",
@@ -419,7 +603,7 @@ export const CARRIER_CAPABILITIES = {
     "linkRules": [],
     "detectionRules": [
       {
-        "pattern": "^[A-Z]{2}\\d{9}(?!CH$)[A-Z]{2}$",
+        "pattern": "^(?!(?:PZ|XU|XW|XY))[A-Z]{2}\\d{9}(?!CH$|FR$)[A-Z]{2}$",
         "confidence": "high",
         "checksum": "s10"
       }
@@ -466,6 +650,11 @@ export const CARRIER_IDS = [
   "ups",
   "fedex",
   "dpd",
+  "la-poste",
+  "chronopost",
+  "gls-fr",
+  "colis-prive",
+  "geodis",
   "shipup",
   "intl-post",
   "unknown"
