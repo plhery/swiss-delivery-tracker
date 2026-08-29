@@ -77,14 +77,80 @@ extension View {
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(.white.opacity(0.22), lineWidth: 0.7)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    .white.opacity(0.52),
+                                    .white.opacity(0.16),
+                                    tint.opacity(0.18),
+                                    .white.opacity(0.08),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
                 }
+                .shadow(
+                    color: shadow ? tint.opacity(0.08) : .clear,
+                    radius: shadow ? 28 : 0,
+                    y: shadow ? 12 : 0
+                )
                 .shadow(
                     color: shadow ? .black.opacity(0.08) : .clear,
                     radius: shadow ? 18 : 0,
                     y: shadow ? 9 : 0
                 )
         }
+    }
+
+    func experimentalGlassSheen(
+        cornerRadius: CGFloat = 26,
+        delay: Double = 0.35
+    ) -> some View {
+        modifier(ExperimentalGlassSheenModifier(cornerRadius: cornerRadius, delay: delay))
+    }
+}
+
+private struct ExperimentalGlassSheenModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let delay: Double
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var swept = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                GeometryReader { geometry in
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            .white.opacity(colorScheme == .dark ? 0.12 : 0.32),
+                            .clear,
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: max(72, geometry.size.width * 0.24), height: geometry.size.height * 1.8)
+                    .rotationEffect(.degrees(17))
+                    .offset(
+                        x: swept ? geometry.size.width * 1.28 : -geometry.size.width * 0.52,
+                        y: -geometry.size.height * 0.38
+                    )
+                }
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+            .task {
+                guard !reduceMotion, !swept else { return }
+                try? await Task.sleep(for: .seconds(delay))
+                withAnimation(.smooth(duration: 1.15)) {
+                    swept = true
+                }
+            }
     }
 }
 
@@ -124,15 +190,98 @@ struct ExperimentalStatusPill: View {
     let text: String
     let symbol: String
     let tint: Color
+    var isLive = false
 
     var body: some View {
-        Label(text, systemImage: symbol)
+        HStack(spacing: 6) {
+            if isLive {
+                ExperimentalLiveDot(tint: tint, size: 6)
+            } else {
+                Image(systemName: symbol)
+                    .font(.caption2.weight(.bold))
+            }
+            Text(text)
+        }
             .font(.caption.weight(.bold))
             .lineLimit(1)
             .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .frame(height: 30)
             .background(tint.opacity(0.15), in: Capsule())
+    }
+}
+
+struct ExperimentalLiveDot: View {
+    let tint: Color
+    var size: CGFloat = 7
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+            let elapsed = context.date.timeIntervalSinceReferenceDate
+            let phase = reduceMotion ? 0.35 : elapsed.truncatingRemainder(dividingBy: 1.8) / 1.8
+
+            ZStack {
+                Circle()
+                    .stroke(tint.opacity(0.52 * (1 - phase)), lineWidth: 1.2)
+                    .scaleEffect(1 + phase * 1.25)
+                Circle()
+                    .fill(tint)
+                    .padding(size * 0.2)
+                    .shadow(color: tint.opacity(0.42), radius: 3)
+            }
+        }
+        .frame(width: size, height: size)
+        .padding(size * 0.55)
+        .accessibilityHidden(true)
+    }
+}
+
+struct ExperimentalRouteLine: View {
+    let tint: Color
+    var animated = true
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { geometry in
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || !animated)) { context in
+                let elapsed = context.date.timeIntervalSinceReferenceDate
+                let phase = animated && !reduceMotion
+                    ? elapsed.truncatingRemainder(dividingBy: 3.6) / 3.6
+                    : (animated ? 0.62 : 1)
+                let travel = max(0, geometry.size.width - 8)
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(tint.opacity(0.13))
+                        .frame(height: 2)
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [tint.opacity(0.32), tint, tint.opacity(0.32)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(height: 2)
+
+                    if animated {
+                        Circle()
+                            .fill(.white)
+                            .overlay(Circle().fill(tint).padding(1.6))
+                            .frame(width: 8, height: 8)
+                            .shadow(color: tint.opacity(0.54), radius: 5)
+                            .offset(x: travel * phase)
+                    }
+                }
+                .frame(maxHeight: .infinity)
+            }
+        }
+        .frame(minWidth: 36, minHeight: 12)
+        .accessibilityHidden(true)
     }
 }
 
@@ -186,6 +335,9 @@ struct ExperimentalJourneyRail: View {
                 }
 
                 ZStack {
+                    if stage == .outForDelivery {
+                        ExperimentalLiveDot(tint: tint, size: markerSize * 0.62)
+                    }
                     Circle().fill(.regularMaterial)
                     Circle().fill(tint.opacity(0.16)).padding(2)
                     Image(systemName: stage?.metadata.symbol ?? "shippingbox.fill")

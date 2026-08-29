@@ -19,6 +19,7 @@ struct ExperimentalRootView: View {
                 }
         }
         .tint(Brand.ink)
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }
 
@@ -482,6 +483,8 @@ private struct ExperimentalNextDeliveryPass: View {
     let transition: Namespace.ID
 
     @EnvironmentObject private var localizer: Localizer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
     private let catalog = CarrierCatalog.shared
 
     var body: some View {
@@ -492,7 +495,8 @@ private struct ExperimentalNextDeliveryPass: View {
                 ExperimentalStatusPill(
                     text: localizer.text(parcel.currentStage?.localizationKey ?? parcel.displayStatus.key),
                     symbol: parcel.currentStage?.metadata.symbol ?? "shippingbox.fill",
-                    tint: tint
+                    tint: tint,
+                    isLive: parcel.currentStage == .outForDelivery
                 )
                 Spacer(minLength: 4)
                 ExperimentalCarrierToken(carrier: catalog.info(for: parcel.activeTrackingCarrier), tint: tint)
@@ -539,8 +543,17 @@ private struct ExperimentalNextDeliveryPass: View {
         }
         .padding(22)
         .experimentalSurface(tint: tint, cornerRadius: 30)
+        .experimentalGlassSheen(cornerRadius: 30)
+        .opacity(appeared ? 1 : 0)
+        .scaleEffect(appeared ? 1 : 0.975)
+        .offset(y: appeared ? 0 : 12)
         .matchedTransitionSource(id: parcel.id, in: transition)
         .accessibilityElement(children: .combine)
+        .onAppear {
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.56)) {
+                appeared = true
+            }
+        }
     }
 }
 
@@ -552,10 +565,12 @@ private struct ExperimentalParcelPassCard: View {
     let onArchive: (() -> Void)?
 
     @EnvironmentObject private var localizer: Localizer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let catalog = CarrierCatalog.shared
 
     var body: some View {
         let tint = ExperimentalPalette.tint(for: parcel)
+        let motionReduced = reduceMotion
 
         HStack(spacing: 0) {
             Button(action: onOpen) {
@@ -566,10 +581,15 @@ private struct ExperimentalParcelPassCard: View {
                             tint: tint
                         )
                         Spacer(minLength: 4)
-                        Text(localizer.parcelStatus(parcel))
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(tint)
-                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            if parcel.currentStage == .outForDelivery {
+                                ExperimentalLiveDot(tint: tint, size: 5)
+                            }
+                            Text(localizer.parcelStatus(parcel))
+                                .lineLimit(1)
+                        }
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(tint)
                     }
 
                     Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
@@ -639,6 +659,11 @@ private struct ExperimentalParcelPassCard: View {
                 Button(localizer.text("parcel.archive"), systemImage: "archivebox") { onArchive() }
                     .tint(.orange)
             }
+        }
+        .scrollTransition(.animated(.snappy(duration: 0.42))) { content, phase in
+            content
+                .opacity(motionReduced || phase.isIdentity ? 1 : 0.66)
+                .scaleEffect(motionReduced || phase.isIdentity ? 1 : 0.975)
         }
         .accessibilityElement(children: .contain)
     }

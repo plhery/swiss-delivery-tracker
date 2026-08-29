@@ -46,6 +46,7 @@ struct ExperimentalParcelDetailView: View {
         .navigationTitle(localizer.text("detail.label"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationTransition(.zoom(sourceID: parcelID, in: transition))
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             if let parcel {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -91,7 +92,8 @@ struct ExperimentalParcelDetailView: View {
                 ExperimentalStatusPill(
                     text: localizer.parcelStatus(parcel),
                     symbol: parcel.currentStage?.metadata.symbol ?? "shippingbox.fill",
-                    tint: tint
+                    tint: tint,
+                    isLive: parcel.currentStage == .outForDelivery
                 )
                 Spacer(minLength: 4)
                 ExperimentalCarrierToken(carrier: carrier, tint: tint)
@@ -109,24 +111,20 @@ struct ExperimentalParcelDetailView: View {
                     .minimumScaleFactor(0.72)
             }
 
-            HStack(spacing: 10) {
-                Label(origin, systemImage: "location.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [tint.opacity(0.2), tint, tint.opacity(0.2)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(height: 2)
-                Image(systemName: "house.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(tint)
-                Text(strings.home)
-                    .font(.subheadline.weight(.semibold))
+            VStack(spacing: 7) {
+                HStack(spacing: 10) {
+                    Label(origin, systemImage: "location.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 12)
+                    Label(strings.home, systemImage: "house.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(tint)
+                }
+                ExperimentalRouteLine(
+                    tint: tint,
+                    animated: parcel.currentStage?.isFinal != true
+                )
             }
 
             ExperimentalJourneyRail(stage: parcel.currentStage, tint: tint)
@@ -140,6 +138,7 @@ struct ExperimentalParcelDetailView: View {
         }
         .padding(22)
         .experimentalSurface(tint: tint, cornerRadius: 30)
+        .experimentalGlassSheen(cornerRadius: 30, delay: 0.22)
         .accessibilityElement(children: .combine)
     }
 
@@ -153,12 +152,17 @@ struct ExperimentalParcelDetailView: View {
                     .font(.title3.weight(.bold))
 
                 HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: event.stage.metadata.symbol)
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 42, height: 42)
-                        .background(tint.opacity(0.16), in: Circle())
-                        .symbolEffect(.pulse, value: event.id)
+                    ZStack {
+                        if event.stage == .outForDelivery {
+                            ExperimentalLiveDot(tint: tint, size: 22)
+                        }
+                        Image(systemName: event.stage.metadata.symbol)
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 42, height: 42)
+                            .background(tint.opacity(0.16), in: Circle())
+                            .symbolEffect(.pulse, value: event.id)
+                    }
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(localizer.text(event.stage.localizationKey))
