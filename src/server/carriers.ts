@@ -4,7 +4,7 @@ import { validatePlanzerSharedUrl } from './planzerShared';
 
 interface CarrierRequirement {
   field: 'trackingUrl' | 'dpdPostcode';
-  validator: 'planzerSharedUrl' | 'dachserCapabilityUrl' | 'swissPostcode';
+  validator: 'planzerSharedUrl' | 'dachserCapabilityUrl' | 'swissPostcode' | 'francePostcode';
   whenTrackingNumber?: string;
 }
 
@@ -98,7 +98,7 @@ export function normalizeCarrierInputs(
       if (field === 'trackingUrl') {
         throw new TypeError('A tracking URL is not used for this carrier or tracking number');
       }
-      throw new TypeError('A delivery postcode is only used for DPD');
+      throw new TypeError('A delivery postcode is not used for this carrier');
     }
   }
   for (const [field, requirement] of requirements) {
@@ -107,7 +107,13 @@ export function normalizeCarrierInputs(
       if (field === 'trackingUrl') {
         throw new TypeError(`${carrierDefinition(carrierId).displayName} requires its complete tracking URL`);
       }
-      throw new TypeError('DPD parcels require the four-digit delivery postcode');
+      if (requirement.validator === 'swissPostcode') {
+        throw new TypeError('DPD parcels require the four-digit delivery postcode');
+      }
+      if (requirement.validator === 'francePostcode') {
+        throw new TypeError('Mondial Relay parcels require the five-digit delivery postcode');
+      }
+      throw new TypeError(`${carrierDefinition(carrierId).displayName} requires the delivery postcode`);
     }
     switch (requirement.validator) {
       case 'planzerSharedUrl':
@@ -119,6 +125,11 @@ export function normalizeCarrierInputs(
       case 'swissPostcode':
         if (!/^\d{4}$/.test(value)) {
           throw new TypeError('DPD parcels require the four-digit delivery postcode');
+        }
+        break;
+      case 'francePostcode':
+        if (!/^\d{5}$/.test(value)) {
+          throw new TypeError('Mondial Relay parcels require the five-digit delivery postcode');
         }
         break;
       default:

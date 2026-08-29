@@ -13,13 +13,16 @@ import {
 } from './carriers';
 import { ColisPriveTracker } from './colisPrive';
 import { DachserTracker } from './dachser';
+import { DPDFranceTracker } from './dpdFrance';
 import { DPDTracker } from './dpd';
 import { GeodisTracker } from './geodis';
 import { GLSFranceTracker } from './glsFrance';
 import { HermesTracker } from './hermes';
 import { LaPosteTracker } from './laPoste';
+import { MondialRelayTracker } from './mondialRelay';
 import { PlanzerSharedTracker } from './planzerShared';
 import type { CompositePushNotificationService } from './push';
+import { RelaisColisTracker } from './relaisColis';
 import type { SupabaseServiceClient } from './supabase';
 import { SwissPostTracker } from './swissPost';
 import { isRecord, type JsonObject } from './types';
@@ -50,6 +53,9 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
     readonly glsFrance = new GLSFranceTracker(),
     readonly colisPrive = new ColisPriveTracker(),
     readonly geodis = new GeodisTracker(),
+    readonly dpdFrance = new DPDFranceTracker(),
+    readonly mondialRelay = new MondialRelayTracker(),
+    readonly relaisColis = new RelaisColisTracker(),
   ) {}
 
   async fetch(
@@ -79,6 +85,12 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
       result = await this.colisPrive.fetch(trackingNumber);
     } else if (adapter === 'geodis') {
       result = await this.geodis.fetch(trackingNumber);
+    } else if (adapter === 'dpd-france') {
+      result = await this.dpdFrance.fetch(trackingNumber);
+    } else if (adapter === 'mondial-relay') {
+      result = await this.mondialRelay.fetch(trackingNumber, dpdPostcode ?? '');
+    } else if (adapter === 'relais-colis') {
+      result = await this.relaisColis.fetch(trackingNumber);
     } else if (adapter === 'planzer' && trackingUrl) {
       result = await this.planzerShared.fetch(trackingNumber, trackingUrl);
     } else {

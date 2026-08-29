@@ -70,7 +70,7 @@ if (
 
 const carrierInputValidators = {
   trackingUrl: new Set(['planzerSharedUrl', 'dachserCapabilityUrl']),
-  dpdPostcode: new Set(['swissPostcode']),
+  dpdPostcode: new Set(['swissPostcode', 'francePostcode']),
 };
 for (const [carrierId, definition] of Object.entries(carrierCapabilities)) {
   const tracking = definition?.tracking;

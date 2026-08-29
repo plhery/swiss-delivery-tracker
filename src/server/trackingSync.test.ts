@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { secondsUntilNextSync, workerPollDelay } from './background';
 import type { CarrierResult } from './carrierResult';
 import { ColisPriveTracker, ColisPriveTrackingError } from './colisPrive';
+import { DPDFranceTracker } from './dpdFrance';
 import { GeodisTracker } from './geodis';
 import { GLSFranceTracker } from './glsFrance';
 import { LaPosteTracker } from './laPoste';
+import { MondialRelayTracker } from './mondialRelay';
+import { RelaisColisTracker } from './relaisColis';
 import type { SupabaseServiceClient } from './supabase';
 import {
   CarrierTrackingAdapter,
@@ -32,6 +35,12 @@ describe('French carrier dispatch', () => {
       .mockResolvedValue({ status: 'in_transit' });
     const geodis = vi.spyOn(GeodisTracker.prototype, 'fetch')
       .mockResolvedValue({ status: 'in_transit' });
+    const dpdFrance = vi.spyOn(DPDFranceTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const mondialRelay = vi.spyOn(MondialRelayTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const relaisColis = vi.spyOn(RelaisColisTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
     const adapter = new CarrierTrackingAdapter();
 
     await adapter.fetch('la-poste', '8G12345678901', null);
@@ -39,12 +48,18 @@ describe('French carrier dispatch', () => {
     await adapter.fetch('gls-fr', '00AB12CD', null);
     await adapter.fetch('colis-prive', '99112233445575012', null);
     await adapter.fetch('geodis', '1G123GEODIS0', null);
+    await adapter.fetch('dpd-fr', '250803383035673', null);
+    await adapter.fetch('mondial-relay', '76434219', null, '59650');
+    await adapter.fetch('relais-colis', 'CC200000000401', null);
 
     expect(laPoste).toHaveBeenNthCalledWith(1, '8G12345678901');
     expect(laPoste).toHaveBeenNthCalledWith(2, 'PZ123456785JF');
     expect(glsFrance).toHaveBeenCalledWith('00AB12CD');
     expect(colisPrive).toHaveBeenCalledWith('99112233445575012');
     expect(geodis).toHaveBeenCalledWith('1G123GEODIS0');
+    expect(dpdFrance).toHaveBeenCalledWith('250803383035673');
+    expect(mondialRelay).toHaveBeenCalledWith('76434219', '59650');
+    expect(relaisColis).toHaveBeenCalledWith('CC200000000401');
   });
 });
 

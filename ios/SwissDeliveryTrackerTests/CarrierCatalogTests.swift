@@ -8,6 +8,8 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.detect("1Z999AA10123456784").carrier, .ups)
         XCTAssertEqual(catalog.detect("443412345678901234").carrier, .quickpac)
         XCTAssertEqual(catalog.detect("RA123456785CH").carrier, .swissPost)
+        XCTAssertEqual(catalog.detect("250803383035673").carrier, .dpdFr)
+        XCTAssertEqual(catalog.detect("CC200000000401").carrier, .relaisColis)
     }
 
     func testKeepsAmbiguousCarrierForConfirmation() {
@@ -38,7 +40,10 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertEqual(parsed.trackingNumber, "1G123GEODIS0")
         XCTAssertEqual(parsed.carrier, .geodis)
         XCTAssertEqual(parsed.source, .link)
-        for carrier in [CarrierID.laPoste, .chronopost, .glsFr, .colisPrive, .geodis] {
+        for carrier in [
+            CarrierID.dpdFr, .mondialRelay, .relaisColis,
+            .laPoste, .chronopost, .glsFr, .colisPrive, .geodis,
+        ] {
             XCTAssertFalse(catalog.selectableCarriers.contains(carrier))
         }
     }

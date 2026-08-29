@@ -283,6 +283,24 @@ describe('input validation', () => {
       trackingUrl: '',
       dpdPostcode: '',
     })).toThrow('four-digit');
+    expect(newPackageValues({
+      trackingNumber: '76434219',
+      label: 'Relay parcel',
+      carrier: 'mondial-relay',
+      trackingUrl: '',
+      dpdPostcode: '59650',
+    })).toMatchObject({
+      trackingNumber: '76434219',
+      carrier: 'mondial-relay',
+      dpdPostcode: '59650',
+    });
+    expect(() => newPackageValues({
+      trackingNumber: '76434219',
+      label: 'Relay parcel',
+      carrier: 'mondial-relay',
+      trackingUrl: '',
+      dpdPostcode: '5965',
+    })).toThrow('five-digit');
     expect(() => newPackageValues({
       trackingNumber: 'letters',
       label: 'Parcel',

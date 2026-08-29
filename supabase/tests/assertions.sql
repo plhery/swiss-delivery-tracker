@@ -265,6 +265,18 @@ select public.create_owned_package(
 );
 
 select public.create_owned_package(
+  '250803383035673', 'DPD France parcel', 'dpd-fr', null, null
+);
+
+select public.create_owned_package(
+  '76434219', 'Mondial Relay parcel', 'mondial-relay', null, '59650'
+);
+
+select public.create_owned_package(
+  'CC200000000401', 'Relais Colis parcel', 'relais-colis', null, null
+);
+
+select public.create_owned_package(
   '8G12345678901', 'French postal parcel', 'la-poste', null, null
 );
 
@@ -328,18 +340,30 @@ begin
     raise exception 'DPD postcode was not stored for its owner';
   end if;
 
+  if not exists (
+    select 1 from public.packages
+    where tracking_number = '76434219'
+      and dpd_postcode = '59650'
+      and user_id = '10000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'Mondial Relay postcode was not stored for its owner';
+  end if;
+
   if (
     select count(*)
     from public.packages
     where user_id = '10000000-0000-0000-0000-000000000001'
       and (tracking_number, carrier) in (
+        ('250803383035673', 'dpd-fr'),
+        ('76434219', 'mondial-relay'),
+        ('CC200000000401', 'relais-colis'),
         ('8G12345678901', 'la-poste'),
         ('PZ123456785JF', 'chronopost'),
         ('00AB12CD', 'gls-fr'),
         ('99112233445575012', 'colis-prive'),
         ('1G1234567890', 'geodis')
       )
-  ) <> 5 then
+  ) <> 8 then
     raise exception 'French carrier identifiers were not accepted by the package RPC';
   end if;
 
@@ -388,7 +412,16 @@ begin
     perform public.create_owned_package(
       'NOTDPD8004', '', 'dhl', null, '8004'
     );
-    raise exception 'DPD postcode was accepted for a different carrier';
+    raise exception 'delivery postcode was accepted for a different carrier';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  begin
+    perform public.create_owned_package(
+      '76434220', '', 'mondial-relay', null, '5965'
+    );
+    raise exception 'invalid Mondial Relay postcode was accepted';
   exception when invalid_parameter_value then
     null;
   end;

@@ -394,6 +394,110 @@ export const CARRIER_CAPABILITIES = {
       }
     ]
   },
+  "dpd-fr": {
+    "displayName": "DPD France",
+    "color": "#dc0032",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "dpd-france"
+    },
+    "canaryUrl": "https://trace.dpd.fr/fr/trace",
+    "trackingUrlTemplate": "https://trace.dpd.fr/fr/trace/{trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "trace.dpd.fr"
+        ],
+        "path": "^/(?:fr/trace|trace-particuliers)/([^/?#]+)/?$"
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^250\\d{12}$",
+        "confidence": "high"
+      },
+      {
+        "pattern": "^(?:[01]\\d{11,14}|250\\d{9,11})$",
+        "confidence": "low"
+      }
+    ]
+  },
+  "mondial-relay": {
+    "displayName": "Mondial Relay",
+    "color": "#ef3026",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "mondial-relay",
+      "requirements": [
+        {
+          "field": "dpdPostcode",
+          "validator": "francePostcode",
+          "label": "Delivery postcode",
+          "type": "text",
+          "placeholder": "75001",
+          "help": "Mondial Relay requires the recipient postcode to disclose shipment events.",
+          "pattern": "^[0-9]{5}$",
+          "maxLength": 5,
+          "inputMode": "numeric",
+          "autoComplete": "postal-code"
+        }
+      ]
+    },
+    "canaryUrl": "https://www.mondialrelay.fr/suivi-de-colis/",
+    "trackingUrlTemplate": "https://www.mondialrelay.fr/suivi-de-colis/?numeroExpedition={trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "mondialrelay.fr"
+        ],
+        "params": [
+          "shipment",
+          "numeroExpedition",
+          "numero",
+          "trackingNumber"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^(?:\\d{8}|\\d{10}|\\d{12})$",
+        "confidence": "low"
+      }
+    ]
+  },
+  "relais-colis": {
+    "displayName": "Relais Colis",
+    "color": "#7bb928",
+    "selectable": false,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "relais-colis"
+    },
+    "canaryUrl": "https://www.relaiscolis.com/colis/suivre",
+    "linkRules": [
+      {
+        "domains": [
+          "relaiscolis.com"
+        ],
+        "params": [
+          "trackingNumber",
+          "numeroColis",
+          "numColis"
+        ]
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^CC\\d{10,14}$",
+        "confidence": "high"
+      }
+    ]
+  },
   "la-poste": {
     "displayName": "La Poste / Colissimo",
     "color": "#ffcf00",
@@ -650,6 +754,9 @@ export const CARRIER_IDS = [
   "ups",
   "fedex",
   "dpd",
+  "dpd-fr",
+  "mondial-relay",
+  "relais-colis",
   "la-poste",
   "chronopost",
   "gls-fr",

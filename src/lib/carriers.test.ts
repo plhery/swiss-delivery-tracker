@@ -139,6 +139,21 @@ describe('detectCarrier', () => {
     expect(detectCarrier('1G123GEODIS0')).toBe('geodis');
   });
 
+  it('recognises distinctive deep French carrier identifiers without guessing broad numbers', () => {
+    expect(detectCarrier('250803383035673')).toBe('dpd-fr');
+    expect(detectCarrier('CC200000000401')).toBe('relais-colis');
+    expect(detectCarrierMatch('10594002378611')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['dpd', 'dpd-fr'],
+    });
+    expect(detectCarrierMatch('76434219')).toMatchObject({
+      carrier: 'unknown',
+      confidence: 'low',
+      candidates: ['mondial-relay'],
+    });
+  });
+
   it('rejects S10-shaped values with an invalid check digit', () => {
     expect(isValidS10TrackingNumber('RA123456785CH')).toBe(true);
     expect(isValidS10TrackingNumber('RA123456789CH')).toBe(false);
@@ -153,7 +168,7 @@ describe('detectCarrier', () => {
     expect(detectCarrierMatch('1234567890')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['dhl'],
+      candidates: ['dhl', 'mondial-relay'],
     });
     expect(detectCarrier('JJD0099999999')).toBe('dhl');
     expect(detectCarrier('JVGL0099999999')).toBe('dhl');
@@ -163,12 +178,12 @@ describe('detectCarrier', () => {
     expect(detectCarrierMatch('123456789012')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['fedex'],
+      candidates: ['fedex', 'dpd-fr', 'mondial-relay'],
     });
     expect(detectCarrierMatch('123456789012345')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['fedex'],
+      candidates: ['fedex', 'dpd-fr'],
     });
   });
 
@@ -176,7 +191,7 @@ describe('detectCarrier', () => {
     expect(detectCarrierMatch('01234567890123')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['dpd'],
+      candidates: ['dpd', 'dpd-fr'],
     });
   });
 
@@ -219,6 +234,7 @@ describe('parseTrackingInput', () => {
     ['ups', '1Z999AA10123456784'],
     ['fedex', '123456789012'],
     ['dpd', '01234567890123'],
+    ['dpd-fr', '250803383035673'],
     ['la-poste', '8G12345678901'],
     ['chronopost', '12345678901234Q'],
     ['gls-fr', '00AB12CD'],
@@ -240,6 +256,25 @@ describe('parseTrackingInput', () => {
       carrier: 'gls-fr',
       confidence: 'high',
       candidates: ['gls-fr'],
+      source: 'link',
+    });
+  });
+
+  it('trusts deep French identifiers embedded in their official carrier links', () => {
+    expect(parseTrackingInput(
+      'https://www.mondialrelay.fr/suivi-de-colis/?shipment=76434219',
+    )).toMatchObject({
+      trackingNumber: '76434219',
+      carrier: 'mondial-relay',
+      confidence: 'high',
+      source: 'link',
+    });
+    expect(parseTrackingInput(
+      'https://www.relaiscolis.com/colis/suivre?trackingNumber=CC200000000401',
+    )).toMatchObject({
+      trackingNumber: 'CC200000000401',
+      carrier: 'relais-colis',
+      confidence: 'high',
       source: 'link',
     });
   });
@@ -387,11 +422,17 @@ describe('carrier metadata', () => {
     expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('gls-fr');
     expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('colis-prive');
     expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('geodis');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('dpd-fr');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('mondial-relay');
+    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('relais-colis');
     expect(tracksAutomatically('la-poste')).toBe(true);
     expect(tracksAutomatically('chronopost')).toBe(true);
     expect(tracksAutomatically('gls-fr')).toBe(true);
     expect(tracksAutomatically('colis-prive')).toBe(true);
     expect(tracksAutomatically('geodis')).toBe(true);
+    expect(tracksAutomatically('dpd-fr')).toBe(true);
+    expect(tracksAutomatically('mondial-relay')).toBe(true);
+    expect(tracksAutomatically('relais-colis')).toBe(true);
     expect(carrierInfo('planzer')).toBe(CARRIERS.planzer);
   });
 });
