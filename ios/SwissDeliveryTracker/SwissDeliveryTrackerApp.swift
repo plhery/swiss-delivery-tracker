@@ -39,6 +39,11 @@ struct RootView: View {
     @AppStorage("sdt.notificationOnboardingCompleted.v1") private var notificationOnboardingCompleted = false
     @State private var showingNotificationOnboarding = false
 
+    private var experimentalUIEnabled: Bool {
+        ProcessInfo.processInfo.arguments.contains("-experimental-ui")
+            || ProcessInfo.processInfo.arguments.contains("experimental-ui")
+    }
+
     var body: some View {
         Group {
             switch session.state {
@@ -51,7 +56,11 @@ struct RootView: View {
             case .signedOut:
                 SignInView(configured: true)
             case .demo, .signedIn:
-                ParcelListView()
+                if experimentalUIEnabled {
+                    ExperimentalRootView()
+                } else {
+                    ParcelListView()
+                }
             }
         }
         .task { await session.bootstrap() }
