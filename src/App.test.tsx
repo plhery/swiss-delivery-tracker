@@ -52,6 +52,7 @@ describe('App', () => {
       level: 1,
       name: 'Swiss Delivery Tracker',
     })).toBeInTheDocument();
+    expect(screen.getByText('France + Switzerland')).toBeInTheDocument();
     expect(await screen.findByText('Coffee beans ☕')).toBeInTheDocument();
     expect(screen.getByText('New sneakers 👟')).toBeInTheDocument();
     expect(screen.getAllByText('Birthday gift 🎁')).toHaveLength(2);
@@ -351,6 +352,55 @@ describe('App', () => {
     await user.selectOptions(within(sheet).getByLabelText(/carrier/i), 'dpd');
 
     expect(within(sheet).getByLabelText(/delivery postcode/i)).toHaveValue('8004');
+  });
+
+  it('offers every French carrier and keeps Swiss DPD postcodes out of Mondial Relay', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    await repo.add({
+      trackingNumber: '06086514587082',
+      label: 'Previous DPD parcel',
+      carrier: 'dpd',
+      dpdPostcode: '8004',
+    });
+    const add = vi.fn(repo.add);
+    const user = userEvent.setup();
+    renderApp({ ...repo, add });
+    await screen.findByText('Previous DPD parcel');
+
+    await user.click(screen.getByRole('button', { name: /add a parcel/i }));
+    const sheet = screen.getByRole('dialog', { name: /add a parcel/i });
+    await user.type(within(sheet).getByLabelText(/tracking number/i), '76434219');
+
+    const carrier = within(sheet).getByLabelText('Carrier');
+    for (const name of [
+      'DPD France',
+      'Mondial Relay',
+      'Relais Colis',
+      'La Poste / Colissimo',
+      'Chronopost',
+      'GLS France',
+      'Colis Privé',
+      'GEODIS',
+    ]) {
+      expect(within(carrier).getByRole('option', { name })).toBeInTheDocument();
+    }
+
+    await user.selectOptions(carrier, 'mondial-relay');
+    const postcode = within(sheet).getByLabelText(/delivery postcode/i);
+    expect(postcode).toHaveValue('');
+    expect(postcode).toHaveAttribute('maxlength', '5');
+    expect(within(sheet).getByText(/used only to verify and retrieve tracking updates/i))
+      .toBeInTheDocument();
+
+    await user.type(postcode, '59650');
+    await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
+
+    expect(add).toHaveBeenCalledWith({
+      trackingNumber: '76434219',
+      label: '',
+      carrier: 'mondial-relay',
+      dpdPostcode: '59650',
+    });
   });
 
   it('shows the first sync in progress and reflects its result without manual refresh', async () => {

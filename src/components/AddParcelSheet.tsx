@@ -31,7 +31,10 @@ export function AddParcelSheet({
   const [trackingInputValue, setTrackingInputValue] = useState(initialTrackingInput);
   const [carrierInputs, setCarrierInputs] = useState<Record<CarrierInputField, string>>({
     trackingUrl: '',
-    dpdPostcode: lastDpdPostcode ?? '',
+    dpdPostcode: '',
+  });
+  const [carrierPostcodes, setCarrierPostcodes] = useState<Partial<Record<CarrierId, string>>>({
+    dpd: lastDpdPostcode ?? '',
   });
   const [selectedCarrier, setSelectedCarrier] = useState<CarrierId | 'auto'>('auto');
   const [showCarrierPicker, setShowCarrierPicker] = useState(false);
@@ -53,7 +56,9 @@ export function AddParcelSheet({
   const carrierInputValue = (field: CarrierInputField) =>
     field === 'trackingUrl' && parsedCarrierTrackingUrl
       ? parsedCarrierTrackingUrl
-      : carrierInputs[field];
+      : field === 'dpdPostcode'
+        ? carrierPostcodes[resolvedCarrier] ?? ''
+        : carrierInputs[field];
   const requirementsSatisfied = requirements.every((requirement) => {
     const value = carrierInputValue(requirement.field).trim();
     return value && (!requirement.pattern || new RegExp(requirement.pattern).test(value));
@@ -241,10 +246,17 @@ export function AddParcelSheet({
                     const value = requirement.inputMode === 'numeric'
                       ? event.target.value.replace(/\D/g, '').slice(0, requirement.maxLength)
                       : event.target.value;
-                    setCarrierInputs((current) => ({
-                      ...current,
-                      [requirement.field]: value,
-                    }));
+                    if (requirement.field === 'dpdPostcode') {
+                      setCarrierPostcodes((current) => ({
+                        ...current,
+                        [resolvedCarrier]: value,
+                      }));
+                    } else {
+                      setCarrierInputs((current) => ({
+                        ...current,
+                        [requirement.field]: value,
+                      }));
+                    }
                   }}
                   autoCapitalize={requirement.type === 'url' ? 'none' : undefined}
                   autoCorrect="off"
@@ -252,7 +264,11 @@ export function AddParcelSheet({
                   required
                 />
                 {requirement.help && (
-                  <small className="field__help">{requirement.help}</small>
+                  <small className="field__help">
+                    {t(requirement.field === 'dpdPostcode'
+                      ? 'add.requirement.dpdPostcodeHelp'
+                      : 'add.requirement.trackingUrlHelp')}
+                  </small>
                 )}
               </label>
             ))}

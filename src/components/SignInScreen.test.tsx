@@ -13,9 +13,12 @@ describe('SignInScreen', () => {
     );
 
     expect(screen.getByText('Swiss Delivery Tracker')).toBeInTheDocument();
+    expect(screen.getByText('France + Switzerland')).toBeInTheDocument();
     expect(screen.getByRole('heading', {
       name: 'Keep every delivery in one place',
     })).toBeInTheDocument();
+    expect(screen.getByText(/track parcels across France and Switzerland/i))
+      .toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Read the privacy notice.' }))
       .toHaveAttribute('href', '/privacy.html');
 

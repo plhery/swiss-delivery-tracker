@@ -33,13 +33,13 @@ detection rules are defined once in `contracts/openapi.json` under
 numeric formats are treated as suggestions and require manual confirmation;
 UPU S10 identifiers must pass their check digit before automatic detection.
 
-## French carrier rollout
+## French carrier handling and privacy
 
-The French carriers are currently backend-only: their contract entries use
-`selectable: false`, so this release does not add them to either manual carrier
-picker. Recognized tracking links and distinctive number formats can still be
-classified, and API clients can store the carrier IDs directly. This lets the
-adapters gather real-world coverage before a later UI rollout.
+DPD France, Mondial Relay, Relais Colis, La Poste / Colissimo, Chronopost, GLS
+France, Colis Privé and GEODIS are visible in the manual carrier picker on the
+web and in both iPhone interfaces. Recognized tracking links and distinctive
+number formats can still select a carrier automatically. Broad numeric formats
+remain suggestions and ask the user to confirm the carrier before saving.
 
 La Poste's unified response covers Colissimo, tracked mail and Chronopost. The
 adapter validates the returned shipment identifier and retains only normalized
@@ -64,8 +64,8 @@ timeline status, time and operational location fields. Cloudflare normally
 requires the same private TRAWL browser fallback used for UPS. DPD France's
 current [site terms](https://www.dpd.com/fr/fr/conditions-generales-utilisation/)
 broadly restrict unapproved automated access and extraction, so this integration
-is experimental and should be replaced by a contracted API before broader
-deployment.
+is experimental and should be replaced by a contracted API before relying on it
+as a long-term production integration.
 
 Mondial Relay's current recipient page calls its own tracking endpoint with an
 eight-, ten- or twelve-digit shipment number, the recipient postcode and a

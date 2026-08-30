@@ -3,8 +3,9 @@ import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { ClientApplication } from '../src/ClientApplication';
 
-const title = 'Swiss Delivery Tracker';
-const description = 'Every shipment, from first lookup to arrival.';
+const title = 'French & Swiss Parcel Tracking | Swiss Delivery Tracker';
+const description =
+  'Private parcel tracking across France and Switzerland for French, Swiss, and international carriers.';
 
 function firstHeaderValue(value: string | null): string | null {
   const first = value?.split(',')[0]?.trim();
@@ -52,14 +53,14 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type: 'website',
       url: origin.href,
-      siteName: title,
+      siteName: 'Swiss Delivery Tracker',
       title,
       description,
       images: [{
         url: image,
         width: 1_734,
         height: 907,
-        alt: 'Swiss Delivery Tracker parcel journey from lookup to arrival',
+        alt: 'Swiss Delivery Tracker for parcel deliveries across France and Switzerland',
       }],
     },
     twitter: {

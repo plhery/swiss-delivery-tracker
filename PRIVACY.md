@@ -1,10 +1,10 @@
 # Swiss Delivery Tracker privacy notice
 
-Effective: 25 August 2026
+Effective: 30 August 2026
 
-This notice describes the official Swiss Delivery Tracker service. A third
-party running a fork controls its own deployment and must publish its own
-notice.
+This notice describes the official Swiss Delivery Tracker service for French
+and Swiss parcel tracking. A third party running a fork controls its own
+deployment and must publish its own notice.
 
 ## Data the service processes
 
@@ -12,7 +12,9 @@ notice.
   security events, and basic Google profile data when you choose Google sign-in.
 - Parcel labels, tracking numbers, carrier selection, tracking history, status,
   timestamps, optional Planzer shared and Dachser Customer Iberia capability
-  URLs, and the delivery postcode supplied for a DPD parcel.
+  URLs, the delivery postcode supplied for a DPD Switzerland or Mondial Relay
+  parcel, and a Colis Privé combined tracking credential that can contain the
+  parcel's delivery postcode.
 - Web Push subscription endpoints, encryption keys, browser user agent, native
   iPhone APNs device token, optional device name and locale, a random local
   installation identifier, ActivityKit push-to-start and per-activity update
@@ -32,15 +34,18 @@ abuse, diagnose failures, and honor export or deletion requests.
 Supabase processes authentication and database requests. Google provides social
 sign-in, and the configured SMTP provider delivers sign-in codes when email OTP
 is enabled. Cloudflare and the container host may process network metadata. A
-selected carrier necessarily receives its tracking number; DPD may also receive
-the parcel's supplied postcode for recipient verification, and Planzer receives
-the supplied shared-link capability. Dachser receives its supplied capability
-URL; the application discards sender, recipient, address, contact and document
-fields from Dachser's response. Browser push services receive encrypted Web Push
-messages; Apple processes native notification and Live Activity payloads through
-APNs. Those Apple payloads can contain a parcel label, carrier, status, location,
-and expected delivery text, but Swiss Delivery Tracker does not put the tracking
-number in them.
+selected carrier necessarily receives its tracking number or carrier-specific
+tracking credential. DPD Switzerland may also receive the parcel's supplied
+postcode for recipient verification. Mondial Relay requires the five-digit
+recipient postcode to retrieve shipment events. Colis Privé receives a combined
+credential made from its 12-character shipment number and the five-digit
+delivery postcode. Planzer receives the supplied shared-link capability. Dachser
+receives its supplied capability URL; the application discards sender,
+recipient, address, contact and document fields from Dachser's response. Browser
+push services receive encrypted Web Push messages; Apple processes native
+notification and Live Activity payloads through APNs. Those Apple payloads can
+contain a parcel label, carrier, status, location, and expected delivery text,
+but Swiss Delivery Tracker does not put the tracking number in them.
 
 Swiss Delivery Tracker does not sell personal data, serve advertising, or
 include third-party behavioral analytics.
@@ -68,10 +73,11 @@ stores its session in Keychain and a protected account-scoped parcel snapshot;
 it requests a current APNs token from Apple instead of persisting that token
 locally. It stores a random installation identifier and the independent Home
 Screen widget and Live Activity preferences on the device. Either snapshot can
-include tracking history, a carrier capability URL, and a DPD postcode. Signing
-out clears account-scoped local state and ends Live Activities. Browser or
-operating-system controls can clear app data, Live Activities, and notification
-permissions.
+include tracking history, a carrier capability URL, a DPD Switzerland or
+Mondial Relay postcode, and a Colis Privé combined credential that can contain
+the delivery postcode. Signing out clears account-scoped local state and ends
+Live Activities. Browser or operating-system controls can clear app data, Live
+Activities, and notification permissions.
 
 ## Security and contact
 
@@ -81,5 +87,6 @@ keys. No internet service can promise absolute security.
 
 For a privacy or security concern, use GitHub's
 [private vulnerability report](https://github.com/plhery/swiss-delivery-tracker/security/advisories/new).
-Do not include a real tracking number, sign-in code, access token, Planzer
-shared link, or Dachser detail link in a public issue.
+Do not include a real tracking number or combined tracking credential, delivery
+postcode, sign-in code, access token, Planzer shared link, or Dachser detail
+link in a public issue.

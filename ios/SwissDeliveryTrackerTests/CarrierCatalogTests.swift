@@ -33,7 +33,7 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertEqual(parsed.source, .link)
     }
 
-    func testParsesGeodisHashLinkWithoutAddingFrenchCarriersToThePicker() {
+    func testParsesGeodisHashLinkAndExposesFrenchCarriersInThePicker() {
         let parsed = catalog.parse(
             "https://espace-client.geodis.com/services/destinataires/#/fr/suivi/1G123GEODIS0"
         )
@@ -44,8 +44,31 @@ final class CarrierCatalogTests: XCTestCase {
             CarrierID.dpdFr, .mondialRelay, .relaisColis,
             .laPoste, .chronopost, .glsFr, .colisPrive, .geodis,
         ] {
-            XCTAssertFalse(catalog.selectableCarriers.contains(carrier))
+            XCTAssertTrue(catalog.selectableCarriers.contains(carrier), carrier.rawValue)
+            XCTAssertTrue(catalog.tracksAutomatically(carrier), carrier.rawValue)
         }
+    }
+
+    func testCountrySpecificPostcodeRequirementsNormalizeAndValidate() throws {
+        let dpd = try XCTUnwrap(
+            catalog.requirements(for: .dpd, trackingNumber: "12345678901234")
+                .first(where: { $0.field == .dpdPostcode })
+        )
+        XCTAssertEqual(dpd.placeholder, "8004")
+        XCTAssertEqual(dpd.maxLength, 4)
+        XCTAssertEqual(dpd.normalizedValue("80 A04 9"), "8004")
+        XCTAssertTrue(dpd.accepts("8004"))
+        XCTAssertFalse(dpd.accepts("75001"))
+
+        let mondialRelay = try XCTUnwrap(
+            catalog.requirements(for: .mondialRelay, trackingNumber: "76434219")
+                .first(where: { $0.field == .dpdPostcode })
+        )
+        XCTAssertEqual(mondialRelay.placeholder, "75001")
+        XCTAssertEqual(mondialRelay.maxLength, 5)
+        XCTAssertEqual(mondialRelay.normalizedValue("75 A001 9"), "75001")
+        XCTAssertTrue(mondialRelay.accepts("75001"))
+        XCTAssertFalse(mondialRelay.accepts("8004"))
     }
 
     func testPlanzerLinkKeepsQuickpacIdentityFor44Barcode() {

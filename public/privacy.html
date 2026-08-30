@@ -13,12 +13,12 @@
       <a class="back" href="/">← Back to Swiss Delivery Tracker</a>
       <p class="eyebrow">Swiss Delivery Tracker</p>
       <h1>Privacy notice</h1>
-      <p class="effective">Effective 5 August 2026</p>
+      <p class="effective">Effective 30 August 2026</p>
 
       <p>
         Swiss Delivery Tracker stores only the information needed to authenticate you and
-        follow deliveries. It does not sell personal data, serve ads, or include
-        third-party behavioral analytics.
+        follow French and Swiss parcel deliveries. It does not sell personal data,
+        serve ads, or include third-party behavioral analytics.
       </p>
 
       <h2>What is processed</h2>
@@ -29,7 +29,9 @@
         </li>
         <li>
           Parcel labels, tracking numbers, carriers, status, tracking history,
-          and a delivery postcode supplied for a DPD parcel.
+          a delivery postcode supplied for a DPD Switzerland or Mondial Relay
+          parcel, and a Colis Privé combined tracking credential that can
+          contain the parcel's delivery postcode.
         </li>
         <li>Optional Planzer shared and Dachser Customer Iberia capability links.</li>
         <li>
@@ -47,13 +49,17 @@
         Supabase provides authentication and database access. Google provides
         social sign-in, and the configured SMTP provider sends codes when email
         OTP is enabled. Cloudflare and the container host may process network
-        metadata. The selected carrier receives its tracking number so Swiss
-        Delivery Tracker can retrieve updates. DPD may also receive the
-        parcel's supplied delivery postcode for recipient verification, and
-        Planzer receives a shared-link capability when you provide one. Dachser
-        receives its supplied capability link; sender, recipient, address,
-        contact, and document fields in Dachser's response are discarded. Web
-        Push endpoints receive encrypted notifications you requested.
+        metadata. The selected carrier receives its tracking number or
+        carrier-specific tracking credential so Swiss Delivery Tracker can
+        retrieve updates. DPD Switzerland may also receive the parcel's
+        supplied postcode for recipient verification. Mondial Relay requires
+        the five-digit recipient postcode to retrieve shipment events. Colis
+        Privé receives a combined credential made from its 12-character
+        shipment number and the five-digit delivery postcode. Planzer receives
+        a shared-link capability when you provide one. Dachser receives its
+        supplied capability link; sender, recipient, address, contact, and
+        document fields in Dachser's response are discarded. Web Push endpoints
+        receive encrypted notifications you requested.
       </p>
 
       <h2>Retention and your controls</h2>
@@ -81,8 +87,9 @@
         Report a privacy or security concern through GitHub's
         <a href="https://github.com/plhery/swiss-delivery-tracker/security/advisories/new"
           >private vulnerability reporting</a
-        >. Never put a real tracking number, sign-in code, token, Planzer shared
-        link, or Dachser detail link in a public issue.
+        >. Never put a real tracking number or combined tracking credential,
+        delivery postcode, sign-in code, token, Planzer shared link, or Dachser
+        detail link in a public issue.
       </p>
 
       <p class="forks">

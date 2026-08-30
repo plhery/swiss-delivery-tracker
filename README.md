@@ -5,7 +5,7 @@
 <h1 align="center">Swiss Delivery Tracker</h1>
 
 <p align="center">
-  A new home for your packages, built for Switzerland.
+  A new home for your packages across Switzerland and France.
 </p>
 
 <p align="center">
@@ -20,9 +20,14 @@
 
 ![Swiss Delivery Tracker showing fictional demo parcels](docs/screenshot.jpg)
 
-Swiss Delivery Tracker follows parcels from Post CH, UPS, DPD, Planzer and
-other carriers in one tidy, installable web app. Sign in on any device, get push
-notifications, and keep every tracking number private to your account.
+Swiss Delivery Tracker follows French and Swiss parcel deliveries in one tidy,
+installable web app. Its shared carrier picker includes Swiss Post, Quickpac,
+Planzer, DPD Switzerland, UPS, Cainiao / AliExpress, SunYou, Hermes
+Einrichtungs-Service, Spring GDS, PostLogistics, Dachser, DHL, FedEx and ShipUp,
+plus DPD France, Mondial Relay, Relais Colis, La Poste / Colissimo, Chronopost,
+GLS France, Colis Privé and GEODIS. DHL and FedEx use carrier links; ShipUp stays
+available as a manual record. Sign in on any device, get push notifications, and
+keep every tracking credential private to your account.
 
 ## What it does
 

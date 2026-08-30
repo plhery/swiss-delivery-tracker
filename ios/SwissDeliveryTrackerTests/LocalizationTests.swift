@@ -48,6 +48,8 @@ final class LocalizationTests: XCTestCase {
             "welcome.feature.track",
             "welcome.feature.alerts",
             "welcome.feature.private",
+            "add.requirement.dpdPostcodeHelp",
+            "add.requirement.trackingUrlHelp",
             "auth.subtitle",
             "auth.emailOption",
             "native.configurationHelp",
@@ -67,6 +69,20 @@ final class LocalizationTests: XCTestCase {
                 XCTAssertFalse(value.isEmpty, "\(language).\(key)")
                 XCTAssertNotEqual(value, key, "\(language).\(key)")
             }
+        }
+    }
+
+    func testNativeWelcomeNamesFranceAndSwitzerlandInEveryLanguage() throws {
+        let dictionaries = try localizationDictionaries()
+        let expected = [
+            "en": "Track deliveries across France and Switzerland on the web and this iPhone.",
+            "de": "Verfolge Lieferungen in Frankreich und der Schweiz im Web und auf diesem iPhone.",
+            "fr": "Suivez vos livraisons en France et en Suisse, sur le web et sur cet iPhone.",
+            "it": "Segui le consegne in Francia e Svizzera sul web e su questo iPhone.",
+        ]
+
+        for (language, subtitle) in expected {
+            XCTAssertEqual(dictionaries[language]?["welcome.subtitle"], subtitle, language)
         }
     }
 

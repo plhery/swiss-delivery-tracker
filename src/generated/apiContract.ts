@@ -397,7 +397,7 @@ export const CARRIER_CAPABILITIES = {
   "dpd-fr": {
     "displayName": "DPD France",
     "color": "#dc0032",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",
@@ -427,7 +427,7 @@ export const CARRIER_CAPABILITIES = {
   "mondial-relay": {
     "displayName": "Mondial Relay",
     "color": "#ef3026",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",
@@ -472,7 +472,7 @@ export const CARRIER_CAPABILITIES = {
   "relais-colis": {
     "displayName": "Relais Colis",
     "color": "#7bb928",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",
@@ -501,7 +501,7 @@ export const CARRIER_CAPABILITIES = {
   "la-poste": {
     "displayName": "La Poste / Colissimo",
     "color": "#ffcf00",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",
@@ -540,7 +540,7 @@ export const CARRIER_CAPABILITIES = {
   "chronopost": {
     "displayName": "Chronopost",
     "color": "#0056a7",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",
@@ -581,7 +581,7 @@ export const CARRIER_CAPABILITIES = {
   "gls-fr": {
     "displayName": "GLS France",
     "color": "#ffdd00",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",
@@ -626,7 +626,7 @@ export const CARRIER_CAPABILITIES = {
   "colis-prive": {
     "displayName": "Colis Privé",
     "color": "#e30613",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",
@@ -655,7 +655,7 @@ export const CARRIER_CAPABILITIES = {
   "geodis": {
     "displayName": "GEODIS",
     "color": "#00549f",
-    "selectable": false,
+    "selectable": true,
     "timezone": "Europe/Paris",
     "tracking": {
       "mode": "automatic",

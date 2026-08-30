@@ -583,12 +583,13 @@ private extension String {
 private struct AuthenticationIdentity: View {
     let title: String
     let subtitle: String
+    @EnvironmentObject private var localizer: Localizer
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             ParcelGlyph(size: 54)
             VStack(alignment: .leading, spacing: 5) {
-                Text("Swiss Delivery Tracker")
+                Text(localizer.text("app.title"))
                     .font(.subheadline.weight(.bold))
                 Text(title)
                     .font(.system(.title2, design: .rounded, weight: .bold))

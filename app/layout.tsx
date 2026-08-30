@@ -4,8 +4,9 @@ import '../src/styles.css';
 
 export const metadata: Metadata = {
   applicationName: 'Swiss Delivery Tracker',
-  title: 'Swiss Delivery Tracker',
-  description: 'Follow your Swiss package deliveries through every stage.',
+  title: 'French & Swiss Parcel Tracking | Swiss Delivery Tracker',
+  description:
+    'Private parcel tracking across France and Switzerland for French, Swiss, and international carriers.',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: '/icons/icon.svg',

@@ -14,7 +14,12 @@ import {
 
 function TranslationProbe() {
   const { t } = useI18n();
-  return <p>{stageLabel(t, 'out_for_delivery')}</p>;
+  return (
+    <>
+      <p>{t('app.eyebrow')}</p>
+      <p>{stageLabel(t, 'out_for_delivery')}</p>
+    </>
+  );
 }
 
 describe('localization', () => {
@@ -36,10 +41,12 @@ describe('localization', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText('Sprache')).toHaveValue('de');
+      expect(screen.getByText('Frankreich + Schweiz')).toBeInTheDocument();
       expect(screen.getByText('In Zustellung')).toBeInTheDocument();
     });
 
     await user.selectOptions(screen.getByLabelText('Sprache'), 'fr');
+    expect(screen.getByText('France + Suisse')).toBeInTheDocument();
     expect(screen.getByText('En livraison')).toBeInTheDocument();
     await waitFor(() => {
       expect(document.documentElement.lang).toBe('fr');

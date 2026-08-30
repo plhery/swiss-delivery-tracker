@@ -414,17 +414,20 @@ describe('carrier metadata', () => {
     }
   });
 
-  it('excludes fallback carriers from the manual selector', () => {
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('unknown');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('intl-post');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('la-poste');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('chronopost');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('gls-fr');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('colis-prive');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('geodis');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('dpd-fr');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('mondial-relay');
-    expect(SELECTABLE_CARRIERS.map((carrier) => carrier.id)).not.toContain('relais-colis');
+  it('exposes every French carrier while excluding fallback-only carriers', () => {
+    const selectable = SELECTABLE_CARRIERS.map((carrier) => carrier.id);
+    expect(selectable).not.toContain('unknown');
+    expect(selectable).not.toContain('intl-post');
+    expect(selectable).toEqual(expect.arrayContaining([
+      'dpd-fr',
+      'mondial-relay',
+      'relais-colis',
+      'la-poste',
+      'chronopost',
+      'gls-fr',
+      'colis-prive',
+      'geodis',
+    ]));
     expect(tracksAutomatically('la-poste')).toBe(true);
     expect(tracksAutomatically('chronopost')).toBe(true);
     expect(tracksAutomatically('gls-fr')).toBe(true);

@@ -17,6 +17,28 @@ struct CarrierRequirement: Codable, Hashable, Sendable {
     let maxLength: Int?
     let inputMode: String?
     let autoComplete: String?
+
+    func normalizedValue(_ rawValue: String) -> String {
+        var value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if inputMode == "numeric" {
+            value = value.filter(\.isNumber)
+        }
+        if let maxLength {
+            value = String(value.prefix(maxLength))
+        }
+        return value
+    }
+
+    func accepts(_ rawValue: String) -> Bool {
+        var value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if inputMode == "numeric" {
+            value = value.filter(\.isNumber)
+        }
+        guard !value.isEmpty else { return false }
+        if let maxLength, value.count > maxLength { return false }
+        guard let pattern, !pattern.isEmpty else { return true }
+        return value.range(of: pattern, options: .regularExpression) != nil
+    }
 }
 
 struct CarrierDefinition: Codable, Sendable {

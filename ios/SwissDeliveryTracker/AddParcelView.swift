@@ -93,13 +93,8 @@ struct AddParcelView: View {
             .sensoryFeedback(.success, trigger: canSave) { oldValue, newValue in
                 !oldValue && newValue
             }
-            .onAppear {
-                if dpdPostcode.isEmpty {
-                    dpdPostcode = store.parcels
-                        .sorted { $0.createdAt > $1.createdAt }
-                        .first(where: { $0.carrier == .dpd && $0.dpdPostcode != nil })?
-                        .dpdPostcode ?? ""
-                }
+            .onChange(of: resolvedCarrier, initial: true) { _, carrier in
+                preparePostcode(for: carrier)
             }
             .fullScreenCover(isPresented: $showingScanner) {
                 TrackingScannerView { value in
@@ -378,10 +373,11 @@ struct AddParcelView: View {
     }
 
     private var trackingURLSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let requirement = trackingURLRequirement
+        return VStack(alignment: .leading, spacing: 10) {
             sectionHeader(localizer.text("add.requirement.trackingUrl"))
             VStack(alignment: .leading, spacing: 8) {
-                TextField("https://…", text: $trackingURL)
+                TextField(requirement?.placeholder ?? "https://…", text: $trackingURL)
                     .font(.body)
                     .foregroundStyle(Brand.ink)
                     .keyboardType(.URL)
@@ -389,11 +385,12 @@ struct AddParcelView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .focused($focusedField, equals: .trackingURL)
-                if let help = requirements.first(where: { $0.field == .trackingURL })?.help {
-                    Text(help)
-                        .font(.caption)
-                        .foregroundStyle(Brand.ink.opacity(0.65))
-                }
+                    .onChange(of: trackingURL) { _, value in
+                        trackingURL = requirement?.normalizedValue(value) ?? value
+                    }
+                Text(localizer.text("add.requirement.trackingUrlHelp"))
+                    .font(.caption)
+                    .foregroundStyle(Brand.ink.opacity(0.65))
             }
             .padding(16)
             .addParcelCardSurface()
@@ -401,27 +398,46 @@ struct AddParcelView: View {
     }
 
     private var dpdPostcodeSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let requirement = postcodeRequirement
+        return VStack(alignment: .leading, spacing: 10) {
             sectionHeader(localizer.text("add.requirement.dpdPostcode"))
             VStack(alignment: .leading, spacing: 8) {
-                TextField("8004", text: $dpdPostcode)
+                TextField(requirement?.placeholder ?? "", text: $dpdPostcode)
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(Brand.ink)
                     .keyboardType(.numberPad)
                     .textContentType(.postalCode)
                     .focused($focusedField, equals: .dpdPostcode)
                     .onChange(of: dpdPostcode) { _, value in
-                        dpdPostcode = String(value.filter(\.isNumber).prefix(4))
+                        dpdPostcode = requirement?.normalizedValue(value) ?? value
                     }
-                if let help = requirements.first(where: { $0.field == .dpdPostcode })?.help {
-                    Text(help)
-                        .font(.caption)
-                        .foregroundStyle(Brand.ink.opacity(0.65))
-                }
+                Text(localizer.text("add.requirement.dpdPostcodeHelp"))
+                    .font(.caption)
+                    .foregroundStyle(Brand.ink.opacity(0.65))
             }
             .padding(16)
             .addParcelCardSurface()
         }
+    }
+
+    private func preparePostcode(for carrier: CarrierID) {
+        guard carrier == .dpd else {
+            dpdPostcode = ""
+            return
+        }
+        let lastPostcode = store.parcels
+            .sorted { $0.createdAt > $1.createdAt }
+            .first(where: { $0.carrier == .dpd && $0.dpdPostcode != nil })?
+            .dpdPostcode ?? ""
+        dpdPostcode = postcodeRequirement?.normalizedValue(lastPostcode) ?? ""
+    }
+
+    private var trackingURLRequirement: CarrierRequirement? {
+        requirements.first(where: { $0.field == .trackingURL })
+    }
+
+    private var postcodeRequirement: CarrierRequirement? {
+        requirements.first(where: { $0.field == .dpdPostcode })
     }
 
     private func sectionHeader(_ title: String, optional: Bool = false) -> some View {
@@ -546,10 +562,14 @@ struct AddParcelView: View {
         for requirement in requirements {
             switch requirement.field {
             case .trackingURL:
-                let raw = parsed.trackingURL ?? trackingURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let url = URL(string: raw), url.scheme == "https", url.host != nil else { return false }
+                let raw = parsed.trackingURL ?? trackingURL
+                let normalized = requirement.normalizedValue(raw)
+                guard requirement.accepts(normalized),
+                      let url = URL(string: normalized),
+                      url.scheme == "https",
+                      url.host != nil else { return false }
             case .dpdPostcode:
-                guard dpdPostcode.range(of: "^[0-9]{4}$", options: .regularExpression) != nil else { return false }
+                guard requirement.accepts(dpdPostcode) else { return false }
             }
         }
         return true

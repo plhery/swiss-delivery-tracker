@@ -350,7 +350,7 @@
     "dpd-fr": {
       "displayName": "DPD France",
       "color": "#dc0032",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
@@ -378,7 +378,7 @@
     "mondial-relay": {
       "displayName": "Mondial Relay",
       "color": "#ef3026",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
@@ -416,7 +416,7 @@
     "relais-colis": {
       "displayName": "Relais Colis",
       "color": "#7bb928",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
@@ -439,7 +439,7 @@
     "la-poste": {
       "displayName": "La Poste / Colissimo",
       "color": "#ffcf00",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
@@ -472,7 +472,7 @@
     "chronopost": {
       "displayName": "Chronopost",
       "color": "#0056a7",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
@@ -505,7 +505,7 @@
     "gls-fr": {
       "displayName": "GLS France",
       "color": "#ffdd00",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
@@ -541,7 +541,7 @@
     "colis-prive": {
       "displayName": "Colis Privé",
       "color": "#e30613",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
@@ -565,7 +565,7 @@
     "geodis": {
       "displayName": "GEODIS",
       "color": "#00549f",
-      "selectable": false,
+      "selectable": true,
       "timezone": "Europe/Paris",
       "tracking": {
         "mode": "automatic",
