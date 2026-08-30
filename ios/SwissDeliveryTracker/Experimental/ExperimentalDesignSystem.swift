@@ -411,6 +411,15 @@ struct ExperimentalCopy {
     var noMemories: String {
         value(en: "Completed deliveries will collect here.", de: "Abgeschlossene Lieferungen sammeln sich hier.", fr: "Les livraisons terminées apparaîtront ici.", it: "Le consegne completate appariranno qui.")
     }
+    var archiveHint: String {
+        value(en: "Past journeys, tucked away", de: "Vergangene Wege, gut verstaut", fr: "Les anciens trajets, bien rangés", it: "I viaggi passati, ben custoditi")
+    }
+    var showArchive: String {
+        value(en: "Show archived parcels", de: "Archivierte Pakete anzeigen", fr: "Afficher les colis archivés", it: "Mostra i pacchi archiviati")
+    }
+    var hideArchive: String {
+        value(en: "Hide archived parcels", de: "Archivierte Pakete ausblenden", fr: "Masquer les colis archivés", it: "Nascondi i pacchi archiviati")
+    }
     var currentUpdate: String { value(en: "Current update", de: "Aktueller Stand", fr: "Dernière nouvelle", it: "Ultimo aggiornamento") }
     var fullJourney: String { value(en: "Show full journey", de: "Ganze Reise zeigen", fr: "Afficher tout le trajet", it: "Mostra tutto il viaggio") }
     var lessJourney: String { value(en: "Show less", de: "Weniger zeigen", fr: "Afficher moins", it: "Mostra meno") }
