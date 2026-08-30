@@ -429,6 +429,16 @@ struct ExperimentalCopy {
     var scanOrEnter: String {
         value(en: "Paste anything from a shipping message. We’ll find the useful part.", de: "Füge etwas aus einer Versandnachricht ein. Wir finden den nützlichen Teil.", fr: "Collez un extrait d’un message d’expédition. Nous trouverons l’essentiel.", it: "Incolla un testo da un messaggio di spedizione. Troveremo la parte utile.")
     }
+    var quickAddIntro: String {
+        value(en: "Name it, drop in the tracking number, done.", de: "Benennen, Sendungsnummer einfügen, fertig.", fr: "Nommez-le, ajoutez le numéro de suivi, c’est fait.", it: "Dagli un nome, inserisci il numero, fatto.")
+    }
+    var parcelTitle: String { value(en: "Title", de: "Titel", fr: "Titre", it: "Titolo") }
+    var trackingReady: String {
+        value(en: "Ready to add", de: "Bereit zum Hinzufügen", fr: "Prêt à ajouter", it: "Pronto da aggiungere")
+    }
+    var oneMoreDetail: String {
+        value(en: "One detail needed", de: "Noch eine Angabe", fr: "Un détail nécessaire", it: "Serve ancora un dettaglio")
+    }
     var ready: String { value(en: "Ready to review", de: "Bereit zur Prüfung", fr: "Prêt à vérifier", it: "Pronto da verificare") }
     var chooseNext: String {
         value(en: "Carrier details can be confirmed next.", de: "Anbieterdetails können als Nächstes bestätigt werden.", fr: "Vous pourrez ensuite confirmer le transporteur.", it: "Potrai confermare i dettagli del corriere nel passaggio successivo.")

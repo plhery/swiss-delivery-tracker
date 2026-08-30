@@ -637,7 +637,7 @@ private extension View {
     }
 }
 
-private struct TrackingScannerView: View {
+struct TrackingScannerView: View {
     let onScan: (String) -> Void
     @EnvironmentObject private var localizer: Localizer
     @Environment(\.dismiss) private var dismiss
