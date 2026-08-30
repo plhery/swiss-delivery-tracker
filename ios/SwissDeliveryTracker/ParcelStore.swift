@@ -272,7 +272,7 @@ final class ParcelStore: ObservableObject {
         }
         let day = ParcelOrganizer.dayKey(Date())
         let url = FileManager.default.temporaryDirectory
-            .appending(path: "swiss-delivery-tracker-export-\(day).json")
+            .appending(path: "delivery-tracker-export-\(day).json")
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         return url
     }

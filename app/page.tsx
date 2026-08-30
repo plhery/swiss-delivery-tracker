@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { ClientApplication } from '../src/ClientApplication';
 
-const title = 'French & Swiss Parcel Tracking | Swiss Delivery Tracker';
+const title = 'French & Swiss Parcel Tracking | Delivery Tracker';
 const description =
   'Private parcel tracking across France and Switzerland for French, Swiss, and international carriers.';
 
@@ -53,14 +53,14 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type: 'website',
       url: origin.href,
-      siteName: 'Swiss Delivery Tracker',
+      siteName: 'Delivery Tracker',
       title,
       description,
       images: [{
         url: image,
         width: 1_734,
         height: 907,
-        alt: 'Swiss Delivery Tracker for parcel deliveries across France and Switzerland',
+        alt: 'Delivery Tracker for French and Swiss parcel deliveries',
       }],
     },
     twitter: {

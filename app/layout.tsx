@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import '../src/styles.css';
 
 export const metadata: Metadata = {
-  applicationName: 'Swiss Delivery Tracker',
-  title: 'French & Swiss Parcel Tracking | Swiss Delivery Tracker',
+  applicationName: 'Delivery Tracker',
+  title: 'French & Swiss Parcel Tracking | Delivery Tracker',
   description:
     'Private parcel tracking across France and Switzerland for French, Swiss, and international carriers.',
   manifest: '/manifest.webmanifest',

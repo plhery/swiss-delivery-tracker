@@ -15,6 +15,6 @@ export const GET = apiRoute(async (context) => {
     account: { id: user.id, email: user.email },
     packages: await requireUserClient(context).listPackages(true),
   }, 200, {
-    'Content-Disposition': 'attachment; filename="swiss-delivery-tracker-export.json"',
+    'Content-Disposition': 'attachment; filename="delivery-tracker-export.json"',
   });
 }, { serviceRequired: true });

@@ -50,9 +50,9 @@ describe('App', () => {
     renderApp();
     expect(screen.getByRole('heading', {
       level: 1,
-      name: 'Swiss Delivery Tracker',
+      name: 'Delivery Tracker',
     })).toBeInTheDocument();
-    expect(screen.getByText('France + Switzerland')).toBeInTheDocument();
+    expect(screen.getByText('French and Swiss parcel tracking')).toBeInTheDocument();
     expect(await screen.findByText('Coffee beans ☕')).toBeInTheDocument();
     expect(screen.getByText('New sneakers 👟')).toBeInTheDocument();
     expect(screen.getAllByText('Birthday gift 🎁')).toHaveLength(2);

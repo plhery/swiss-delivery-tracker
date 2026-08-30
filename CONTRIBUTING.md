@@ -1,6 +1,6 @@
-# Contributing to Swiss Delivery Tracker
+# Contributing to Delivery Tracker
 
-Thanks for helping improve Swiss Delivery Tracker. Keep changes focused,
+Thanks for helping improve Delivery Tracker. Keep changes focused,
 explain the user problem they solve, and avoid including real shipment data in
 code, tests, screenshots, logs, or issues.
 

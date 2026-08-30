@@ -1,6 +1,6 @@
 # Experimental Parcel Pass UI
 
-This folder contains the isolated, radical SwiftUI concept for Swiss Delivery Tracker. It reuses the production data, session, localization, notification, and mutation layers while replacing the main delivery surfaces.
+This folder contains the isolated, radical SwiftUI concept for Delivery Tracker. It reuses the production data, session, localization, notification, and mutation layers while replacing the main French and Swiss delivery surfaces.
 
 Select the shared **SwissDeliveryTracker Experimental** scheme in Xcode to run it. That scheme adds the `-experimental-ui` launch argument. The normal **SwissDeliveryTracker** scheme does not add the argument and continues to launch the existing interface.
 

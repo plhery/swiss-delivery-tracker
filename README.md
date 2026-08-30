@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="public/icons/icon-192.png" width="96" alt="Swiss Delivery Tracker logo">
+  <img src="public/icons/icon-192.png" width="96" alt="Delivery Tracker logo">
 </p>
 
-<h1 align="center">Swiss Delivery Tracker</h1>
+<h1 align="center">Delivery Tracker</h1>
 
 <p align="center">
   A new home for your packages across Switzerland and France.
@@ -18,9 +18,9 @@
   <strong><a href="https://delivery.plhery.com">Open the public instance →</a></strong>
 </p>
 
-![Swiss Delivery Tracker showing fictional demo parcels](docs/screenshot.jpg)
+![Delivery Tracker showing fictional demo parcels](docs/screenshot.jpg)
 
-Swiss Delivery Tracker follows French and Swiss parcel deliveries in one tidy,
+Delivery Tracker follows French and Swiss parcel deliveries in one tidy,
 installable web app. Its shared carrier picker includes Swiss Post, Quickpac,
 Planzer, DPD Switzerland, UPS, Cainiao / AliExpress, SunYou, Hermes
 Einrichtungs-Service, Spring GDS, PostLogistics, Dachser, DHL, FedEx and ShipUp,

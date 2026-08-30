@@ -1,6 +1,6 @@
 # Carrier support
 
-Swiss Delivery Tracker can refresh these carriers automatically:
+Delivery Tracker can refresh these French, Swiss and international carriers automatically:
 
 | Carrier | Notes |
 | --- | --- |

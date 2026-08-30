@@ -64,6 +64,8 @@ describe('account privacy actions', () => {
     downloadAccountExport(accountExport, document, urlApi);
 
     expect(click).toHaveBeenCalledOnce();
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download)
+      .toBe('delivery-tracker-export-2026-08-05.json');
     expect(urlApi.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(urlApi.revokeObjectURL).toHaveBeenCalledWith('blob:account-export');
   });

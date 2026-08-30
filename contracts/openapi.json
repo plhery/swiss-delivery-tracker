@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Swiss Delivery Tracker API",
+    "title": "Delivery Tracker API",
     "version": "1.0.0",
-    "description": "Same-origin API used by the Swiss Delivery Tracker PWA with Supabase Auth. Every private operation is scoped to the bearer-token owner."
+    "description": "Same-origin API used by the Delivery Tracker PWA for French and Swiss parcels with Supabase Auth. Every private operation is scoped to the bearer-token owner."
   },
   "x-carriers": {
     "swiss-post": {

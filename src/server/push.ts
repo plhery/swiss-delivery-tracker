@@ -25,7 +25,7 @@ const STAGE_LABELS: Record<string, string> = {
 const PUSH_COPY: Record<string, Record<string, string>> = {
   en: {
     test_title: 'Notifications are on',
-    test_body: 'Swiss Delivery Tracker will alert this iPhone when tracking changes.',
+    test_body: 'Delivery Tracker will alert this iPhone when tracking changes.',
     update: 'Parcel update',
     eta: 'ETA {{date}}',
     eta_changed: 'New ETA: {{date}}',
@@ -35,7 +35,7 @@ const PUSH_COPY: Record<string, Record<string, string>> = {
   },
   de: {
     test_title: 'Benachrichtigungen sind aktiv',
-    test_body: 'Swiss Delivery Tracker meldet Änderungen an Sendungen auf diesem iPhone.',
+    test_body: 'Delivery Tracker meldet Änderungen an Sendungen auf diesem iPhone.',
     update: 'Paketaktualisierung',
     eta: 'Voraussichtliche Zustellung: {{date}}',
     eta_changed: 'Neue Lieferprognose: {{date}}',
@@ -54,7 +54,7 @@ const PUSH_COPY: Record<string, Record<string, string>> = {
   },
   fr: {
     test_title: 'Les notifications sont activées',
-    test_body: 'Swiss Delivery Tracker signalera les changements de suivi sur cet iPhone.',
+    test_body: 'Delivery Tracker signalera les changements de suivi sur cet iPhone.',
     update: 'Mise à jour du colis',
     eta: 'Livraison prévue : {{date}}',
     eta_changed: 'Nouvelle date estimée : {{date}}',
@@ -73,7 +73,7 @@ const PUSH_COPY: Record<string, Record<string, string>> = {
   },
   it: {
     test_title: 'Le notifiche sono attive',
-    test_body: 'Swiss Delivery Tracker segnalerà le modifiche di tracciamento su questo iPhone.',
+    test_body: 'Delivery Tracker segnalerà le modifiche di tracciamento su questo iPhone.',
     update: 'Aggiornamento del pacco',
     eta: 'Consegna prevista: {{date}}',
     eta_changed: 'Nuova data stimata: {{date}}',
@@ -253,7 +253,7 @@ export class WebPushNotificationService {
   async sendTest(subscription: JsonObject): Promise<void> {
     await this.send(subscription, {
       title: 'Notifications are on',
-      body: 'Swiss Delivery Tracker will alert this device when tracking changes.',
+      body: 'Delivery Tracker will alert this device when tracking changes.',
       tag: 'parcel-post-ready',
       data: { url: '/' },
     });

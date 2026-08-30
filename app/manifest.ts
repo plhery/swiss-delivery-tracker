@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Swiss Delivery Tracker',
-    short_name: 'Deliveries',
+    name: 'Delivery Tracker',
+    short_name: 'Delivery Tracker',
     description:
       'Private parcel tracking across France and Switzerland for French, Swiss, and international carriers.',
     lang: 'en',

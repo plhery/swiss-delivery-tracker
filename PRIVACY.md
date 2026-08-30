@@ -1,8 +1,8 @@
-# Swiss Delivery Tracker privacy notice
+# Delivery Tracker privacy notice
 
 Effective: 30 August 2026
 
-This notice describes the official Swiss Delivery Tracker service for French
+This notice describes the official Delivery Tracker service for French
 and Swiss parcel tracking. A third party running a fork controls its own
 deployment and must publish its own notice.
 
@@ -45,9 +45,9 @@ recipient, address, contact and document fields from Dachser's response. Browser
 push services receive encrypted Web Push messages; Apple processes native
 notification and Live Activity payloads through APNs. Those Apple payloads can
 contain a parcel label, carrier, status, location, and expected delivery text,
-but Swiss Delivery Tracker does not put the tracking number in them.
+but Delivery Tracker does not put the tracking number in them.
 
-Swiss Delivery Tracker does not sell personal data, serve advertising, or
+Delivery Tracker does not sell personal data, serve advertising, or
 include third-party behavioral analytics.
 
 ## Retention and control

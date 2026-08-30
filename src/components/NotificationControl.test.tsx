@@ -79,7 +79,7 @@ describe('NotificationControl', () => {
     const user = userEvent.setup();
     render(<NotificationControl />);
     await user.click(screen.getByRole('button', { name: 'Notification settings' }));
-    expect(await screen.findByText(/add Swiss Delivery Tracker to your Home Screen/i)).toBeInTheDocument();
+    expect(await screen.findByText(/add Delivery Tracker to your Home Screen/i)).toBeInTheDocument();
   });
 
   it('saves account-wide event presets and quiet hours', async () => {

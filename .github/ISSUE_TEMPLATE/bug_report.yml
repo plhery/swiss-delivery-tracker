@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in Swiss Delivery Tracker.
+description: Report a reproducible problem in Delivery Tracker.
 title: "[Bug]: "
 labels: [bug]
 body:

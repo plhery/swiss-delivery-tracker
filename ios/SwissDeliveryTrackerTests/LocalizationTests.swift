@@ -72,13 +72,13 @@ final class LocalizationTests: XCTestCase {
         }
     }
 
-    func testNativeWelcomeNamesFranceAndSwitzerlandInEveryLanguage() throws {
+    func testNativeWelcomeNamesFrenchAndSwissDeliveriesInEveryLanguage() throws {
         let dictionaries = try localizationDictionaries()
         let expected = [
-            "en": "Track deliveries across France and Switzerland on the web and this iPhone.",
-            "de": "Verfolge Lieferungen in Frankreich und der Schweiz im Web und auf diesem iPhone.",
-            "fr": "Suivez vos livraisons en France et en Suisse, sur le web et sur cet iPhone.",
-            "it": "Segui le consegne in Francia e Svizzera sul web e su questo iPhone.",
+            "en": "Track French and Swiss deliveries on the web and this iPhone.",
+            "de": "Verfolge französische und Schweizer Lieferungen im Web und auf diesem iPhone.",
+            "fr": "Suivez vos livraisons françaises et suisses sur le web et sur cet iPhone.",
+            "it": "Segui le consegne francesi e svizzere sul web e su questo iPhone.",
         ]
 
         for (language, subtitle) in expected {

@@ -11,19 +11,20 @@ import { metadata as layoutMetadata } from '../app/layout';
 import manifest from '../app/manifest';
 import { generateMetadata } from '../app/page';
 
-const TITLE = 'French & Swiss Parcel Tracking | Swiss Delivery Tracker';
+const TITLE = 'French & Swiss Parcel Tracking | Delivery Tracker';
 const DESCRIPTION =
   'Private parcel tracking across France and Switzerland for French, Swiss, and international carriers.';
 
 describe('public product metadata', () => {
   it('positions the site and installed PWA for France and Switzerland', () => {
     expect(layoutMetadata).toMatchObject({
-      applicationName: 'Swiss Delivery Tracker',
+      applicationName: 'Delivery Tracker',
       title: TITLE,
       description: DESCRIPTION,
     });
     expect(manifest()).toMatchObject({
-      name: 'Swiss Delivery Tracker',
+      name: 'Delivery Tracker',
+      short_name: 'Delivery Tracker',
       description: DESCRIPTION,
     });
   });
@@ -36,7 +37,7 @@ describe('public product metadata', () => {
       description: DESCRIPTION,
       alternates: { canonical: 'https://delivery.example.test/' },
       openGraph: {
-        siteName: 'Swiss Delivery Tracker',
+        siteName: 'Delivery Tracker',
         title: TITLE,
         description: DESCRIPTION,
       },

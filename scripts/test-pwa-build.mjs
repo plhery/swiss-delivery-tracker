@@ -43,6 +43,7 @@ assert.match(worker, /push-sw\.js/, 'the push handler must be loaded');
 assert.match(worker, /privacy\.html/, 'the privacy notice must be cached for offline access');
 assert.match(worker, /~offline/, 'offline navigations must use the dedicated Next.js fallback');
 assert.match(offline, /You’re offline/, 'the offline fallback must be rendered during the build');
+assert.match(offline, /Delivery Tracker/, 'the offline fallback must use the public product name');
 assert.match(pushWorker, /addEventListener\(['"]push['"]/, 'push events must be handled');
 assert.match(pushWorker, /showNotification\(/, 'push events must display a notification');
 assert.match(pushWorker, /addEventListener\(['"]notificationclick['"]/, 'notification clicks must be handled');
@@ -63,6 +64,8 @@ assert.ok(ogImage.readUInt32BE(16) >= 1_200, 'the social card must be wide enoug
 assert.ok(ogImage.readUInt32BE(20) >= 630, 'the social card must be tall enough for link previews');
 
 const manifest = JSON.parse(manifestText);
+assert.equal(manifest.name, 'Delivery Tracker');
+assert.equal(manifest.short_name, 'Delivery Tracker');
 assert.equal(manifest.start_url, '/');
 assert.equal(manifest.scope, '/');
 assert.equal(manifest.display, 'standalone');
@@ -76,5 +79,7 @@ assert.deepEqual(manifest.share_target, {
   params: { title: 'title', text: 'text', url: 'url' },
 });
 assert.match(privacy, /Download my data/, 'the public build must include the privacy notice');
+assert.match(privacy, /Delivery Tracker/, 'the privacy notice must use the public product name');
+assert.doesNotMatch(privacy, /Swiss Delivery Tracker/, 'the old product name must not remain public');
 
 console.log(`PWA build contract passed for ${applicationAsset}`);

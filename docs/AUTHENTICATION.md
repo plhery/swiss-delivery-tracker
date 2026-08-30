@@ -1,6 +1,6 @@
 # Authentication
 
-Swiss Delivery Tracker supports Google OAuth and passwordless email one-time
+Delivery Tracker supports Google OAuth and passwordless email one-time
 passwords (OTP) through Supabase Auth. Supabase is the identity and session
 provider. An SMTP provider is only the mail transport used by Supabase; it is
 not a second login system. Both login methods produce the same account-owned
@@ -51,8 +51,8 @@ Customize the **Magic Link / OTP** email template so the message visibly
 contains the six-digit code:
 
 ```html
-<h2>Your Swiss Delivery Tracker sign-in code</h2>
-<p>Enter this code in Swiss Delivery Tracker:</p>
+<h2>Your Delivery Tracker sign-in code</h2>
+<p>Enter this code in Delivery Tracker:</p>
 <p><strong>{{ .Token }}</strong></p>
 <p>If you did not request this code, you can ignore this email.</p>
 ```
@@ -100,7 +100,7 @@ GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://supabase.example.com/auth/v1/callbac
 
 Set `GOTRUE_SITE_URL` and `GOTRUE_URI_ALLOW_LIST` to the application origin,
 restart the Auth service, and verify `/auth/v1/settings` reports Google as
-enabled. The Google client secret never belongs in the Swiss Delivery Tracker
+enabled. The Google client secret never belongs in the Delivery Tracker
 container or browser bundle.
 
 ## Session duration

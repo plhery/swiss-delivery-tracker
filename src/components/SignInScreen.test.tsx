@@ -12,12 +12,12 @@ describe('SignInScreen', () => {
       <SignInScreen configured sendCode={sendCode} verifyCode={verifyCode} />,
     );
 
-    expect(screen.getByText('Swiss Delivery Tracker')).toBeInTheDocument();
-    expect(screen.getByText('France + Switzerland')).toBeInTheDocument();
+    expect(screen.getByText('Delivery Tracker')).toBeInTheDocument();
+    expect(screen.getByText('French and Swiss parcel tracking')).toBeInTheDocument();
     expect(screen.getByRole('heading', {
       name: 'Keep every delivery in one place',
     })).toBeInTheDocument();
-    expect(screen.getByText(/track parcels across France and Switzerland/i))
+    expect(screen.getByText(/track French and Swiss parcels/i))
       .toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Read the privacy notice.' }))
       .toHaveAttribute('href', '/privacy.html');

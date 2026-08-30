@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('heading', { name: 'Swiss Delivery Tracker' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Delivery Tracker' })).toBeVisible();
   // This control is rendered only after the client repository has loaded, so
   // it is also a stable signal that hydration and the first effect completed.
   await expect(page.getByRole('button', { name: 'Search & filters' })).toBeVisible();
