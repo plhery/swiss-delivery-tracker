@@ -3,6 +3,7 @@ import {
   DPDAPIError,
   DPDChallengeError,
   DPDTracker,
+  DPDTrackingError,
   dpdTrackingUrl,
   parseDPDTrackingApi,
   parseDPDTrackingHtml,
@@ -110,6 +111,48 @@ describe('DPD tracking normalization', () => {
       tracking_url: expect.stringContaining(DPD_NUMBER),
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps a guest API 404 for a valid-shaped wrong number without invoking the web fallback', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        fid: 'unit-test-fid',
+        authToken: { token: 'installation-token', expiresIn: '604800s' },
+      })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        entries: { basic_dpd_token: 'dW5pdDp0ZXN0' },
+      })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        access_token: 'unit-test-access-token',
+        expires_in: 3600,
+      })))
+      .mockResolvedValueOnce(new Response('', { status: 404 }));
+
+    await expect(new DPDTracker({ timeoutMs: 1_000 }).fetch('00000000000000', '8000'))
+      .rejects.toBeInstanceOf(DPDTrackingError);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(String(fetcher.mock.calls[3]?.[0])).toContain('/v10/parcels/details/00000000000000');
+  });
+
+  it('does not misclassify an authentication-stage 404 as a missing parcel', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('', { status: 404 }))
+      .mockResolvedValueOnce(new Response(`
+        <html><body>
+          <div>${DPD_NUMBER}</div>
+          <li class="content-item-track">
+            <span class="entry-date">15.07.2026</span>
+            <span class="entry-time">11:28</span>
+            <span class="entry-body">Parcel handed to DPD</span>
+          </li>
+        </body></html>
+      `));
+
+    await expect(new DPDTracker({ timeoutMs: 1_000 }).fetch(DPD_NUMBER))
+      .resolves.toMatchObject({ status: 'in_transit' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain('firebaseinstallations.googleapis.com');
+    expect(String(fetcher.mock.calls[1]?.[0])).toContain('dpdgroup.com/ch/mydpd/my-parcels/track');
   });
 });
 

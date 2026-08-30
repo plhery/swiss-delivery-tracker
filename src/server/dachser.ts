@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { fetchBounded, parseJsonBytes } from './boundedFetch';
+import { fetchBounded, parseJsonBytes, UpstreamHttpError } from './boundedFetch';
 import type { CarrierResult } from './carrierResult';
 import { isRecord } from './types';
 
@@ -31,6 +31,15 @@ const DATE_FORMATS = [
   'yyyy-MM-dd HH:mm',
   'yyyy-MM-dd',
 ];
+
+export class DachserTrackingError extends Error {
+  readonly status = 404;
+
+  constructor() {
+    super('Dachser could not locate the shipment');
+    this.name = 'DachserTrackingError';
+  }
+}
 
 function normalizeTrackingNumber(raw: unknown): string {
   return String(raw ?? '').replace(/[\s.-]/g, '').toUpperCase();
@@ -213,7 +222,7 @@ export class DachserTracker {
   constructor(readonly timeoutMs = 15_000) {}
 
   async fetch(trackingNumber: string, trackingUrl: string): Promise<CarrierResult> {
-    const { bytes } = await fetchBounded(dachserApiUrl(trackingUrl, trackingNumber), {
+    const { bytes, response } = await fetchBounded(dachserApiUrl(trackingUrl, trackingNumber), {
       headers: {
         Accept: 'application/json',
         'Accept-Language': 'en',
@@ -223,7 +232,33 @@ export class DachserTracker {
     }, {
       provider: 'Dachser tracking',
       timeoutMs: this.timeoutMs,
+      allowHttpError: true,
     });
+    if (!response.ok) {
+      if (response.status === 404) throw new DachserTrackingError();
+      let errorPayload: unknown;
+      try {
+        errorPayload = parseJsonBytes(bytes, 'Dachser');
+      } catch {
+        throw new UpstreamHttpError('Dachser tracking', response.status);
+      }
+      // An unknown shipment/access tuple currently reaches a null result in
+      // Dachser's public endpoint and is surfaced as this stable JSON 500.
+      // Match the public error signature narrowly so unrelated 500s remain
+      // operational failures rather than false not-found results.
+      const errorMessage = String(isRecord(errorPayload)
+        ? errorPayload.message ?? ''
+        : '').toLocaleLowerCase('en-US');
+      if (
+        response.status === 500
+        && isRecord(errorPayload)
+        && errorPayload.code === 'ERR_APP_500'
+        && errorPayload.path === DACHSER_API_PATH
+        && errorMessage.includes('resultadodetexp')
+        && errorMessage.includes('null')
+      ) throw new DachserTrackingError();
+      throw new UpstreamHttpError('Dachser tracking', response.status);
+    }
     return parseDachserTrackingResponse(parseJsonBytes(bytes, 'Dachser'), trackingNumber);
   }
 }

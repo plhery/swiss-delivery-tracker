@@ -1,13 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { secondsUntilNextSync, workerPollDelay } from './background';
-import type { CarrierResult } from './carrierResult';
+import { normalizeCarrierResult, type CarrierResult } from './carrierResult';
 import { ColisPriveTracker, ColisPriveTrackingError } from './colisPrive';
+import { ColiswebTracker } from './colisweb';
+import { CChezVousTracker } from './cChezVous';
+import { CiblexTracker } from './ciblex';
 import { DPDFranceTracker } from './dpdFrance';
 import { GeodisTracker } from './geodis';
 import { GLSFranceTracker } from './glsFrance';
+import { GLSSwitzerlandTracker } from './glsSwitzerland';
+import { HeppnerTracker } from './heppner';
 import { LaPosteTracker } from './laPoste';
 import { MondialRelayTracker } from './mondialRelay';
+import { PaackTracker } from './paack';
 import { RelaisColisTracker } from './relaisColis';
+import { SwissPostCargoTracker } from './swissPostCargo';
 import type { SupabaseServiceClient } from './supabase';
 import {
   CarrierTrackingAdapter,
@@ -18,6 +25,7 @@ import {
   isUnannouncedTrackingError,
   providerEventId,
   resultHasUpdate,
+  resultStage,
   TrackingSyncService,
   type TrackingAdapter,
 } from './trackingSync';
@@ -25,8 +33,8 @@ import type { JsonObject } from './types';
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('French carrier dispatch', () => {
-  it('routes every hidden carrier to its isolated adapter', async () => {
+describe('regional carrier dispatch', () => {
+  it('routes every dedicated French and Swiss carrier to its isolated adapter', async () => {
     const laPoste = vi.spyOn(LaPosteTracker.prototype, 'fetch')
       .mockResolvedValue({ status: 'in_transit' });
     const glsFrance = vi.spyOn(GLSFranceTracker.prototype, 'fetch')
@@ -41,6 +49,20 @@ describe('French carrier dispatch', () => {
       .mockResolvedValue({ status: 'in_transit' });
     const relaisColis = vi.spyOn(RelaisColisTracker.prototype, 'fetch')
       .mockResolvedValue({ status: 'in_transit' });
+    const swissPostCargo = vi.spyOn(SwissPostCargoTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const glsSwitzerland = vi.spyOn(GLSSwitzerlandTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const colisweb = vi.spyOn(ColiswebTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const cChezVous = vi.spyOn(CChezVousTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const heppner = vi.spyOn(HeppnerTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const ciblex = vi.spyOn(CiblexTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
+    const paack = vi.spyOn(PaackTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
     const adapter = new CarrierTrackingAdapter();
 
     await adapter.fetch('la-poste', '8G12345678901', null);
@@ -51,6 +73,13 @@ describe('French carrier dispatch', () => {
     await adapter.fetch('dpd-fr', '250803383035673', null);
     await adapter.fetch('mondial-relay', '76434219', null, '59650');
     await adapter.fetch('relais-colis', 'CC200000000401', null);
+    await adapter.fetch('swiss-post-cargo', '1234ABC789', null);
+    await adapter.fetch('gls-ch', '37463502621', null, '8000');
+    await adapter.fetch('colisweb', '12345678', null);
+    await adapter.fetch('c-chez-vous', 'PRJV50T7DP', null);
+    await adapter.fetch('heppner', '25461320', null, '92410');
+    await adapter.fetch('ciblex', '99996007756925', null);
+    await adapter.fetch('paack', 'ORDER1234', null, '75001');
 
     expect(laPoste).toHaveBeenNthCalledWith(1, '8G12345678901');
     expect(laPoste).toHaveBeenNthCalledWith(2, 'PZ123456785JF');
@@ -60,6 +89,13 @@ describe('French carrier dispatch', () => {
     expect(dpdFrance).toHaveBeenCalledWith('250803383035673');
     expect(mondialRelay).toHaveBeenCalledWith('76434219', '59650');
     expect(relaisColis).toHaveBeenCalledWith('CC200000000401');
+    expect(swissPostCargo).toHaveBeenCalledWith('1234ABC789');
+    expect(glsSwitzerland).toHaveBeenCalledWith('37463502621', '8000');
+    expect(colisweb).toHaveBeenCalledWith('12345678');
+    expect(cChezVous).toHaveBeenCalledWith('PRJV50T7DP');
+    expect(heppner).toHaveBeenCalledWith('25461320', '92410');
+    expect(ciblex).toHaveBeenCalledWith('99996007756925');
+    expect(paack).toHaveBeenCalledWith('ORDER1234', '75001');
   });
 });
 
@@ -98,12 +134,72 @@ describe('tracking event normalization', () => {
     );
   });
 
+  it('records an observed event when a timestamp-less current state changes', () => {
+    const observedAt = new Date('2026-08-30T13:00:00Z');
+    const result: CarrierResult = {
+      status: 'out_for_delivery',
+      last_status_text: 'En cours de livraison',
+      events: [{
+        description: 'En cours de livraison',
+        stage: 'out_for_delivery',
+      }],
+    };
+    const changed = buildEvents({
+      id: 'package-current',
+      carrier: 'c-chez-vous',
+      current_stage: 'in_transit',
+    }, result, undefined, observedAt);
+    expect(changed).toEqual([
+      expect.objectContaining({
+        stage: 'out_for_delivery',
+        description: 'En cours de livraison',
+        occurred_at: '2026-08-30T13:00:00.000Z',
+        raw_data: { observed_without_provider_timestamp: true },
+      }),
+    ]);
+
+    expect(buildEvents({
+      id: 'package-current',
+      carrier: 'c-chez-vous',
+      current_stage: 'out_for_delivery',
+    }, result, undefined, observedAt)).toEqual([]);
+
+    expect(buildEvents({
+      id: 'package-registered',
+      carrier: 'c-chez-vous',
+      current_stage: 'pending',
+    }, {
+      status: 'pending',
+      last_status_text: 'Commande enregistrée',
+      events: [{ description: 'Commande enregistrée', stage: 'registered' }],
+    }, undefined, observedAt)).toEqual([
+      expect.objectContaining({ stage: 'registered', occurred_at: observedAt.toISOString() }),
+    ]);
+  });
+
   it('recognizes usable event progress even when a carrier summary is pending', () => {
     expect(resultHasUpdate({
       status: 'pending',
       events: [{ description: 'Accepted at depot' }],
     })).toBe(true);
     expect(resultHasUpdate({ status: 'pending', events: [] })).toBe(false);
+  });
+
+  it('uses a validated adapter stage instead of reverse-translating display text', () => {
+    expect(resultStage({
+      status: 'exception',
+      current_stage: 'returned',
+      last_status_text: 'Livraison annulée',
+    })).toBe('returned');
+    expect(resultStage({
+      status: 'in_transit',
+      current_stage: 'accepted',
+      last_status_text: 'Shipment collected',
+    })).toBe('accepted');
+    expect(() => normalizeCarrierResult({
+      status: 'in_transit',
+      current_stage: 'private_internal_state',
+    })).toThrow('invalid current stage');
   });
 
   it('recognizes 404s through an error cause chain', () => {
@@ -190,6 +286,88 @@ describe('TrackingSyncService', () => {
       sync_status: 'ok',
       sync_error: null,
     }));
+  });
+
+  it('prefers an explicit current failure over an older timestamped milestone', async () => {
+    const parcel = {
+      id: 'package-current-failure',
+      carrier: 'colisweb',
+      tracking_number: '10000000',
+      current_stage: 'in_transit',
+    };
+    const client = fakeClient();
+    const adapter: TrackingAdapter = {
+      fetch: vi.fn().mockResolvedValue({
+        status: 'exception',
+        last_status_text: 'Incident de livraison',
+        last_update: '2026-08-28T11:30:00+02:00',
+        events: [{
+          description: 'Incident de livraison',
+          stage: 'failed_attempt',
+        }, {
+          time: '2026-08-28T11:30:00+02:00',
+          description: 'Colis pris en charge',
+          stage: 'in_transit',
+        }],
+      }),
+    };
+    const service = new TrackingSyncService(
+      client as unknown as SupabaseServiceClient,
+      adapter,
+      null,
+      () => new Date('2026-08-30T13:00:00Z'),
+    );
+
+    await expect(service.syncPackage(parcel)).resolves.toMatchObject({ updated: 1, errors: 0 });
+    expect(client.insertEvents).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ stage: 'in_transit' }),
+      expect.objectContaining({
+        stage: 'failed_attempt',
+        occurred_at: '2026-08-30T13:00:00.000Z',
+      }),
+    ]));
+    expect(client.updatePackage).toHaveBeenLastCalledWith(
+      'package-current-failure',
+      expect.objectContaining({
+        current_stage: 'failed_attempt',
+        last_status_text: 'Incident de livraison',
+        sync_status: 'ok',
+      }),
+    );
+  });
+
+  it('keeps timed progress ahead of a pending provider summary', async () => {
+    const parcel = {
+      id: 'package-pending-summary',
+      carrier: 'paack',
+      tracking_number: 'PAACK12345',
+      current_stage: 'pending',
+    };
+    const client = fakeClient();
+    const adapter: TrackingAdapter = {
+      fetch: vi.fn().mockResolvedValue({
+        status: 'pending',
+        last_status_text: 'Shipment registered',
+        events: [{
+          time: '2026-08-28T11:30:00+02:00',
+          description: 'Received at hub',
+          stage: 'in_transit',
+        }],
+      }),
+    };
+    const service = new TrackingSyncService(
+      client as unknown as SupabaseServiceClient,
+      adapter,
+    );
+
+    await expect(service.syncPackage(parcel)).resolves.toMatchObject({ updated: 1, errors: 0 });
+    expect(client.updatePackage).toHaveBeenLastCalledWith(
+      'package-pending-summary',
+      expect.objectContaining({
+        current_stage: 'in_transit',
+        sync_status: 'ok',
+      }),
+    );
   });
 
   it('keeps a newly unannounced shipment waiting without showing an error', async () => {

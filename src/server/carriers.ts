@@ -4,7 +4,13 @@ import { validatePlanzerSharedUrl } from './planzerShared';
 
 interface CarrierRequirement {
   field: 'trackingUrl' | 'dpdPostcode';
-  validator: 'planzerSharedUrl' | 'dachserCapabilityUrl' | 'swissPostcode' | 'francePostcode';
+  validator:
+    | 'planzerSharedUrl'
+    | 'dachserCapabilityUrl'
+    | 'swissPostcode'
+    | 'francePostcode'
+    | 'swissOrFrancePostcode'
+    | 'paackPostcode';
   whenTrackingNumber?: string;
 }
 
@@ -108,10 +114,22 @@ export function normalizeCarrierInputs(
         throw new TypeError(`${carrierDefinition(carrierId).displayName} requires its complete tracking URL`);
       }
       if (requirement.validator === 'swissPostcode') {
-        throw new TypeError('DPD parcels require the four-digit delivery postcode');
+        throw new TypeError(
+          `${carrierDefinition(carrierId).displayName} requires the four-digit delivery postcode`,
+        );
       }
       if (requirement.validator === 'francePostcode') {
-        throw new TypeError('Mondial Relay parcels require the five-digit delivery postcode');
+        throw new TypeError(
+          `${carrierDefinition(carrierId).displayName} requires the five-digit delivery postcode`,
+        );
+      }
+      if (requirement.validator === 'swissOrFrancePostcode') {
+        throw new TypeError(
+          `${carrierDefinition(carrierId).displayName} requires a four- or five-digit delivery postcode`,
+        );
+      }
+      if (requirement.validator === 'paackPostcode') {
+        throw new TypeError('Paack requires the delivery postcode');
       }
       throw new TypeError(`${carrierDefinition(carrierId).displayName} requires the delivery postcode`);
     }
@@ -124,14 +142,33 @@ export function normalizeCarrierInputs(
         break;
       case 'swissPostcode':
         if (!/^\d{4}$/.test(value)) {
-          throw new TypeError('DPD parcels require the four-digit delivery postcode');
+          throw new TypeError(
+            `${carrierDefinition(carrierId).displayName} requires the four-digit delivery postcode`,
+          );
         }
         break;
       case 'francePostcode':
         if (!/^\d{5}$/.test(value)) {
-          throw new TypeError('Mondial Relay parcels require the five-digit delivery postcode');
+          throw new TypeError(
+            `${carrierDefinition(carrierId).displayName} requires the five-digit delivery postcode`,
+          );
         }
         break;
+      case 'swissOrFrancePostcode':
+        if (!/^\d{4,5}$/.test(value)) {
+          throw new TypeError(
+            `${carrierDefinition(carrierId).displayName} requires a four- or five-digit delivery postcode`,
+          );
+        }
+        break;
+      case 'paackPostcode': {
+        const rawPostcode = value.toLocaleUpperCase('en-US');
+        if (!/^(?=.{3,10}$)(?=.*\d)[A-Z0-9]+(?:[ -][A-Z0-9]+)*$/.test(rawPostcode)) {
+          throw new TypeError('Paack requires a valid delivery postcode');
+        }
+        supplied[field] = rawPostcode.replace(/\s+/g, '');
+        break;
+      }
       default:
         requirement.validator satisfies never;
     }

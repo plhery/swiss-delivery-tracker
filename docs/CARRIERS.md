@@ -5,6 +5,7 @@ Delivery Tracker can refresh these French, Swiss and international carriers auto
 | Carrier | Notes |
 | --- | --- |
 | Swiss Post | Automatic tracking through the pinned upstream adapter. A contracted business API is preferable for long-term production use. |
+| Swiss Post Cargo | Automatic through the official anonymous public tracker. |
 | Quickpac | Automatic through Planzer's current tracking API. Existing Quickpac numbers keep their carrier label. |
 | Planzer | Automatic. Shared `999.90.########` shipments need the complete shared tracking URL. |
 | Cainiao / AliExpress | Automatic. |
@@ -14,6 +15,7 @@ Delivery Tracker can refresh these French, Swiss and international carriers auto
 | PostLogistics | Automatic. |
 | Dachser | Automatic for Customer Iberia shipments when the complete public detail URL is supplied. |
 | DPD Switzerland | Automatic through the myDPD guest flow. The parcel's delivery postcode unlocks verified scans and delivery windows. |
+| GLS Switzerland | Automatic through GLS's public tracking services. The four-digit recipient postcode unlocks the detailed event history. |
 | UPS | Automatic. Direct HTTP is tried first; a private TRAWL instance can handle browser challenges. |
 | DPD France | Automatic through the recipient trace page. Direct HTTP is tried first; a private TRAWL instance is required when Cloudflare challenges it. |
 | Mondial Relay | Automatic through the recipient web flow. Requires the five-digit recipient postcode and can use private TRAWL for Cloudflare. |
@@ -23,9 +25,16 @@ Delivery Tracker can refresh these French, Swiss and international carriers auto
 | GLS France | Automatic through the public recipient-tracking JSON service. |
 | Colis Privé | Automatic when the tracking input contains the 12-character shipment number followed by the five-digit recipient postcode. |
 | GEODIS | Automatic for the official 12-character `1G…` recipient tracking format. |
+| Colisweb | Automatic through the public recipient-search service. |
+| C Chez Vous | Automatic through the public order-tracking page. |
+| Heppner | Automatic through the public recipient flow. Requires the shipment receipt number and its four- or five-digit delivery postcode. |
+| Ciblex | Automatic through the public parcel-tracking page for 14-digit shipment numbers. |
+| Paack | Automatic through the public recipient flow. Requires the tracking number and delivery postcode. |
 
-DHL, FedEx and International Post parcels are saved with a direct carrier link.
-ShipUp can be kept as a manual record.
+Asendia, DHL, FedEx and International Post parcels are saved with a direct
+carrier link. Asendia's public flow requires a fresh Cloudflare Turnstile
+validation, while the supported DHL and FedEx tracking APIs require provider
+credentials. ShipUp can be kept as a manual record.
 
 Carrier names, adapter modes, tracking links, required inputs, timezones and
 detection rules are defined once in `contracts/openapi.json` under
@@ -36,10 +45,11 @@ UPU S10 identifiers must pass their check digit before automatic detection.
 ## French carrier handling and privacy
 
 DPD France, Mondial Relay, Relais Colis, La Poste / Colissimo, Chronopost, GLS
-France, Colis Privé and GEODIS are visible in the manual carrier picker on the
-web and in both iPhone interfaces. Recognized tracking links and distinctive
-number formats can still select a carrier automatically. Broad numeric formats
-remain suggestions and ask the user to confirm the carrier before saving.
+France, Colis Privé, GEODIS, Colisweb, C Chez Vous, Heppner, Ciblex and Paack
+are visible in the manual carrier picker on the web and in both iPhone
+interfaces. Recognized tracking links and distinctive number formats can still
+select a carrier automatically. Broad numeric formats remain suggestions and
+ask the user to confirm the carrier before saving.
 
 La Poste's unified response covers Colissimo, tracked mail and Chronopost. The
 adapter validates the returned shipment identifier and retains only normalized
@@ -57,6 +67,20 @@ Colis Privé's HTML adapter similarly removes the destination block before it
 reads the status banner and timeline. The Colis Privé combined credential ends
 in the recipient postcode, so treat it like a tracking secret and keep it out
 of logs and public issues.
+
+Colisweb, C Chez Vous, Heppner, Ciblex and Paack use their public recipient
+flows. Their adapters verify the returned shipment identifier when the provider
+supplies one and retain only normalized status, delivery estimate, scan time,
+event code and coarse operational-location fields. Recipient names, street
+addresses, contact details and delivery instructions are discarded. Heppner
+and Paack require the delivery postcode; treat it as part of the tracking
+credential. C Chez Vous order references grant access to a public order page
+and should be handled the same way.
+
+Colisweb currently returns an empty HTTP 500 for a validly shaped unknown
+shipment. Because that response does not prove that the shipment is absent, the
+adapter reports an indeterminate upstream failure instead of converting it to a
+false not-found result.
 
 DPD France exposes a server-rendered timeline rather than a reusable JSON feed.
 Its adapter verifies the outbound or return parcel number before retaining only
@@ -84,6 +108,16 @@ checks, and privacy-safe projections; failures remain visible for retry. La
 Poste's supported Okapi-key API is the preferred future production path when
 deployment credentials are available.
 
+## Swiss carrier handling and privacy
+
+Swiss Post Cargo uses the anonymous endpoint called by its official public
+tracker. The adapter validates the response shape and retains only normalized
+tracking history. GLS Switzerland first resolves the public parcel overview,
+then uses the recipient's four-digit postcode to request its detailed history.
+The GLS adapter keeps coarse scan city and country fields but drops street,
+postcode, recipient and contact data returned alongside them. Treat the GLS
+postcode as part of the tracking credential.
+
 ## AliExpress handoff to Swiss Post
 
 Valid tracked letter-post S10 identifiers in the `L…CH` range are checked
@@ -100,6 +134,41 @@ and undocumented endpoints can change without notice, so tracking is best
 effort and failures remain visible for later retry. Provider-specific adapters
 are isolated under `src/server/`, validate inputs, bound response sizes, and use
 timeouts so one carrier cannot block the rest of a scheduled run.
+
+### Opt-in live carrier tests
+
+The regular test suite uses deterministic fixtures and does not depend on
+carrier availability. To probe the current anonymous provider endpoints, run:
+
+```bash
+npm run test:carriers:live
+```
+
+The opt-in suite sends validly shaped, deliberately wrong shipment numbers
+through every automatic adapter family. That includes Swiss Post, Swiss Post
+Cargo, Planzer and Quickpac, Cainiao, SunYou, Hermes, Spring GDS,
+PostLogistics, Dachser, UPS, GLS Switzerland, DPD Switzerland, DPD France,
+Mondial Relay, Relais Colis, La Poste and Chronopost, GLS France, Colis Privé,
+GEODIS, Colisweb, C Chez Vous, Heppner, Ciblex and Paack. It also checks
+publicly documented historical C Chez Vous, Heppner and Hermes shipments where
+stable examples are available.
+
+Several canaries intentionally have different expectations. Colisweb's wrong-number
+test asserts the observed empty upstream HTTP 500 is reported as an
+indeterminate `502`, not mislabeled as a `404`. Ciblex normally returns an echoed
+empty table (a clean `404`), but its transient bare-empty `200` remains an
+indeterminate upstream error. DPD's canary likewise accepts its explicitly
+recognized Cloudflare fallback when the guest API is temporarily unavailable.
+The Dachser endpoint alternates between an explicit null-result error and a
+generic HTTP 500 for the same invalid capability tuple; its canary requires a
+recognized rejection but deliberately keeps the generic response indeterminate.
+UPS, DPD France and Mondial Relay likewise accept only their exact recognized
+browser-challenge errors when direct anonymous access is blocked. La Poste's
+edge may reject an anonymous lookup with a provider-scoped HTTP 403 before it
+can return the normal not-found response. Asendia remains link-only; its canary
+verifies that a rejected Cloudflare Turnstile token is recognized as a
+challenge, not that an anonymous tracking lookup succeeds. These tests contact
+external services and are therefore excluded from the default test command.
 
 ## Planzer shared links
 

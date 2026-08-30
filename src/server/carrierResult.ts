@@ -1,4 +1,5 @@
 import { isRecord, type JsonObject } from './types';
+import { STAGES } from '../generated/apiContract';
 
 export type CarrierStatus =
   | 'pending'
@@ -18,6 +19,7 @@ export interface CarrierEvent extends JsonObject {
 
 export interface CarrierResult extends JsonObject {
   status?: CarrierStatus;
+  current_stage?: string;
   last_status_text?: string | null;
   last_update?: string | null;
   expected_delivery?: string | null;
@@ -33,6 +35,7 @@ const STATUSES = new Set<CarrierStatus>([
   'exception',
   'unknown',
 ]);
+const CURRENT_STAGES = new Set<string>(STAGES);
 const OPTIONAL_TEXT_FIELDS = [
   'last_status_text',
   'last_update',
@@ -47,6 +50,12 @@ export function normalizeCarrierResult(value: unknown): CarrierResult {
   normalized.status = typeof value.status === 'string' && STATUSES.has(value.status as CarrierStatus)
     ? value.status as CarrierStatus
     : 'unknown';
+  if (value.current_stage !== undefined) {
+    if (typeof value.current_stage !== 'string' || !CURRENT_STAGES.has(value.current_stage)) {
+      throw new TypeError('The carrier adapter returned an invalid current stage');
+    }
+    normalized.current_stage = value.current_stage;
+  }
 
   for (const field of OPTIONAL_TEXT_FIELDS) {
     const fieldValue = normalized[field];

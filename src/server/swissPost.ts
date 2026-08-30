@@ -38,6 +38,15 @@ const EVENT_STAGE_BY_CODE: Record<string, string> = {
   '3600': 'returned',
   '4600': 'delivered',
 };
+
+export class SwissPostTrackingError extends Error {
+  readonly status = 404;
+
+  constructor() {
+    super('Swiss Post could not locate the shipment');
+    this.name = 'SwissPostTrackingError';
+  }
+}
 const STAGE_STATUS: Record<string, CarrierStatus> = {
   registered: 'pending',
   accepted: 'in_transit',
@@ -52,6 +61,10 @@ const STAGE_STATUS: Record<string, CarrierStatus> = {
 
 function text(value: unknown, limit = 500): string {
   return String(value ?? '').trim().slice(0, limit);
+}
+
+function comparableShipmentNumber(value: unknown): string {
+  return String(value ?? '').replace(/[\s.-]/g, '').toUpperCase();
 }
 
 function datePart(value: unknown): string | null {
@@ -254,17 +267,22 @@ export class SwissPostTracker {
       `${API_BASE}/history/not-included/${encodeURIComponent(hash)}?${query}`,
       { headers },
     );
-    if (!Array.isArray(items) || !isRecord(items[0])) {
-      return {
-        status: 'unknown',
-        last_status_text: '',
-        last_update: null,
-        expected_delivery: null,
-        timezone: 'Europe/Zurich',
-        events: [],
-      };
+    if (!Array.isArray(items)) {
+      throw new TypeError('Swiss Post returned an invalid shipment response');
     }
-    const item = items[0];
+    if (items.length === 0) throw new SwissPostTrackingError();
+    if (!items.every(isRecord)) {
+      throw new TypeError('Swiss Post returned an invalid shipment response');
+    }
+    const requested = comparableShipmentNumber(trackingNumber);
+    const identified = items.filter((candidate) => comparableShipmentNumber(candidate.shipmentNumber));
+    if (identified.length === 0) {
+      throw new TypeError('Swiss Post did not return a shipment identifier');
+    }
+    const item = identified.find(
+      (candidate) => comparableShipmentNumber(candidate.shipmentNumber) === requested,
+    );
+    if (!item) throw new RangeError('Swiss Post returned a different shipment');
     const identity = text(item.identity);
     let events: unknown[] = [];
     if (identity) {

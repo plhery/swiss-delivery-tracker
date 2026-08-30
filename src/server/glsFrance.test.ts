@@ -77,7 +77,7 @@ describe('GLS France tracking input', () => {
 describe('GLS France status mapping', () => {
   it.each([
     [['CON'], 'pending'],
-    [['REC', 'EXP', 'PBC', 'DOU'], 'in_transit'],
+    [['REC', 'EXP', 'PBC', 'DOU', 'DEL'], 'in_transit'],
     [['TRV'], 'out_for_delivery'],
     [['LIV', 'LTV', 'LTL', 'LIL', 'LIT', 'LTT'], 'delivered'],
     [['INC', 'PBP', 'NLI', 'NLK', 'NLP', 'RET', 'PBA', 'SIN'], 'exception'],
@@ -150,6 +150,54 @@ describe('GLS France response normalization', () => {
     });
   });
 
+  it('treats DEL as scheduled unless the latest provider event is a failed LIV attempt', () => {
+    const scheduled = deliveredFixture();
+    scheduled.colis.statutColis = 'DEL';
+    scheduled.evenements = [{
+      datereference: '2026-08-29 11:42:00.0',
+      statutEvenement: 'DEL',
+      typeEvenement: 'EXP',
+      codelieuEvenement: 'FR0012',
+      nomSignataire: '',
+      referenceDestinataire: '',
+    }];
+
+    expect(parseGLSFranceTrackingResponse(scheduled, TRACKING_NUMBER)).toMatchObject({
+      status: 'in_transit',
+      last_status_text: 'Delivery delayed',
+      events: [{
+        description: 'Delivery delayed',
+        stage: 'in_transit',
+        provider_code: 'DEL',
+      }],
+    });
+
+    const failed = deliveredFixture();
+    failed.colis.statutColis = 'DEL';
+    failed.evenements = [{
+      datereference: '2026-08-29 11:42:00.0',
+      statutEvenement: 'DEL',
+      typeEvenement: 'LIV',
+      codelieuEvenement: 'FR0012',
+      nomSignataire: '',
+      referenceDestinataire: '',
+    }];
+
+    expect(parseGLSFranceTrackingResponse(failed, TRACKING_NUMBER)).toMatchObject({
+      status: 'exception',
+      last_status_text: 'Delivery delayed',
+      events: [{
+        description: 'Delivery delayed',
+        stage: 'failed_attempt',
+        provider_code: 'DEL',
+      }],
+    });
+
+    failed.colis.statutColis = 'NEW';
+    expect(parseGLSFranceTrackingResponse(failed, TRACKING_NUMBER))
+      .toMatchObject({ status: 'exception' });
+  });
+
   it('rejects malformed responses and responses for another shipment', () => {
     expect(() => parseGLSFranceTrackingResponse([], TRACKING_NUMBER))
       .toThrow('invalid tracking response');
@@ -182,6 +230,22 @@ describe('GLS France response normalization', () => {
         Origin: 'https://moncolis.gls-france.com',
       }),
     });
+  });
+
+  it('preserves the official wrong-number 404 for a validly shaped parcel number', async () => {
+    const wrongNumber = '00ZZ00Z0';
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      `404 No command found for code: ${wrongNumber}`,
+      { status: 404 },
+    ));
+
+    await expect(new GLSFranceTracker(1_000).fetch(wrongNumber)).rejects.toMatchObject({
+      name: 'UpstreamHttpError',
+      provider: 'GLS France tracking',
+      status: 404,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]![0])).toBe(glsFranceTrackingApiUrl(wrongNumber));
   });
 
   it('enforces the adapter response-size limit', async () => {

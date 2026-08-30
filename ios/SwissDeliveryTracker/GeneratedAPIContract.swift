@@ -14,6 +14,7 @@ struct DeleteAccountRequest: Codable, Equatable, Hashable, Sendable {
 
 enum CarrierID: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
     case swissPost = "swiss-post"
+    case swissPostCargo = "swiss-post-cargo"
     case quickpac
     case planzer
     case aliexpress
@@ -25,6 +26,7 @@ enum CarrierID: String, Codable, CaseIterable, Hashable, Sendable, Identifiable 
     case dhl
     case ups
     case fedex
+    case glsCh = "gls-ch"
     case dpd
     case dpdFr = "dpd-fr"
     case mondialRelay = "mondial-relay"
@@ -34,6 +36,12 @@ enum CarrierID: String, Codable, CaseIterable, Hashable, Sendable, Identifiable 
     case glsFr = "gls-fr"
     case colisPrive = "colis-prive"
     case geodis
+    case colisweb
+    case cChezVous = "c-chez-vous"
+    case heppner
+    case ciblex
+    case paack
+    case asendia
     case shipup
     case internationalPost = "intl-post"
     case unknown

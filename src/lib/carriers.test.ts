@@ -117,12 +117,12 @@ describe('detectCarrier', () => {
     expect(detectCarrierMatch('AB12CD34')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['gls-fr'],
+      candidates: ['gls-ch', 'gls-fr'],
     });
     expect(detectCarrierMatch('36631000001')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['gls-fr'],
+      candidates: ['gls-ch', 'gls-fr'],
     });
     expect(detectCarrierMatch('99112233445575012')).toMatchObject({
       carrier: 'unknown',
@@ -145,13 +145,15 @@ describe('detectCarrier', () => {
     expect(detectCarrierMatch('10594002378611')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['dpd', 'dpd-fr'],
+      candidates: ['gls-ch', 'dpd', 'dpd-fr', 'ciblex'],
     });
     expect(detectCarrierMatch('76434219')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['mondial-relay'],
+      candidates: ['mondial-relay', 'heppner'],
     });
+    expect(detectCarrier('PRJV50T7DP')).toBe('c-chez-vous');
+    expect(detectCarrier('ASE12345678')).toBe('asendia');
   });
 
   it('rejects S10-shaped values with an invalid check digit', () => {
@@ -178,7 +180,7 @@ describe('detectCarrier', () => {
     expect(detectCarrierMatch('123456789012')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['fedex', 'dpd-fr', 'mondial-relay'],
+      candidates: ['fedex', 'gls-ch', 'dpd-fr', 'mondial-relay'],
     });
     expect(detectCarrierMatch('123456789012345')).toMatchObject({
       carrier: 'unknown',
@@ -191,7 +193,7 @@ describe('detectCarrier', () => {
     expect(detectCarrierMatch('01234567890123')).toMatchObject({
       carrier: 'unknown',
       confidence: 'low',
-      candidates: ['dpd', 'dpd-fr'],
+      candidates: ['gls-ch', 'dpd', 'dpd-fr', 'ciblex'],
     });
   });
 
@@ -225,6 +227,7 @@ describe('formatTrackingNumber', () => {
 describe('parseTrackingInput', () => {
   it.each([
     ['swiss-post', '993412345612345678'],
+    ['swiss-post-cargo', '1234ABC789'],
     ['quickpac', '440012345612345678'],
     ['planzer', '91346097020038089282'],
     ['aliexpress', 'LP123456789CN'],
@@ -233,6 +236,7 @@ describe('parseTrackingInput', () => {
     ['dhl', '1234567890'],
     ['ups', '1Z999AA10123456784'],
     ['fedex', '123456789012'],
+    ['gls-ch', '37463502621'],
     ['dpd', '01234567890123'],
     ['dpd-fr', '250803383035673'],
     ['la-poste', '8G12345678901'],
@@ -240,6 +244,11 @@ describe('parseTrackingInput', () => {
     ['gls-fr', '00AB12CD'],
     ['colis-prive', '99112233445575012'],
     ['geodis', '1G123GEODIS0'],
+    ['colisweb', '87654321'],
+    ['c-chez-vous', 'PRJV50T7DP'],
+    ['ciblex', '99996007756925'],
+    ['paack', 'PAACK12345'],
+    ['asendia', 'ASE12345678'],
   ] as const)('round-trips a generated %s tracking link', (carrier, trackingNumber) => {
     const link = CARRIERS[carrier].trackingUrl?.(trackingNumber);
     expect(link).toBeDefined();
@@ -248,6 +257,15 @@ describe('parseTrackingInput', () => {
       carrier,
       source: 'link',
     });
+  });
+
+  it('builds usable links for C Chez Vous compact credentials and Paack', () => {
+    expect(CARRIERS['c-chez-vous'].trackingUrl?.('4TZKO15679059600')).toBe(
+      'https://www.cchezvous.fr/suivi-colis/4TZKO156790--59600',
+    );
+    expect(CARRIERS.paack.trackingUrl?.('PAACK12345')).toBe(
+      'https://mydeliveries.paack.app/tracking?tracking_number=PAACK12345',
+    );
   });
 
   it('trusts a broad GLS identifier only when it comes from the official domain', () => {

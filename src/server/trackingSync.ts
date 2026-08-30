@@ -12,19 +12,26 @@ import {
   supportsSwissPostHandoff,
 } from './carriers';
 import { ColisPriveTracker } from './colisPrive';
+import { ColiswebTracker } from './colisweb';
+import { CChezVousTracker } from './cChezVous';
+import { CiblexTracker } from './ciblex';
 import { DachserTracker } from './dachser';
 import { DPDFranceTracker } from './dpdFrance';
 import { DPDTracker } from './dpd';
 import { GeodisTracker } from './geodis';
 import { GLSFranceTracker } from './glsFrance';
+import { GLSSwitzerlandTracker } from './glsSwitzerland';
+import { HeppnerTracker } from './heppner';
 import { HermesTracker } from './hermes';
 import { LaPosteTracker } from './laPoste';
 import { MondialRelayTracker } from './mondialRelay';
+import { PaackTracker } from './paack';
 import { PlanzerSharedTracker } from './planzerShared';
 import type { CompositePushNotificationService } from './push';
 import { RelaisColisTracker } from './relaisColis';
 import type { SupabaseServiceClient } from './supabase';
 import { SwissPostTracker } from './swissPost';
+import { SwissPostCargoTracker } from './swissPostCargo';
 import { isRecord, type JsonObject } from './types';
 import { fetchUpstreamCarrier } from './upstreamAdapters';
 import { UPSTracker } from './ups';
@@ -56,6 +63,13 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
     readonly dpdFrance = new DPDFranceTracker(),
     readonly mondialRelay = new MondialRelayTracker(),
     readonly relaisColis = new RelaisColisTracker(),
+    readonly swissPostCargo = new SwissPostCargoTracker(),
+    readonly glsSwitzerland = new GLSSwitzerlandTracker(),
+    readonly colisweb = new ColiswebTracker(),
+    readonly cChezVous = new CChezVousTracker(),
+    readonly heppner = new HeppnerTracker(),
+    readonly ciblex = new CiblexTracker(),
+    readonly paack = new PaackTracker(),
   ) {}
 
   async fetch(
@@ -68,6 +82,8 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
     let result: CarrierResult;
     if (carrierId === 'swiss-post') {
       result = await this.swissPost.fetch(trackingNumber);
+    } else if (adapter === 'swiss-post-cargo') {
+      result = await this.swissPostCargo.fetch(trackingNumber);
     } else if (adapter === 'dpd') {
       result = await this.dpd.fetch(trackingNumber, dpdPostcode ?? '');
     } else if (adapter === 'dachser') {
@@ -81,6 +97,8 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
       result = await this.laPoste.fetch(trackingNumber);
     } else if (adapter === 'gls-france') {
       result = await this.glsFrance.fetch(trackingNumber);
+    } else if (adapter === 'gls-switzerland') {
+      result = await this.glsSwitzerland.fetch(trackingNumber, dpdPostcode ?? '');
     } else if (adapter === 'colis-prive') {
       result = await this.colisPrive.fetch(trackingNumber);
     } else if (adapter === 'geodis') {
@@ -91,6 +109,16 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
       result = await this.mondialRelay.fetch(trackingNumber, dpdPostcode ?? '');
     } else if (adapter === 'relais-colis') {
       result = await this.relaisColis.fetch(trackingNumber);
+    } else if (adapter === 'colisweb') {
+      result = await this.colisweb.fetch(trackingNumber);
+    } else if (adapter === 'c-chez-vous') {
+      result = await this.cChezVous.fetch(trackingNumber);
+    } else if (adapter === 'heppner') {
+      result = await this.heppner.fetch(trackingNumber, dpdPostcode ?? '');
+    } else if (adapter === 'ciblex') {
+      result = await this.ciblex.fetch(trackingNumber);
+    } else if (adapter === 'paack') {
+      result = await this.paack.fetch(trackingNumber, dpdPostcode ?? '');
     } else if (adapter === 'planzer' && trackingUrl) {
       result = await this.planzerShared.fetch(trackingNumber, trackingUrl);
     } else {
@@ -157,10 +185,17 @@ export function inferStage(text: string, fallback = 'in_transit'): string {
 }
 
 export function resultStage(result: CarrierResult): string | null {
+  const declaredCurrent = String(result.current_stage ?? '');
+  if (VALID_STAGES.has(declaredCurrent)) return declaredCurrent;
   const status = String(result.status ?? 'unknown');
   const text = String(result.last_status_text ?? '');
   switch (status) {
-    case 'pending': return inferStage(text, 'pending');
+    case 'pending': {
+      const inferred = inferStage(text, 'pending');
+      if (inferred !== 'pending') return inferred;
+      const declared = String(result.events?.[0]?.stage ?? '');
+      return VALID_STAGES.has(declared) ? declared : 'pending';
+    }
     case 'in_transit': return inferStage(text, 'in_transit');
     case 'out_for_delivery': return inferStage(text, 'out_for_delivery');
     case 'delivered': return inferStage(text, 'delivered');
@@ -268,8 +303,10 @@ export function buildEvents(
   parcel: JsonObject,
   result: CarrierResult,
   sourceCarrierId?: string,
+  observedAt?: Date,
 ): JsonObject[] {
-  const current = resultStage(result) ?? 'in_transit';
+  const reportedCurrent = resultStage(result);
+  const current = reportedCurrent ?? 'in_transit';
   const carrierId = sourceCarrierId ?? String(parcel.carrier ?? '');
   const timezone = resultTimezone(carrierId, result);
   const rows: JsonObject[] = [];
@@ -303,6 +340,43 @@ export function buildEvents(
         raw_data: {},
       });
     }
+  }
+  const previousStage = String(parcel.current_stage ?? 'pending');
+  const currentAlreadyTimed = rows.some((row) => row.stage === current);
+  if (
+    observedAt
+    && !Number.isNaN(observedAt.getTime())
+    && reportedCurrent !== null
+    && (result.status !== 'pending' || rows.length === 0)
+    && current !== 'pending'
+    && current !== previousStage
+    && !currentAlreadyTimed
+  ) {
+    const matchingEvent = (result.events ?? []).find((raw) => {
+      const declaredStage = String(raw.stage ?? '');
+      const description = String(raw.description ?? '');
+      return (VALID_STAGES.has(declaredStage) ? declaredStage : inferStage(description, current))
+        === current;
+    });
+    const description = String(
+      matchingEvent?.description ?? result.last_status_text ?? 'Tracking update',
+    ).trim() || 'Tracking update';
+    const location = String(matchingEvent?.location ?? '').trim();
+    const occurredAt = observedAt.toISOString();
+    rows.push({
+      package_id: parcel.id,
+      stage: current,
+      description,
+      location: location || null,
+      occurred_at: occurredAt,
+      provider_event_id: providerEventId(
+        carrierId,
+        `observed:${previousStage}->${current}`,
+        location,
+        description,
+      ),
+      raw_data: { observed_without_provider_timestamp: true },
+    });
   }
   return rows;
 }
@@ -398,7 +472,7 @@ export class TrackingSyncService {
       }
 
       const { result, sourceCarrierId, swissPostReady } = fetched;
-      const events = buildEvents(parcel, result, sourceCarrierId);
+      const events = buildEvents(parcel, result, sourceCarrierId, now);
       await this.client.insertEvents(events);
       if (sourceCarrierId === 'swiss-post' && (result.events?.length ?? 0) > 0) {
         await this.client.deleteEventsByDescriptions(id, new Set([
@@ -410,7 +484,14 @@ export class TrackingSyncService {
       const latestEvent = [...events].sort(
         (left, right) => String(right.occurred_at).localeCompare(String(left.occurred_at)),
       )[0];
-      const stage = latestEvent ? String(latestEvent.stage) : reportedStage;
+      const latestEventStage = latestEvent ? String(latestEvent.stage) : null;
+      // A provider's explicit non-pending summary can be newer than its last
+      // timestamped milestone (for example, Colisweb reports a failed current
+      // state without a corresponding event timestamp). Keep timed progress
+      // authoritative only while the provider summary is still pending.
+      const stage = reportedStage && result.status !== 'pending'
+        ? reportedStage
+        : latestEventStage ?? reportedStage;
       const hasUpdate = Boolean(
         (stage && stage !== 'pending')
         || events.some((event) => event.stage !== 'pending'),

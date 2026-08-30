@@ -25,6 +25,7 @@
     "start": "node .next/standalone/server.js",
     "preview": "npm run start",
     "test": "vitest run",
+    "test:carriers:live": "vitest run --config vitest.carriers-live.config.ts",
     "test:scripts": "node --test scripts/prepare-personal-ios-project.test.mjs scripts/validate-production-config.test.mjs",
     "test:contract": "node scripts/generate-api-contract.mjs --check",
     "test:coverage": "vitest run --coverage",

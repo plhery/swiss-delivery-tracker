@@ -38,6 +38,15 @@ export class DPDAPIError extends Error {
   }
 }
 
+export class DPDTrackingError extends Error {
+  readonly status = 404;
+
+  constructor() {
+    super('DPD could not locate the shipment');
+    this.name = 'DPDTrackingError';
+  }
+}
+
 class DPDAPIHttpError extends DPDAPIError {
   constructor(readonly status: number) {
     super(`DPD guest API returned HTTP ${status}`);
@@ -367,12 +376,19 @@ export class DPDTracker {
     url.searchParams.set('lang', 'en');
     url.searchParams.set('continueWithoutVerification', postcode ? 'false' : 'true');
     if (postcode) url.searchParams.set('dataForVerification', postcode);
-    return await this.requestJson(url, '', {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'User-Agent': `myDPD/${CLIENT_VERSION} (Android)`,
-    });
+    try {
+      return await this.requestJson(url, '', {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': `myDPD/${CLIENT_VERSION} (Android)`,
+      });
+    } catch (error) {
+      if (error instanceof DPDAPIHttpError && error.status === 404) {
+        throw new DPDTrackingError();
+      }
+      throw error;
+    }
   }
 
   private async accessToken(): Promise<string> {

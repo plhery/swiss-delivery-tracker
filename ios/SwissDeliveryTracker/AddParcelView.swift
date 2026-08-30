@@ -307,7 +307,7 @@ struct AddParcelView: View {
                 ) {
                     TextField(requirement.placeholder ?? "", text: $deliveryPostcode)
                         .font(.body.monospacedDigit())
-                        .keyboardType(.numberPad)
+                        .keyboardType(requirement.inputMode == "numeric" ? .numberPad : .asciiCapable)
                         .textContentType(.postalCode)
                         .focused($focusedField, equals: .deliveryPostcode)
                         .onChange(of: deliveryPostcode) { _, value in

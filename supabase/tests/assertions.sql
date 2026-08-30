@@ -297,6 +297,38 @@ select public.create_owned_package(
 );
 
 select public.create_owned_package(
+  '1234ABC789', 'Swiss Post Cargo shipment', 'swiss-post-cargo', null, null
+);
+
+select public.create_owned_package(
+  '37463502621', 'GLS Switzerland parcel', 'gls-ch', null, '8000'
+);
+
+select public.create_owned_package(
+  '12345678', 'Colisweb delivery', 'colisweb', null, null
+);
+
+select public.create_owned_package(
+  'PRJV50T7DP', 'C Chez Vous delivery', 'c-chez-vous', null, null
+);
+
+select public.create_owned_package(
+  '25461320', 'Heppner shipment', 'heppner', null, '92410'
+);
+
+select public.create_owned_package(
+  '99996007756925', 'Ciblex parcel', 'ciblex', null, null
+);
+
+select public.create_owned_package(
+  'PAACK12345', 'Paack delivery', 'paack', null, '1234-567'
+);
+
+select public.create_owned_package(
+  'ASE12345678', 'Asendia parcel link', 'asendia', null, null
+);
+
+select public.create_owned_package(
   '9010000001234',
   'Dachser parcel',
   'dachser',
@@ -349,6 +381,45 @@ begin
     raise exception 'Mondial Relay postcode was not stored for its owner';
   end if;
 
+  if not exists (
+    select 1 from public.packages
+    where tracking_number = '37463502621'
+      and carrier = 'gls-ch'
+      and dpd_postcode = '8000'
+      and user_id = '10000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'GLS Switzerland postcode was not stored for its owner';
+  end if;
+
+  if not exists (
+    select 1 from public.packages
+    where tracking_number = '25461320'
+      and carrier = 'heppner'
+      and dpd_postcode = '92410'
+      and user_id = '10000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'Heppner postcode was not stored for its owner';
+  end if;
+
+  if not exists (
+    select 1 from public.packages
+    where tracking_number = 'PAACK12345'
+      and carrier = 'paack'
+      and dpd_postcode = '1234-567'
+      and user_id = '10000000-0000-0000-0000-000000000001'
+  ) then
+    raise exception 'Paack postcode was not stored for its owner';
+  end if;
+
+  begin
+    perform public.create_owned_package(
+      'PAACK12346', '', 'paack', null, '12 - 345'
+    );
+    raise exception 'Paack postcode with doubled separators was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
   if (
     select count(*)
     from public.packages
@@ -365,6 +436,24 @@ begin
       )
   ) <> 8 then
     raise exception 'French carrier identifiers were not accepted by the package RPC';
+  end if;
+
+  if (
+    select count(*)
+    from public.packages
+    where user_id = '10000000-0000-0000-0000-000000000001'
+      and (tracking_number, carrier) in (
+        ('1234ABC789', 'swiss-post-cargo'),
+        ('37463502621', 'gls-ch'),
+        ('12345678', 'colisweb'),
+        ('PRJV50T7DP', 'c-chez-vous'),
+        ('25461320', 'heppner'),
+        ('99996007756925', 'ciblex'),
+        ('PAACK12345', 'paack'),
+        ('ASE12345678', 'asendia')
+      )
+  ) <> 8 then
+    raise exception 'regional carrier identifiers were not accepted by the package RPC';
   end if;
 
   if not exists (
@@ -422,6 +511,42 @@ begin
       '76434220', '', 'mondial-relay', null, '5965'
     );
     raise exception 'invalid Mondial Relay postcode was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  begin
+    perform public.create_owned_package(
+      '37463502622', '', 'gls-ch', null, '800'
+    );
+    raise exception 'invalid GLS Switzerland postcode was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  begin
+    perform public.create_owned_package(
+      '25461321', '', 'heppner', null, '924100'
+    );
+    raise exception 'invalid Heppner postcode was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  begin
+    perform public.create_owned_package(
+      'PAACK12346', '', 'paack', null, '12--345'
+    );
+    raise exception 'invalid Paack postcode was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+
+  begin
+    perform public.create_owned_package(
+      'PAACK12347', '', 'paack', null, 'ABC'
+    );
+    raise exception 'all-letter Paack postcode was accepted';
   exception when invalid_parameter_value then
     null;
   end;

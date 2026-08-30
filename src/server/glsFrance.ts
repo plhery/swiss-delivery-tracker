@@ -19,6 +19,17 @@ interface GLSStatusMetadata {
   description: string;
 }
 
+const DELAYED_DELIVERY: GLSStatusMetadata = {
+  status: 'in_transit',
+  stage: 'in_transit',
+  description: 'Delivery delayed',
+};
+const FAILED_DELAYED_DELIVERY: GLSStatusMetadata = {
+  status: 'exception',
+  stage: 'failed_attempt',
+  description: 'Delivery delayed',
+};
+
 const GLS_STATUSES = new Map<string, GLSStatusMetadata>([
   ['CON', { status: 'pending', stage: 'registered', description: 'Shipment information received' }],
   ['REC', { status: 'in_transit', stage: 'accepted', description: 'Parcel received at GLS depot' }],
@@ -48,7 +59,9 @@ const GLS_STATUSES = new Map<string, GLSStatusMetadata>([
   // These additional values are present in the current official tracking frontend.
   ['DEP', { status: 'in_transit', stage: 'in_transit', description: 'ParcelShop delivery planned' }],
   ['DEK', { status: 'in_transit', stage: 'in_transit', description: 'Locker delivery planned' }],
-  ['DEL', { status: 'exception', stage: 'failed_attempt', description: 'Delivery delayed' }],
+  // GLS's frontend treats DEL as a rescheduled delay by default. It only marks
+  // the parcel as failed when the newest event has typeEvenement=LIV.
+  ['DEL', DELAYED_DELIVERY],
   ['LIR', { status: 'exception', stage: 'returned', description: 'Returned to sender' }],
 ]);
 
@@ -137,17 +150,25 @@ interface ParsedEvent {
   event: CarrierEvent;
   timestamp: number;
   sourceIndex: number;
+  typeCode: string;
+  metadata: GLSStatusMetadata | null;
 }
 
 function parseEvent(raw: JsonObject, sourceIndex: number): ParsedEvent | null {
-  const code = statusCode(raw.statutEvenement) || statusCode(raw.typeEvenement);
-  const metadata = statusMetadata(code);
+  const eventStatusCode = statusCode(raw.statutEvenement);
+  const typeCode = statusCode(raw.typeEvenement);
+  const code = eventStatusCode || typeCode;
+  const metadata = eventStatusCode === 'DEL' && typeCode === 'LIV'
+    ? FAILED_DELAYED_DELIVERY
+    : statusMetadata(code);
   const time = parseDate(raw.datereference) ?? parseDate(raw.datecreation);
   if (!code && !time) return null;
   const location = locationCode(raw.codelieuEvenement);
   return {
     timestamp: time?.timestamp ?? Number.NEGATIVE_INFINITY,
     sourceIndex,
+    typeCode,
+    metadata,
     event: {
       ...(time ? { time: time.iso } : {}),
       ...(location ? { location } : {}),
@@ -193,14 +214,17 @@ export function parseGLSFranceTrackingResponse(
   parsedEvents.sort((left, right) => (
     right.timestamp - left.timestamp || left.sourceIndex - right.sourceIndex
   ));
+  const latestParsedEvent = parsedEvents[0];
   const events = parsedEvents
     .slice(0, MAX_EVENTS_TO_RETURN)
     .map(({ event }) => event);
 
   const currentCode = statusCode(parcel.statutColis);
-  const current = statusMetadata(currentCode);
+  const current = currentCode === 'DEL' && latestParsedEvent?.typeCode === 'LIV'
+    ? FAILED_DELAYED_DELIVERY
+    : statusMetadata(currentCode);
   const latestEvent = events[0];
-  const latestEventStatus = statusMetadata(latestEvent?.provider_code);
+  const latestEventStatus = latestParsedEvent?.metadata ?? statusMetadata(latestEvent?.provider_code);
   const fallbackUpdate = parseDate(parcel.dateActionColis);
   return {
     status: current?.status ?? latestEventStatus?.status ?? 'unknown',

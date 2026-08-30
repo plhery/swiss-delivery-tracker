@@ -32,6 +32,27 @@
         }
       ]
     },
+    "swiss-post-cargo": {
+      "displayName": "Swiss Post Cargo",
+      "color": "#ffcc00",
+      "selectable": true,
+      "timezone": "Europe/Zurich",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "swiss-post-cargo"
+      },
+      "canaryUrl": "https://apv.swisspost-cargo.com/public/trackandtrace",
+      "trackingUrlTemplate": "https://apv.swisspost-cargo.com/public/trackandtrace/{trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "apv.swisspost-cargo.com"
+          ],
+          "path": "^/public/trackandtrace/([^/?#]+)/?$"
+        }
+      ],
+      "detectionRules": []
+    },
     "quickpac": {
       "displayName": "Quickpac",
       "color": "#ed1c24",
@@ -345,6 +366,54 @@
         },
         {
           "pattern": "^\\d{15}$",
+          "confidence": "low"
+        }
+      ]
+    },
+    "gls-ch": {
+      "displayName": "GLS Switzerland",
+      "color": "#ffdd00",
+      "selectable": true,
+      "timezone": "Europe/Zurich",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "gls-switzerland",
+        "requirements": [
+          {
+            "field": "dpdPostcode",
+            "validator": "swissPostcode",
+            "label": "Delivery postcode",
+            "type": "text",
+            "placeholder": "8000",
+            "help": "GLS uses the recipient postcode to unlock the detailed event history.",
+            "pattern": "^[0-9]{4}$",
+            "maxLength": 4,
+            "inputMode": "numeric",
+            "autoComplete": "postal-code"
+          }
+        ]
+      },
+      "canaryUrl": "https://gls-group.eu/EU/en/parcel-tracking",
+      "trackingUrlTemplate": "https://gls-group.eu/EU/en/parcel-tracking?match={trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "gls-group.eu"
+          ],
+          "params": [
+            "match",
+            "parcelNumber",
+            "matchParcelNumber"
+          ]
+        }
+      ],
+      "detectionRules": [
+        {
+          "pattern": "^(?=[A-Z0-9]{8}$)(?=.*[A-Z])(?=.*\\d)[A-Z0-9]{8}$",
+          "confidence": "low"
+        },
+        {
+          "pattern": "^\\d{11,14}$",
           "confidence": "low"
         }
       ]
@@ -677,6 +746,178 @@
       "detectionRules": [
         {
           "pattern": "^1G[A-Z0-9]{10}$",
+          "confidence": "high"
+        }
+      ]
+    },
+    "colisweb": {
+      "displayName": "Colisweb",
+      "color": "#ff8a00",
+      "selectable": true,
+      "timezone": "Europe/Paris",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "colisweb"
+      },
+      "canaryUrl": "https://www.colisweb.com/suivi-livraison",
+      "trackingUrlTemplate": "https://www.colisweb.com/suivi-livraison?value={trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "colisweb.com"
+          ],
+          "params": [
+            "value",
+            "trackingNumber"
+          ]
+        }
+      ],
+      "detectionRules": []
+    },
+    "c-chez-vous": {
+      "displayName": "C Chez Vous",
+      "color": "#e50046",
+      "selectable": true,
+      "timezone": "Europe/Paris",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "c-chez-vous"
+      },
+      "canaryUrl": "https://www.cchezvous.fr/suivi-colis",
+      "trackingUrlTemplate": "https://www.cchezvous.fr/suivi-colis/{trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "cchezvous.fr"
+          ],
+          "path": "^/suivi-colis/([^/?#]+)/?$"
+        }
+      ],
+      "detectionRules": [
+        {
+          "pattern": "^[A-Z]{4}\\d{2}[A-Z0-9]{4}$",
+          "confidence": "high"
+        }
+      ]
+    },
+    "heppner": {
+      "displayName": "Heppner",
+      "color": "#005baa",
+      "selectable": true,
+      "timezone": "Europe/Paris",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "heppner",
+        "requirements": [
+          {
+            "field": "dpdPostcode",
+            "validator": "swissOrFrancePostcode",
+            "label": "Delivery postcode",
+            "type": "text",
+            "placeholder": "75001",
+            "help": "Heppner uses the recipient postcode to verify the shipment in France or Switzerland.",
+            "pattern": "^[0-9]{4,5}$",
+            "maxLength": 5,
+            "inputMode": "numeric",
+            "autoComplete": "postal-code"
+          }
+        ]
+      },
+      "canaryUrl": "https://myportal.heppner-group.com/tracking",
+      "linkRules": [],
+      "detectionRules": [
+        {
+          "pattern": "^\\d{8}$",
+          "confidence": "low"
+        }
+      ]
+    },
+    "ciblex": {
+      "displayName": "Ciblex",
+      "color": "#e30613",
+      "selectable": true,
+      "timezone": "Europe/Paris",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "ciblex"
+      },
+      "canaryUrl": "https://secure.extranet.ciblex.fr/extranet/client/corps.php",
+      "trackingUrlTemplate": "https://secure.extranet.ciblex.fr/extranet/client/corps.php?module=colis&colis={trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "secure.extranet.ciblex.fr"
+          ],
+          "params": [
+            "colis"
+          ]
+        }
+      ],
+      "detectionRules": [
+        {
+          "pattern": "^\\d{14}$",
+          "confidence": "low"
+        }
+      ]
+    },
+    "paack": {
+      "displayName": "Paack",
+      "color": "#5b2dee",
+      "selectable": true,
+      "timezone": "Europe/Paris",
+      "tracking": {
+        "mode": "automatic",
+        "adapter": "paack",
+        "requirements": [
+          {
+            "field": "dpdPostcode",
+            "validator": "paackPostcode",
+            "label": "Delivery postcode",
+            "type": "text",
+            "placeholder": "75001",
+            "help": "Paack requires the recipient postcode together with the order number.",
+            "pattern": "^(?=.{3,10}$)(?=.*[0-9])[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$",
+            "maxLength": 10,
+            "inputMode": "text",
+            "autoComplete": "postal-code"
+          }
+        ]
+      },
+      "canaryUrl": "https://mydeliveries.paack.app/tracking",
+      "trackingUrlTemplate": "https://mydeliveries.paack.app/tracking?tracking_number={trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "mydeliveries.paack.app"
+          ],
+          "params": [
+            "tracking_number"
+          ]
+        }
+      ],
+      "detectionRules": []
+    },
+    "asendia": {
+      "displayName": "Asendia",
+      "color": "#ef7d00",
+      "selectable": true,
+      "timezone": "UTC",
+      "tracking": {
+        "mode": "link-only",
+        "adapter": null
+      },
+      "trackingUrlTemplate": "https://track.asendia.com/track/{trackingNumber}",
+      "linkRules": [
+        {
+          "domains": [
+            "track.asendia.com"
+          ],
+          "path": "^/track/([^/?#]+)/?$"
+        }
+      ],
+      "detectionRules": [
+        {
+          "pattern": "^ASE[A-Z0-9]{8,37}$",
           "confidence": "high"
         }
       ]

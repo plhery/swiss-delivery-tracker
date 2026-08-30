@@ -301,6 +301,57 @@ describe('input validation', () => {
       trackingUrl: '',
       dpdPostcode: '5965',
     })).toThrow('five-digit');
+    expect(newPackageValues({
+      trackingNumber: '37463502621',
+      label: 'GLS parcel',
+      carrier: 'gls-ch',
+      trackingUrl: '',
+      dpdPostcode: '8000',
+    })).toMatchObject({
+      carrier: 'gls-ch',
+      dpdPostcode: '8000',
+    });
+    expect(newPackageValues({
+      trackingNumber: '25461320',
+      label: 'Heppner shipment',
+      carrier: 'heppner',
+      trackingUrl: '',
+      dpdPostcode: '1201',
+    })).toMatchObject({
+      carrier: 'heppner',
+      dpdPostcode: '1201',
+    });
+    expect(newPackageValues({
+      trackingNumber: 'PAACK12345',
+      label: 'Paack parcel',
+      carrier: 'paack',
+      trackingUrl: '',
+      dpdPostcode: '1234 567',
+    })).toMatchObject({
+      carrier: 'paack',
+      dpdPostcode: '1234567',
+    });
+    expect(() => newPackageValues({
+      trackingNumber: 'PAACK12345',
+      label: 'Paack parcel',
+      carrier: 'paack',
+      trackingUrl: '',
+      dpdPostcode: '12--345',
+    })).toThrow('valid delivery postcode');
+    expect(() => newPackageValues({
+      trackingNumber: 'PAACK12345',
+      label: 'Paack parcel',
+      carrier: 'paack',
+      trackingUrl: '',
+      dpdPostcode: '12 - 345',
+    })).toThrow('valid delivery postcode');
+    expect(() => newPackageValues({
+      trackingNumber: 'PAACK12345',
+      label: 'Paack parcel',
+      carrier: 'paack',
+      trackingUrl: '',
+      dpdPostcode: 'ABC',
+    })).toThrow('valid delivery postcode');
     expect(() => newPackageValues({
       trackingNumber: 'letters',
       label: 'Parcel',

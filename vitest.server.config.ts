@@ -7,6 +7,7 @@ export default defineConfig({
   },
   test: {
     include: ['src/server/**/*.test.ts'],
+    exclude: ['src/server/**/*.live.test.ts'],
     environment: 'node',
     testTimeout: 10_000,
     coverage: {

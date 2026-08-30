@@ -22,6 +22,8 @@ struct CarrierRequirement: Codable, Hashable, Sendable {
         var value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if inputMode == "numeric" {
             value = value.filter(\.isNumber)
+        } else if validator == "paackPostcode" {
+            value = value.uppercased().filter { !$0.isWhitespace }
         }
         if let maxLength {
             value = String(value.prefix(maxLength))
@@ -261,8 +263,10 @@ final class CarrierCatalog: @unchecked Sendable {
         if !Self.supportsSwissPostHandoff(parcel.trackingNumber) {
             let definition = info(for: parcel.carrier)
             guard let raw = parcel.trackingURL
-                    ?? definition.trackingURLTemplate?.replacingOccurrences(
-                        of: "{trackingNumber}", with: Self.urlEncode(parcel.trackingNumber)
+                    ?? Self.renderTrackingURL(
+                        definition.trackingURLTemplate,
+                        carrier: parcel.carrier,
+                        trackingNumber: parcel.trackingNumber
                     ),
                   let url = localizedURL(raw, carrier: parcel.carrier, language: language) else { return [] }
             return [ParcelTrackingLink(
@@ -409,6 +413,25 @@ final class CarrierCatalog: @unchecked Sendable {
 
     private static func urlEncode(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+    }
+
+    private static func renderTrackingURL(
+        _ template: String?,
+        carrier: CarrierID,
+        trackingNumber: String
+    ) -> String? {
+        guard let template else { return nil }
+        let normalized = normalize(trackingNumber)
+        var linkNumber = trackingNumber
+        if carrier == .cChezVous,
+           normalized.range(of: "^[A-Z0-9]{11}[0-9]{5}$", options: .regularExpression) != nil {
+            let split = normalized.index(normalized.startIndex, offsetBy: 11)
+            linkNumber = "\(normalized[..<split])--\(normalized[split...])"
+        }
+        return template.replacingOccurrences(
+            of: "{trackingNumber}",
+            with: urlEncode(linkNumber)
+        )
     }
 
     private static let emptyMatch = TrackingInputMatch(

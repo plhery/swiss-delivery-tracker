@@ -354,7 +354,7 @@ describe('App', () => {
     expect(within(sheet).getByLabelText(/delivery postcode/i)).toHaveValue('8004');
   });
 
-  it('offers every French carrier and keeps Swiss DPD postcodes out of Mondial Relay', async () => {
+  it('offers every regional carrier and keeps carrier postcodes isolated', async () => {
     const repo = createDemoRepo(window.localStorage);
     await repo.add({
       trackingNumber: '06086514587082',
@@ -381,6 +381,14 @@ describe('App', () => {
       'GLS France',
       'Colis Privé',
       'GEODIS',
+      'Swiss Post Cargo',
+      'GLS Switzerland',
+      'Colisweb',
+      'C Chez Vous',
+      'Heppner',
+      'Ciblex',
+      'Paack',
+      'Asendia (link only)',
     ]) {
       expect(within(carrier).getByRole('option', { name })).toBeInTheDocument();
     }

@@ -19,6 +19,21 @@ const EVENT_DESCRIPTIONS: Record<(typeof CORE_STAGES)[number], string> = {
   out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
 };
+const NOT_FOUND_MESSAGES = new Set([
+  'keine sendungen gefunden.',
+  'aucun envoi trouve.',
+  'nessuna spedizione trovata.',
+  'no shipments found.',
+]);
+
+export class PlanzerTrackingError extends Error {
+  readonly status = 404;
+
+  constructor() {
+    super('Planzer could not locate the shipment');
+    this.name = 'PlanzerTrackingError';
+  }
+}
 
 interface RouteStep {
   label: string;
@@ -87,6 +102,10 @@ function labelStage(label: string): (typeof CORE_STAGES)[number] | null {
 
 export function parsePlanzerTrackingHtml(html: string, trackingNumber: string): CarrierResult {
   const $ = load(html);
+  const notice = $('p.lead').first().text().trim()
+    .toLocaleLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '');
   const timestamps = $('time[datetime]').toArray()
     .map((element) => ($(element).attr('datetime') ?? '').trim())
     .filter(Boolean);
@@ -112,7 +131,8 @@ export function parsePlanzerTrackingHtml(html: string, trackingNumber: string): 
     return true;
   });
   if (uniqueSteps.length < CORE_STAGES.length) {
-    throw new TypeError('The Planzer shared link did not return tracking details; check its accessKey');
+    if (NOT_FOUND_MESSAGES.has(notice)) throw new PlanzerTrackingError();
+    throw new TypeError('Planzer returned an invalid tracking page');
   }
 
   const events: Array<{ time: string; location: string; description: string }> = [];
@@ -130,7 +150,7 @@ export function parsePlanzerTrackingHtml(html: string, trackingNumber: string): 
     });
   });
   if (!currentStage) {
-    throw new TypeError('The Planzer shared link did not return tracking details; check its accessKey');
+    throw new TypeError('Planzer returned a shipment without a current stage');
   }
   const status = {
     registered: 'pending',

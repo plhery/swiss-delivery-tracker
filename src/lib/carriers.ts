@@ -99,10 +99,22 @@ const RAW_CARRIERS = CARRIER_CAPABILITIES as unknown as Record<
   RawCarrierCapability
 >;
 
-function trackingLink(template: string | undefined) {
+function trackingNumberForLink(carrierId: CarrierId, raw: string): string {
+  const normalized = normalizeTrackingNumber(raw);
+  if (carrierId === 'c-chez-vous') {
+    const composite = /^([A-Z0-9]{11})(\d{5})$/.exec(normalized);
+    if (composite) return `${composite[1]}--${composite[2]}`;
+  }
+  return raw;
+}
+
+function trackingLink(carrierId: CarrierId, template: string | undefined) {
   if (!template) return undefined;
   return (trackingNumber: string) =>
-    template.replace('{trackingNumber}', encodeURIComponent(trackingNumber));
+    template.replace(
+      '{trackingNumber}',
+      encodeURIComponent(trackingNumberForLink(carrierId, trackingNumber)),
+    );
 }
 
 export const CARRIERS = Object.fromEntries(
@@ -112,7 +124,7 @@ export const CARRIERS = Object.fromEntries(
       id: id as CarrierId,
       name: carrier.displayName,
       color: carrier.color,
-      trackingUrl: trackingLink(carrier.trackingUrlTemplate),
+      trackingUrl: trackingLink(id as CarrierId, carrier.trackingUrlTemplate),
       capabilities: {
         tracking: {
           mode: carrier.tracking.mode,
