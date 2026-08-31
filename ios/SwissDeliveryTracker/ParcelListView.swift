@@ -122,6 +122,11 @@ private struct DeliveryListView: View {
                         ExperimentalNextDeliveryPass(parcel: nextParcel, transition: parcelTransition)
                     }
                     .buttonStyle(ExperimentalLiftButtonStyle())
+                    .experimentalSwipeToArchive(
+                        title: localizer.text("parcel.archive"),
+                        cornerRadius: 30,
+                        action: { archive(nextParcel) }
+                    )
                     .accessibilityHint(localizer.text("detail.label"))
                 }
 
@@ -694,12 +699,11 @@ private struct ExperimentalParcelPassCard: View {
         }
         .experimentalSurface(tint: tint, cornerRadius: 24)
         .matchedTransitionSource(id: parcel.id, in: transition)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if let onArchive {
-                Button(localizer.text("parcel.archive"), systemImage: "archivebox") { onArchive() }
-                    .tint(.orange)
-            }
-        }
+        .experimentalSwipeToArchive(
+            title: localizer.text("parcel.archive"),
+            cornerRadius: 24,
+            action: onArchive
+        )
         .scrollTransition(.animated(.snappy(duration: 0.42))) { content, phase in
             content
                 .opacity(motionReduced || phase.isIdentity ? 1 : 0.66)
@@ -787,12 +791,12 @@ private struct ExperimentalDeliveredParcelCard: View {
         }
         .experimentalSurface(tint: tint, cornerRadius: 22, shadow: false)
         .matchedTransitionSource(id: parcel.id, in: transition)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if let onArchive {
-                Button(localizer.text("parcel.archive"), systemImage: "archivebox") { onArchive() }
-                    .tint(.orange)
-            }
-        }
+        .experimentalSwipeToArchive(
+            title: localizer.text("parcel.archive"),
+            cornerRadius: 22,
+            shadow: false,
+            action: onArchive
+        )
         .scrollTransition(.animated(.snappy(duration: 0.4))) { content, phase in
             content
                 .opacity(motionReduced || phase.isIdentity ? 1 : 0.72)
@@ -806,6 +810,131 @@ private struct ExperimentalDeliveredParcelCard: View {
             }
         }
         .accessibilityElement(children: .contain)
+    }
+}
+
+private extension View {
+    func experimentalSwipeToArchive(
+        title: String,
+        cornerRadius: CGFloat,
+        shadow: Bool = true,
+        action: (() -> Void)?
+    ) -> some View {
+        modifier(ExperimentalSwipeToArchiveModifier(
+            title: title,
+            cornerRadius: cornerRadius,
+            shadow: shadow,
+            action: action
+        ))
+    }
+}
+
+private struct ExperimentalSwipeToArchiveModifier: ViewModifier {
+    let title: String
+    let cornerRadius: CGFloat
+    let shadow: Bool
+    let action: (() -> Void)?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @GestureState private var dragOffset: CGFloat = 0
+    @State private var restingOffset: CGFloat = 0
+    @State private var width: CGFloat = 0
+    @State private var archiveFeedback = 0
+
+    private let actionWidth: CGFloat = 88
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let action {
+            ZStack(alignment: .trailing) {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Brand.warning, Brand.warning.opacity(0.84)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(alignment: .trailing) {
+                        Button {
+                            trigger(action)
+                        } label: {
+                            VStack(spacing: 5) {
+                                Image(systemName: "archivebox.fill")
+                                    .font(.title3.weight(.bold))
+                                    .symbolEffect(.bounce, value: archiveFeedback)
+                                Text(title)
+                                    .font(.caption2.weight(.bold))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(.white)
+                            .frame(width: actionWidth)
+                            .frame(maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHidden(currentOffset > -8)
+                    }
+                    .opacity(revealProgress)
+
+                content
+                    .offset(x: currentOffset)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .shadow(
+                color: shadow ? .black.opacity(0.08) : .clear,
+                radius: shadow ? 18 : 0,
+                y: shadow ? 9 : 0
+            )
+            .contentShape(Rectangle())
+            .onGeometryChange(for: CGFloat.self) { geometry in
+                geometry.size.width
+            } action: { nextWidth in
+                width = nextWidth
+            }
+            .simultaneousGesture(swipeGesture(action: action))
+            .sensoryFeedback(.warning, trigger: archiveFeedback)
+        } else {
+            content
+        }
+    }
+
+    private var currentOffset: CGFloat {
+        max(-max(width, actionWidth), min(0, restingOffset + dragOffset))
+    }
+
+    private var revealProgress: CGFloat {
+        min(1, max(0, -currentOffset / actionWidth))
+    }
+
+    private func swipeGesture(action: @escaping () -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .updating($dragOffset) { value, state, _ in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                state = value.translation.width
+            }
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+
+                let projectedOffset = restingOffset + value.predictedEndTranslation.width
+                let fullSwipeThreshold = max(actionWidth * 2, width * 0.62)
+                if projectedOffset <= -fullSwipeThreshold {
+                    trigger(action)
+                } else {
+                    let shouldReveal = projectedOffset < -(actionWidth * 0.42)
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.3, extraBounce: 0.04)) {
+                        restingOffset = shouldReveal ? -actionWidth : 0
+                    }
+                }
+            }
+    }
+
+    private func trigger(_ action: @escaping () -> Void) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.24)) {
+            restingOffset = -actionWidth
+        }
+        archiveFeedback += 1
+        action()
     }
 }
 
