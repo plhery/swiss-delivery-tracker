@@ -24,11 +24,7 @@ struct ParcelDetailView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         liveParcelPass(parcel)
-                        currentUpdate(parcel)
                         journey(parcel)
-                        shipmentDetails(parcel)
-                        notificationSetting(parcel)
-                        primaryAction(parcel)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -54,6 +50,16 @@ struct ParcelDetailView: View {
                         Button(localizer.text("detail.copyTracking"), systemImage: "doc.on.doc") {
                             copy(parcel.trackingNumber)
                         }
+                        Button(
+                            localizer.text(parcel.notificationsMuted ? "detail.unmute" : "detail.mute"),
+                            systemImage: parcel.notificationsMuted ? "bell.fill" : "bell.slash"
+                        ) {
+                            run {
+                                try await store.setMuted(parcel, muted: !parcel.notificationsMuted)
+                            }
+                        }
+                        .disabled(working)
+                        Divider()
                         if parcel.isArchived {
                             Button(localizer.text("detail.restore"), systemImage: "arrow.uturn.backward") {
                                 restore(parcel)
@@ -86,6 +92,7 @@ struct ParcelDetailView: View {
         let strings = ExperimentalCopy(language: localizer.language)
         let carrier = catalog.info(for: parcel.activeTrackingCarrier)
         let origin = parcel.experimentalLatestLocation ?? carrier.displayName
+        let trackingLinks = catalog.trackingLinks(for: parcel, language: localizer.language)
 
         return VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 9) {
@@ -123,72 +130,107 @@ struct ParcelDetailView: View {
                 }
                 ExperimentalRouteLine(
                     tint: tint,
-                    animated: parcel.currentStage?.isFinal != true
+                    animated: false
                 )
             }
 
-            ExperimentalJourneyRail(stage: parcel.currentStage, tint: tint)
-                .environmentObject(localizer)
+            Divider()
+                .overlay(tint.opacity(0.16))
 
-            if let lastSyncedAt = parcel.lastSyncedAt {
-                Label(localizer.relativeTime(from: lastSyncedAt), systemImage: "clock")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
+            shipmentIdentity(parcel, links: trackingLinks, tint: tint)
+            syncStatus(parcel, tint: tint)
         }
         .padding(22)
         .experimentalSurface(tint: tint, cornerRadius: 30)
         .experimentalGlassSheen(cornerRadius: 30, delay: 0.22)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
-    @ViewBuilder private func currentUpdate(_ parcel: Parcel) -> some View {
-        if let event = parcel.currentEvent {
-            let tint = ExperimentalPalette.tint(for: parcel)
-            let strings = ExperimentalCopy(language: localizer.language)
-
-            VStack(alignment: .leading, spacing: 15) {
-                Text(strings.currentUpdate)
-                    .font(.title3.weight(.bold))
-
-                HStack(alignment: .top, spacing: 14) {
-                    ZStack {
-                        if event.stage == .outForDelivery {
-                            ExperimentalLiveDot(tint: tint, size: 22)
-                        }
-                        Image(systemName: event.stage.metadata.symbol)
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 42, height: 42)
-                            .background(tint.opacity(0.16), in: Circle())
-                            .symbolEffect(.pulse, value: event.id)
-                    }
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(localizer.text(event.stage.localizationKey))
-                            .font(.headline.weight(.bold))
-                        Text(event.description)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: 6) {
-                            if let location = event.location {
-                                Label(location, systemImage: "location.fill")
-                            }
-                            Text(localizer.dateTime(event.occurredAt))
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                }
+    private func shipmentIdentity(
+        _ parcel: Parcel,
+        links: [ParcelTrackingLink],
+        tint: Color
+    ) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localizer.text("detail.trackingNumber"))
+                    .font(.caption2.weight(.bold))
+                    .textCase(.uppercase)
+                    .tracking(0.35)
+                    .foregroundStyle(.secondary)
+                Text(CarrierCatalog.format(parcel.trackingNumber))
+                    .font(.system(.subheadline, design: .monospaced, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .textSelection(.enabled)
             }
-            .padding(19)
-            .experimentalSurface(tint: tint, cornerRadius: 24)
+
+            Spacer(minLength: 4)
+
+            Button {
+                copy(parcel.trackingNumber)
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.caption.weight(.bold))
+                    .frame(width: 32, height: 32)
+                    .background(tint.opacity(0.11), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(tint)
+            .accessibilityLabel(localizer.text(copied ? "detail.copied" : "detail.copyTracking"))
+
+            if let link = links.first {
+                Link(destination: link.url) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.bold))
+                        .frame(width: 32, height: 32)
+                        .background(tint.opacity(0.11), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(tint)
+                .accessibilityLabel(localizer.text("detail.openCarrier", ["carrier": link.name]))
+            }
         }
+    }
+
+    private func syncStatus(_ parcel: Parcel, tint: Color) -> some View {
+        HStack(spacing: 7) {
+            if let lastSyncedAt = parcel.lastSyncedAt {
+                Image(systemName: "clock")
+                    .font(.caption2.weight(.semibold))
+                Text(localizer.relativeTime(from: lastSyncedAt))
+            }
+
+            if !parcel.isArchived {
+                Button {
+                    run { try await store.refresh(parcel) }
+                } label: {
+                    Group {
+                        if working {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption.weight(.bold))
+                        }
+                    }
+                    .frame(width: 27, height: 27)
+                    .background(tint.opacity(0.11), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(tint)
+                .disabled(working)
+                .accessibilityLabel(localizer.text("detail.checkNow"))
+            }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
     }
 
     private func journey(_ parcel: Parcel) -> some View {
         let copy = ExperimentalCopy(language: localizer.language)
+        let tint = ExperimentalPalette.tint(for: parcel)
+        let currentEvent = parcel.sortedEvents.first
         let olderEvents = Array(parcel.sortedEvents.dropFirst())
         let visibleEvents = showingFullJourney ? olderEvents : Array(olderEvents.prefix(2))
 
@@ -209,13 +251,22 @@ struct ParcelDetailView: View {
                 }
             }
 
-            if visibleEvents.isEmpty {
+            if currentEvent == nil {
                 Text(localizer.text(parcel.displayStatus.syncing ? "timeline.emptySyncing" : "timeline.empty"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } else {
                 VStack(spacing: 0) {
+                    if let currentEvent {
+                        ExperimentalCurrentTimelineRow(
+                            event: currentEvent,
+                            tint: tint,
+                            hasFollowingEvent: !visibleEvents.isEmpty
+                        )
+                        .environmentObject(localizer)
+                    }
+
                     ForEach(Array(visibleEvents.enumerated()), id: \.element.id) { index, event in
                         ExperimentalTimelineRow(
                             event: event,
@@ -229,147 +280,6 @@ struct ParcelDetailView: View {
         }
         .padding(20)
         .experimentalSurface(cornerRadius: 24, shadow: false)
-    }
-
-    private func shipmentDetails(_ parcel: Parcel) -> some View {
-        let strings = ExperimentalCopy(language: localizer.language)
-        let tint = ExperimentalPalette.tint(for: parcel)
-        let links = catalog.trackingLinks(for: parcel, language: localizer.language)
-
-        return DisclosureGroup {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(localizer.text("detail.trackingNumber"))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(CarrierCatalog.format(parcel.trackingNumber))
-                            .font(.system(.subheadline, design: .monospaced, weight: .semibold))
-                            .textSelection(.enabled)
-                    }
-                    Spacer(minLength: 5)
-                    Button {
-                        copy(parcel.trackingNumber)
-                    } label: {
-                        Label(
-                            copied ? localizer.text("detail.copied") : localizer.text("detail.copy"),
-                            systemImage: copied ? "checkmark" : "doc.on.doc"
-                        )
-                    }
-                    .font(.caption.weight(.bold))
-                    .buttonStyle(.bordered)
-                    .tint(Brand.ink)
-                }
-                .padding(.vertical, 14)
-
-                ForEach(links) { link in
-                    Link(destination: link.url) {
-                        HStack {
-                            Text(localizer.text("detail.openCarrier", ["carrier": link.name]))
-                                .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption.weight(.bold))
-                        }
-                        .frame(minHeight: 46)
-                        .overlay(alignment: .top) {
-                            Divider().overlay(Brand.separator.opacity(0.55))
-                        }
-                    }
-                    .foregroundStyle(Brand.ink)
-                }
-            }
-        } label: {
-            Label(strings.shipmentDetails, systemImage: "shippingbox.and.arrow.backward")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.primary)
-        }
-        .tint(tint)
-        .padding(18)
-        .experimentalSurface(tint: tint, cornerRadius: 24, shadow: false)
-    }
-
-    private func notificationSetting(_ parcel: Parcel) -> some View {
-        let tint = ExperimentalPalette.tint(for: parcel)
-        return HStack(spacing: 14) {
-            Image(systemName: parcel.notificationsMuted ? "bell.slash.fill" : "bell.fill")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(parcel.notificationsMuted ? .secondary : tint)
-                .frame(width: 40, height: 40)
-                .background(tint.opacity(parcel.notificationsMuted ? 0.05 : 0.12), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(localizer.text("detail.notifications"))
-                    .font(.subheadline.weight(.semibold))
-                Text(localizer.text("detail.notificationsDescription"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 5)
-            Toggle("", isOn: Binding(
-                get: { !parcel.notificationsMuted },
-                set: { enabled in
-                    run { try await store.setMuted(parcel, muted: !enabled) }
-                }
-            ))
-            .labelsHidden()
-            .disabled(working)
-        }
-        .padding(18)
-        .experimentalSurface(tint: tint, cornerRadius: 24, shadow: false)
-    }
-
-    @ViewBuilder private func primaryAction(_ parcel: Parcel) -> some View {
-        if parcel.isArchived {
-            Button {
-                restore(parcel)
-            } label: {
-                actionLabel(
-                    working ? localizer.text("common.restoring") : localizer.text("detail.restore"),
-                    symbol: "arrow.uturn.backward"
-                )
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .tint(Brand.ink)
-            .disabled(working)
-        } else if #available(iOS 26.0, *) {
-            checkButton(parcel)
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.capsule)
-                .controlSize(.extraLarge)
-                .tint(Brand.accent)
-                .disabled(working)
-        } else {
-            checkButton(parcel)
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .tint(Brand.accent)
-                .disabled(working)
-        }
-    }
-
-    private func checkButton(_ parcel: Parcel) -> some View {
-        Button {
-            run { try await store.refresh(parcel) }
-        } label: {
-            actionLabel(
-                working ? localizer.text("detail.queueing") : localizer.text("detail.checkNow"),
-                symbol: "arrow.clockwise"
-            )
-            .foregroundStyle(Brand.onAccent)
-        }
-    }
-
-    private func actionLabel(_ title: String, symbol: String) -> some View {
-        HStack(spacing: 9) {
-            if working { ProgressView() }
-            else { Image(systemName: symbol) }
-            Text(title)
-        }
-        .font(.headline)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 30)
     }
 
     private func copy(_ value: String) {
@@ -408,6 +318,60 @@ struct ParcelDetailView: View {
     }
 }
 
+private struct ExperimentalCurrentTimelineRow: View {
+    let event: TrackingEvent
+    let tint: Color
+    let hasFollowingEvent: Bool
+
+    @EnvironmentObject private var localizer: Localizer
+
+    var body: some View {
+        let strings = ExperimentalCopy(language: localizer.language)
+
+        HStack(alignment: .top, spacing: 13) {
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle().fill(tint.opacity(0.16))
+                    Circle().stroke(tint.opacity(0.22), lineWidth: 0.8)
+                    Image(systemName: event.stage.metadata.symbol)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.primary)
+                }
+                .frame(width: 42, height: 42)
+
+                if hasFollowingEvent {
+                    Rectangle()
+                        .fill(tint.opacity(0.2))
+                        .frame(width: 2, height: 24)
+                }
+            }
+            .frame(width: 42)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(strings.currentUpdate)
+                    .font(.caption2.weight(.bold))
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+                    .foregroundStyle(tint)
+                Text(localizer.text(event.stage.localizationKey))
+                    .font(.title3.weight(.bold))
+                Text(event.description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text([event.location, localizer.dateTime(event.occurredAt)]
+                    .compactMap { $0 }
+                    .joined(separator: " · "))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, hasFollowingEvent ? 14 : 0)
+
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct ExperimentalTimelineRow: View {
     let event: TrackingEvent
     let isLast: Bool
@@ -430,6 +394,7 @@ private struct ExperimentalTimelineRow: View {
                         .frame(width: 2, height: 56)
                 }
             }
+            .frame(width: 42)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(localizer.text(event.stage.localizationKey))
