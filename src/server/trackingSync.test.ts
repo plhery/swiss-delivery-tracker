@@ -19,6 +19,7 @@ import type { SupabaseServiceClient } from './supabase';
 import {
   CarrierTrackingAdapter,
   buildEvents,
+  detectSyncAnomalies,
   eventTimestamp,
   fairSyncPackages,
   inferStage,
@@ -245,6 +246,8 @@ function fakeClient(packages: JsonObject[] = []) {
     updatePackage: vi.fn().mockResolvedValue(undefined),
     insertEvents: vi.fn().mockResolvedValue(undefined),
     deleteEventsByDescriptions: vi.fn().mockResolvedValue(undefined),
+    startSyncAttempt: vi.fn().mockResolvedValue(undefined),
+    completeSyncAttempt: vi.fn().mockResolvedValue(true),
   };
 }
 
@@ -286,6 +289,28 @@ describe('TrackingSyncService', () => {
       sync_status: 'ok',
       sync_error: null,
     }));
+    expect(client.startSyncAttempt).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      package_id: 'package-1',
+      trigger: 'scheduled',
+      configured_carrier: 'dpd',
+    }));
+    expect(client.completeSyncAttempt).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        outcome: 'updated',
+        provider_status: 'delivered',
+        selected_stage: 'delivered',
+        events_received: 1,
+        events_normalized: 1,
+      }),
+      expect.arrayContaining([
+        expect.objectContaining({ step: 'fetch', status: 'succeeded' }),
+        expect.objectContaining({ step: 'normalize', status: 'succeeded' }),
+        expect.objectContaining({ step: 'persist_events', status: 'succeeded' }),
+        expect.objectContaining({ step: 'persist_package', status: 'succeeded' }),
+        expect.objectContaining({ step: 'complete', status: 'succeeded' }),
+      ]),
+    );
   });
 
   it('prefers an explicit current failure over an older timestamped milestone', async () => {
@@ -394,6 +419,18 @@ describe('TrackingSyncService', () => {
       sync_status: 'waiting',
       sync_error: null,
     });
+    expect(client.completeSyncAttempt).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ outcome: 'waiting', error_type: null }),
+      expect.arrayContaining([
+        expect.objectContaining({
+          step: 'fetch',
+          status: 'succeeded',
+          details: { disposition: 'unannounced' },
+        }),
+        expect.objectContaining({ step: 'normalize', status: 'skipped' }),
+      ]),
+    );
   });
 
   it('preserves progressed shipment data when a carrier later reports not found', async () => {
@@ -421,6 +458,17 @@ describe('TrackingSyncService', () => {
       sync_status: 'error',
       sync_error: 'Colis Privé could not locate the shipment',
     });
+    expect(client.completeSyncAttempt).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ outcome: 'error', error_type: 'ColisPriveTrackingError' }),
+      expect.arrayContaining([
+        expect.objectContaining({
+          step: 'fetch',
+          status: 'failed',
+          error_type: 'ColisPriveTrackingError',
+        }),
+      ]),
+    );
   });
 
   it('marks link-only carriers unsupported without pretending they were checked', async () => {
@@ -438,5 +486,69 @@ describe('TrackingSyncService', () => {
       sync_status: 'unsupported',
       last_synced_at: null,
     }));
+  });
+
+  it('keeps tracking operational when the private audit store is unavailable', async () => {
+    const parcel = {
+      id: 'package-audit-outage',
+      carrier: 'dpd',
+      tracking_number: '06086514587082',
+      current_stage: 'pending',
+    };
+    const client = fakeClient();
+    client.startSyncAttempt.mockRejectedValue(new Error('audit table unavailable'));
+    client.completeSyncAttempt.mockRejectedValue(new Error('audit table unavailable'));
+    const adapter: TrackingAdapter = {
+      fetch: vi.fn().mockResolvedValue({ status: 'in_transit', current_stage: 'in_transit' }),
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const service = new TrackingSyncService(
+      client as unknown as SupabaseServiceClient,
+      adapter,
+    );
+
+    await expect(service.syncPackage(parcel)).resolves.toMatchObject({ updated: 1, errors: 0 });
+    expect(client.updatePackage).toHaveBeenLastCalledWith(
+      'package-audit-outage',
+      expect.objectContaining({ sync_status: 'ok', current_stage: 'in_transit' }),
+    );
+  });
+});
+
+describe('tracking anomaly detection', () => {
+  it('records malformed, future, synthetic, and contradictory carrier evidence', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    expect(detectSyncAnomalies(
+      { current_stage: 'delivered' },
+      {
+        status: 'delivered',
+        events: [{ time: 'not-a-time', description: 'Delivered' }],
+      },
+      [{
+        occurred_at: '2026-09-03T12:00:00Z',
+        raw_data: { observed_without_provider_timestamp: true },
+      }],
+      'dpd',
+      'in_transit',
+      now,
+    )).toEqual(expect.arrayContaining([
+      'invalid_event_timestamp',
+      'future_event_timestamp',
+      'observed_without_timestamp',
+      'terminal_stage_regression',
+      'delivered_status_conflict',
+    ]));
+  });
+
+  it('flags a progressed parcel when a provider suddenly returns no evidence', () => {
+    expect(detectSyncAnomalies(
+      { current_stage: 'in_transit' },
+      { status: 'unknown', events: [] },
+      [],
+      'colis-prive',
+      null,
+      new Date('2026-08-31T12:00:00Z'),
+    )).toContain('progress_disappeared');
   });
 });

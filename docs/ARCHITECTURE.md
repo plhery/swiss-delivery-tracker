@@ -35,6 +35,10 @@ Next.js route handlers -- user token -----> PostgREST + Postgres RLS
   durable, deduplicated queue; the Node.js worker claims jobs with database
   leases so deploys, crashes, and multiple replicas do not lose or double-run
   active work. This is the only workflow that needs cross-account access.
+- `src/server/observability.ts` and `src/server/trackingAudit.ts` connect
+  privacy-scrubbed Sentry issues and structured logs to the service-role-only
+  `tracking_sync_attempts` and `tracking_sync_steps` decision ledger. See
+  [OBSERVABILITY.md](OBSERVABILITY.md) for the operator queries and runbook.
 - `src/server/push.ts` delivers Web Push, ordinary APNs alerts, and ActivityKit
   start/update/end pushes only to installations owned by the package's account.
   ActivityKit is dispatched first, so a successful delivery-day surface can
@@ -82,9 +86,11 @@ Next.js route handlers -- user token -----> PostgREST + Postgres RLS
   the pre-authentication fallback bucket is deliberately global. A one-way
   token hash adds a credential-specific bucket, and authenticated limits remain
   account-scoped.
-- HTTP and worker logs contain request/job identifiers, normalized routes,
-  status, timing, and exception class only. Query strings, tokens, tracking
-  data, carrier payloads, and user identifiers are excluded.
+- HTTP and worker logs contain request/job/attempt identifiers, normalized
+  routes, status, timing, carrier id, normalized stage names, counts, and
+  exception class only. Query strings, tokens, tracking data, carrier payloads,
+  status text, locations, and user or package identifiers are excluded. Sentry
+  applies the same boundary and links to the private ledger only by opaque ids.
 
 ## Data lifecycle
 
@@ -94,7 +100,8 @@ poll the small owner-checked job resource, then reload the parcel collection
 once at completion. Carrier events inherit privacy through their package.
 Archiving retains the parcel and history. Account deletion removes the Supabase
 Auth user; foreign-key cascades remove packages, jobs, events, browser
-subscriptions, native devices, ActivityKit tokens, and delivery acknowledgements.
+subscriptions, native devices, ActivityKit tokens, delivery acknowledgements,
+and tracking audit rows. Completed audit rows otherwise expire after 90 days.
 
 Live Activities are intentionally narrower than Home Screen widgets. The
 delivery-day queue starts one only for an `out_for_delivery` event, updates the

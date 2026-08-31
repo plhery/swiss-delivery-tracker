@@ -25,6 +25,7 @@ import { HeppnerTracker } from './heppner';
 import { HermesTracker } from './hermes';
 import { LaPosteTracker } from './laPoste';
 import { MondialRelayTracker } from './mondialRelay';
+import { captureOperationalError, errorType } from './observability';
 import { PaackTracker } from './paack';
 import { PlanzerSharedTracker } from './planzerShared';
 import type { CompositePushNotificationService } from './push';
@@ -32,6 +33,11 @@ import { RelaisColisTracker } from './relaisColis';
 import type { SupabaseServiceClient } from './supabase';
 import { SwissPostTracker } from './swissPost';
 import { SwissPostCargoTracker } from './swissPostCargo';
+import {
+  TrackingSyncAudit,
+  type SyncAnomalyCode,
+  type SyncRunContext,
+} from './trackingAudit';
 import { isRecord, type JsonObject } from './types';
 import { fetchUpstreamCarrier } from './upstreamAdapters';
 import { UPSTracker } from './ups';
@@ -381,6 +387,53 @@ export function buildEvents(
   return rows;
 }
 
+export function detectSyncAnomalies(
+  parcel: JsonObject,
+  result: CarrierResult,
+  events: JsonObject[],
+  sourceCarrierId: string,
+  selectedStage: string | null,
+  now: Date,
+): SyncAnomalyCode[] {
+  const anomalies = new Set<SyncAnomalyCode>();
+  const timezone = resultTimezone(sourceCarrierId, result);
+  if ((result.events ?? []).some((event) => (
+    typeof event.time === 'string'
+    && event.time.trim() !== ''
+    && eventTimestamp(event.time, timezone) === null
+  ))) {
+    anomalies.add('invalid_event_timestamp');
+  }
+  const futureBoundary = now.getTime() + 24 * 60 * 60 * 1_000;
+  if (events.some((event) => {
+    const occurredAt = Date.parse(String(event.occurred_at ?? ''));
+    return Number.isFinite(occurredAt) && occurredAt > futureBoundary;
+  })) {
+    anomalies.add('future_event_timestamp');
+  }
+  if (events.some((event) => (
+    isRecord(event.raw_data)
+    && event.raw_data.observed_without_provider_timestamp === true
+  ))) {
+    anomalies.add('observed_without_timestamp');
+  }
+  const previousStage = String(parcel.current_stage ?? 'pending');
+  if (
+    (previousStage === 'delivered' || previousStage === 'returned')
+    && selectedStage !== null
+    && selectedStage !== previousStage
+  ) {
+    anomalies.add('terminal_stage_regression');
+  }
+  if (result.status === 'delivered' && selectedStage !== 'delivered') {
+    anomalies.add('delivered_status_conflict');
+  }
+  if (previousStage !== 'pending' && !resultHasUpdate(result)) {
+    anomalies.add('progress_disappeared');
+  }
+  return [...anomalies];
+}
+
 type SyncOutcome = 'updated' | 'waiting' | 'errors' | 'unsupported';
 
 export class TrackingSyncService {
@@ -393,23 +446,26 @@ export class TrackingSyncService {
     readonly now: () => Date = () => new Date(),
   ) {}
 
-  async sync(): Promise<SyncSummary> {
+  async sync(context: SyncRunContext = { trigger: 'scheduled' }): Promise<SyncSummary> {
     return await this.exclusive(async () => {
       const summary = emptySyncSummary();
       for (const parcel of fairSyncPackages(await this.client.listActivePackages())) {
         summary.checked += 1;
-        summary[await this.syncOne(parcel)] += 1;
+        summary[await this.syncOne(parcel, context)] += 1;
       }
       await this.dispatchNotifications(summary);
       return summary;
     });
   }
 
-  async syncPackage(parcel: JsonObject): Promise<SyncSummary> {
+  async syncPackage(
+    parcel: JsonObject,
+    context: SyncRunContext = { trigger: 'package' },
+  ): Promise<SyncSummary> {
     return await this.exclusive(async () => {
       const summary = emptySyncSummary();
       summary.checked = 1;
-      summary[await this.syncOne(parcel)] += 1;
+      summary[await this.syncOne(parcel, context)] += 1;
       await this.dispatchNotifications(summary);
       return summary;
     });
@@ -434,66 +490,166 @@ export class TrackingSyncService {
       summary.notifications_sent = push.sent;
       summary.notification_errors = push.failed;
       summary.subscriptions_expired = push.expired;
-    } catch {
+      if (push.failed > 0) {
+        captureOperationalError(new Error('Push dispatch returned failed deliveries'), {
+          component: 'push',
+          operation: 'dispatch',
+          failureCount: push.failed,
+        });
+      }
+    } catch (error) {
       summary.notification_errors += 1;
+      captureOperationalError(error, { component: 'push', operation: 'dispatch' });
     }
   }
 
-  private async syncOne(parcel: JsonObject): Promise<SyncOutcome> {
+  private async syncOne(parcel: JsonObject, context: SyncRunContext): Promise<SyncOutcome> {
     const id = String(parcel.id ?? '');
     const carrierId = String(parcel.carrier ?? '');
     if (!id) throw new TypeError('A package id is required for synchronization');
+    const previousStage = String(parcel.current_stage ?? 'pending');
+    const now = this.now();
+    const audit = new TrackingSyncAudit(
+      this.client,
+      id,
+      carrierId || 'unknown',
+      previousStage,
+      context,
+      now,
+    );
+    await audit.start();
+
     if (!AUTOMATIC_CARRIER_IDS.has(carrierId)) {
-      await this.client.updatePackage(id, {
-        sync_status: 'unsupported',
-        sync_error: 'Choose a carrier with an automatic adapter or use the carrier link.',
-        last_synced_at: null,
-      });
-      return 'unsupported';
+      audit.record('selected', 'succeeded', 0, { automatic: false });
+      audit.skip('fetch', 'unsupported_carrier');
+      audit.skip('normalize', 'unsupported_carrier');
+      audit.skip('persist_events', 'unsupported_carrier');
+      try {
+        await audit.step('persist_package', async () => {
+          await this.client.updatePackage(id, {
+            sync_status: 'unsupported',
+            sync_error: 'Choose a carrier with an automatic adapter or use the carrier link.',
+            last_synced_at: null,
+          });
+        });
+        await audit.finish({ outcome: 'unsupported' });
+        return 'unsupported';
+      } catch (error) {
+        audit.reportError(error, 'persist_package');
+        await audit.finish({ outcome: 'error', error });
+        throw error;
+      }
     }
 
-    await this.client.updatePackage(id, { sync_status: 'syncing', sync_error: null });
-    const now = this.now();
+    let operation: 'selected' | 'fetch' | 'normalize' | 'persist_events' | 'persist_package'
+      = 'selected';
+    let result: CarrierResult | null = null;
+    let sourceCarrierId: string | null = null;
+    let reportedStage: string | null = null;
+    let selectedStage: string | null = null;
+    let events: JsonObject[] = [];
+    let anomalies: SyncAnomalyCode[] = [];
     try {
-      let fetched: { result: CarrierResult; sourceCarrierId: string; swissPostReady: boolean | null };
+      await audit.step('selected', async () => {
+        await this.client.updatePackage(id, { sync_status: 'syncing', sync_error: null });
+      }, () => ({ automatic: true }));
+
+      operation = 'fetch';
+      let fetched: {
+        result: CarrierResult;
+        sourceCarrierId: string;
+        swissPostReady: boolean | null;
+        handoffFallbackErrorType: string | null;
+      };
+      const fetchStartedAt = performance.now();
       try {
         fetched = await this.fetchResult(parcel, carrierId);
       } catch (error) {
-        const hasProgress = String(parcel.current_stage ?? 'pending') !== 'pending';
+        const hasProgress = previousStage !== 'pending';
         if (!hasProgress && isUnannouncedTrackingError(error)) {
-          await this.client.updatePackage(id, {
-            last_synced_at: now.toISOString(),
-            sync_status: 'waiting',
-            sync_error: null,
+          audit.record('fetch', 'succeeded', performance.now() - fetchStartedAt, {
+            disposition: 'unannounced',
+          });
+          audit.skip('normalize', 'unannounced');
+          audit.skip('persist_events', 'unannounced');
+          operation = 'persist_package';
+          await audit.step('persist_package', async () => {
+            await this.client.updatePackage(id, {
+              last_synced_at: now.toISOString(),
+              sync_status: 'waiting',
+              sync_error: null,
+            });
+          });
+          await audit.finish({
+            outcome: 'waiting',
+            sourceCarrier: carrierId,
+            eventsReceived: 0,
+            eventsNormalized: 0,
           });
           return 'waiting';
         }
+        audit.record('fetch', 'failed', performance.now() - fetchStartedAt, {}, error);
         throw error;
       }
 
-      const { result, sourceCarrierId, swissPostReady } = fetched;
-      const events = buildEvents(parcel, result, sourceCarrierId, now);
-      await this.client.insertEvents(events);
-      if (sourceCarrierId === 'swiss-post' && (result.events?.length ?? 0) > 0) {
-        await this.client.deleteEventsByDescriptions(id, new Set([
-          'TO_BE_DELIVERED', 'REPORTED', 'IN_DELIVERY', 'DELIVERED',
-          'MISSED_DELIVERY', 'NOT_DELIVERED', 'RETURNED', 'CUSTOMS', 'REGISTERED',
-        ]));
-      }
-      const reportedStage = resultStage(result);
-      const latestEvent = [...events].sort(
-        (left, right) => String(right.occurred_at).localeCompare(String(left.occurred_at)),
-      )[0];
-      const latestEventStage = latestEvent ? String(latestEvent.stage) : null;
-      // A provider's explicit non-pending summary can be newer than its last
-      // timestamped milestone (for example, Colisweb reports a failed current
-      // state without a corresponding event timestamp). Keep timed progress
-      // authoritative only while the provider summary is still pending.
-      const stage = reportedStage && result.status !== 'pending'
-        ? reportedStage
-        : latestEventStage ?? reportedStage;
+      ({ result, sourceCarrierId } = fetched);
+      const { swissPostReady, handoffFallbackErrorType } = fetched;
+      audit.record('fetch', 'succeeded', performance.now() - fetchStartedAt, {
+        source_carrier: sourceCarrierId,
+        swiss_post_ready: swissPostReady,
+        handoff_fallback_error_type: handoffFallbackErrorType,
+      });
+
+      operation = 'normalize';
+      const normalized = await audit.step('normalize', () => {
+        const normalizedEvents = buildEvents(parcel, result!, sourceCarrierId!, now);
+        const normalizedReportedStage = resultStage(result!);
+        const latestEvent = [...normalizedEvents].sort(
+          (left, right) => String(right.occurred_at).localeCompare(String(left.occurred_at)),
+        )[0];
+        const latestEventStage = latestEvent ? String(latestEvent.stage) : null;
+        // A provider's explicit non-pending summary can be newer than its last
+        // timestamped milestone. Timed progress remains authoritative only
+        // while the provider's summary is still pending.
+        const normalizedSelectedStage = normalizedReportedStage && result!.status !== 'pending'
+          ? normalizedReportedStage
+          : latestEventStage ?? normalizedReportedStage;
+        return {
+          events: normalizedEvents,
+          reportedStage: normalizedReportedStage,
+          selectedStage: normalizedSelectedStage,
+        };
+      }, (value) => ({
+        events_received: result?.events?.length ?? 0,
+        events_normalized: value.events.length,
+        provider_status: result?.status ?? 'unknown',
+        reported_stage: value.reportedStage,
+        selected_stage: value.selectedStage,
+      }));
+      events = normalized.events;
+      reportedStage = normalized.reportedStage;
+      selectedStage = normalized.selectedStage;
+      anomalies = detectSyncAnomalies(
+        parcel,
+        result,
+        events,
+        sourceCarrierId,
+        selectedStage,
+        now,
+      );
+
+      operation = 'persist_events';
+      await audit.step('persist_events', async () => {
+        await this.client.insertEvents(events);
+        if (sourceCarrierId === 'swiss-post' && (result!.events?.length ?? 0) > 0) {
+          await this.client.deleteEventsByDescriptions(id, new Set([
+            'TO_BE_DELIVERED', 'REPORTED', 'IN_DELIVERY', 'DELIVERED',
+            'MISSED_DELIVERY', 'NOT_DELIVERED', 'RETURNED', 'CUSTOMS', 'REGISTERED',
+          ]));
+        }
+      }, () => ({ events_persisted: events.length }));
       const hasUpdate = Boolean(
-        (stage && stage !== 'pending')
+        (selectedStage && selectedStage !== 'pending')
         || events.some((event) => event.stage !== 'pending'),
       );
       const handoff = supportsSwissPostHandoff(String(parcel.tracking_number ?? ''));
@@ -513,18 +669,70 @@ export class TrackingSyncService {
         expected_delivery: result.expected_delivery ? String(result.expected_delivery) : null,
         carrier_data: carrierData,
       };
-      if (stage && (hasUpdate || !swissPostReady)) values.current_stage = stage;
-      await this.client.updatePackage(id, values);
-      return knownUpdate ? 'updated' : 'waiting';
+      if (selectedStage && (hasUpdate || !swissPostReady)) values.current_stage = selectedStage;
+      operation = 'persist_package';
+      await audit.step('persist_package', async () => {
+        await this.client.updatePackage(id, values);
+      }, () => ({
+        outcome: knownUpdate ? 'updated' : 'waiting',
+        selected_stage: selectedStage,
+      }));
+      const outcome = knownUpdate ? 'updated' : 'waiting';
+      const completion = {
+        outcome,
+        sourceCarrier: sourceCarrierId,
+        providerStatus: result.status ?? 'unknown',
+        reportedStage,
+        selectedStage,
+        statusText: result.last_status_text,
+        eventsReceived: result.events?.length ?? 0,
+        eventsNormalized: events.length,
+        anomalyCodes: anomalies,
+      } as const;
+      await audit.finish(completion);
+      audit.reportAnomalies(anomalies, completion);
+      return outcome;
     } catch (error) {
+      audit.reportError(error, operation);
       let message = error instanceof Error ? error.message.trim() || error.name : String(error);
       if (error instanceof SyntaxError) {
         message = 'The carrier returned a maintenance page instead of tracking data.';
       }
-      await this.client.updatePackage(id, {
-        last_synced_at: now.toISOString(),
-        sync_status: 'error',
-        sync_error: message.slice(0, 500),
+      try {
+        await audit.step('persist_package', async () => {
+          await this.client.updatePackage(id, {
+            last_synced_at: now.toISOString(),
+            sync_status: 'error',
+            sync_error: message.slice(0, 500),
+          });
+        }, () => ({ purpose: 'record_error' }));
+      } catch (persistenceError) {
+        audit.reportError(persistenceError, 'persist_error_state');
+        await audit.finish({
+          outcome: 'error',
+          sourceCarrier: sourceCarrierId,
+          providerStatus: result?.status ?? null,
+          reportedStage,
+          selectedStage,
+          statusText: result?.last_status_text,
+          eventsReceived: result?.events?.length ?? 0,
+          eventsNormalized: events.length,
+          anomalyCodes: anomalies,
+          error,
+        });
+        throw persistenceError;
+      }
+      await audit.finish({
+        outcome: 'error',
+        sourceCarrier: sourceCarrierId,
+        providerStatus: result?.status ?? null,
+        reportedStage,
+        selectedStage,
+        statusText: result?.last_status_text,
+        eventsReceived: result?.events?.length ?? 0,
+        eventsNormalized: events.length,
+        anomalyCodes: anomalies,
+        error,
       });
       return 'errors';
     }
@@ -533,7 +741,12 @@ export class TrackingSyncService {
   private async fetchResult(
     parcel: JsonObject,
     carrierId: string,
-  ): Promise<{ result: CarrierResult; sourceCarrierId: string; swissPostReady: boolean | null }> {
+  ): Promise<{
+    result: CarrierResult;
+    sourceCarrierId: string;
+    swissPostReady: boolean | null;
+    handoffFallbackErrorType: string | null;
+  }> {
     const trackingNumber = String(parcel.tracking_number ?? '');
     if (!supportsSwissPostHandoff(trackingNumber)) {
       const result = await this.adapter.fetch(
@@ -542,21 +755,38 @@ export class TrackingSyncService {
         typeof parcel.tracking_url === 'string' ? parcel.tracking_url : null,
         typeof parcel.dpd_postcode === 'string' ? parcel.dpd_postcode : null,
       );
-      return { result: normalizeCarrierResult(result), sourceCarrierId: carrierId, swissPostReady: null };
+      return {
+        result: normalizeCarrierResult(result),
+        sourceCarrierId: carrierId,
+        swissPostReady: null,
+        handoffFallbackErrorType: null,
+      };
     }
     const wasReady = isRecord(parcel.carrier_data) && parcel.carrier_data.swiss_post_ready === true;
     if (wasReady) {
       const result = await this.adapter.fetch('swiss-post', trackingNumber, null, null);
-      return { result: normalizeCarrierResult(result), sourceCarrierId: 'swiss-post', swissPostReady: true };
+      return {
+        result: normalizeCarrierResult(result),
+        sourceCarrierId: 'swiss-post',
+        swissPostReady: true,
+        handoffFallbackErrorType: null,
+      };
     }
+    let handoffFallbackErrorType: string | null = null;
     try {
       const swiss = normalizeCarrierResult(
         await this.adapter.fetch('swiss-post', trackingNumber, null, null),
       );
       if (resultHasUpdate(swiss)) {
-        return { result: swiss, sourceCarrierId: 'swiss-post', swissPostReady: true };
+        return {
+          result: swiss,
+          sourceCarrierId: 'swiss-post',
+          swissPostReady: true,
+          handoffFallbackErrorType: null,
+        };
       }
-    } catch {
+    } catch (error) {
+      handoffFallbackErrorType = errorType(error);
       // Cainiao still covers the international leg if Swiss Post is not ready.
     }
     const cainiao = await this.adapter.fetch('aliexpress', trackingNumber, null, null);
@@ -564,6 +794,7 @@ export class TrackingSyncService {
       result: normalizeCarrierResult(cainiao),
       sourceCarrierId: 'aliexpress',
       swissPostReady: false,
+      handoffFallbackErrorType,
     };
   }
 }

@@ -555,6 +555,40 @@ export class SupabaseClient {
 }
 
 export class SupabaseServiceClient extends SupabaseClient {
+  async startSyncAttempt(attemptId: string, values: JsonObject): Promise<void> {
+    await this.request('/rest/v1/tracking_sync_attempts', {
+      method: 'POST',
+      body: { id: attemptId, ...values },
+      prefer: 'return=minimal',
+    });
+  }
+
+  async completeSyncAttempt(
+    attemptId: string,
+    values: JsonObject,
+    steps: JsonObject[],
+  ): Promise<boolean> {
+    return await this.request('/rest/v1/rpc/complete_tracking_sync_attempt', {
+      method: 'POST',
+      body: {
+        p_attempt_id: attemptId,
+        p_values: values,
+        p_steps: steps,
+      },
+    }) === true;
+  }
+
+  async maintainSyncAudit(): Promise<{ abandoned: number; purged: number }> {
+    const result = rows(await this.request('/rest/v1/rpc/maintain_tracking_sync_audit', {
+      method: 'POST',
+      body: {},
+    }))[0];
+    return {
+      abandoned: Number(result?.abandoned ?? 0),
+      purged: Number(result?.purged ?? 0),
+    };
+  }
+
   async enqueueSyncJob(options: {
     userId?: string | null;
     packageId?: string | null;

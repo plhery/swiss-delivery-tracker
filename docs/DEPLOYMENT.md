@@ -150,8 +150,13 @@ repository secrets when they are no longer used.
 
 ## 6. Operate and recover
 
-- Monitor `401`, `429`, database gateway failures, carrier failures, SMTP
-  bounces, and push disablement without logging tracking numbers or tokens.
+- Configure the dedicated Sentry project with `SENTRY_DSN`,
+  `SENTRY_ENVIRONMENT=production`, zero tracing unless deliberately changed,
+  and an immutable release. Keep new-issue, regression, and Cron monitor
+  notifications enabled. See [OBSERVABILITY.md](OBSERVABILITY.md).
+- Monitor `401`, `429`, database gateway failures, carrier failures, suspicious
+  classifications, missed scheduled checks, SMTP bounces, and push disablement
+  without logging tracking numbers or tokens.
 - Application logs are one-line JSON. Alert on `sync_claim_failed`,
   `sync_job_failed`, and `sync_job_finish_failed`; use `request_id` and `job_id`
   for correlation without adding user or parcel data to logs.
@@ -169,6 +174,10 @@ repository secrets when they are no longer used.
   be reclaimed after a worker crash; active package and scheduled jobs are
   deduplicated, and terminal job records are retained for 30 days. Back up this
   table with the rest of Postgres.
+- Every refresh writes a service-role-only attempt and step trace. Start with
+  `tracking_sync_health_24h`, then follow a Sentry `attempt_id` into
+  `tracking_sync_attempts` and `tracking_sync_steps`. Completed traces remain
+  for 90 days; hard-crashed attempts are marked abandoned after 30 minutes.
 - Back up Postgres independently. Regularly test restoring Auth, parcel, event,
   and push tables together.
 - Rotate service-role, SMTP, VAPID, APNs, and carrier credentials if exposed.

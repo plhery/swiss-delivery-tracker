@@ -134,6 +134,22 @@ begin
       ) then
     raise exception 'public database roles can access the durable worker queue';
   end if;
+  if has_table_privilege('authenticated', 'public.tracking_sync_attempts', 'SELECT')
+      or has_table_privilege('authenticated', 'public.tracking_sync_steps', 'SELECT')
+      or has_table_privilege('anon', 'public.tracking_sync_attempts', 'SELECT')
+      or has_table_privilege('anon', 'public.tracking_sync_recent_anomalies', 'SELECT')
+      or has_function_privilege(
+        'authenticated',
+        'public.complete_tracking_sync_attempt(uuid,jsonb,jsonb)',
+        'EXECUTE'
+      )
+      or has_function_privilege(
+        'authenticated',
+        'public.maintain_tracking_sync_audit()',
+        'EXECUTE'
+      ) then
+    raise exception 'public database roles can access the private tracking audit';
+  end if;
   if not has_function_privilege(
     'authenticated',
     'public.create_owned_package(text,text,text,text,text)',
@@ -1601,6 +1617,179 @@ begin
       and result = '{"checked":1}'::jsonb
   ) then
     raise exception 'completed sync job did not retain its safe result';
+  end if;
+end;
+$$;
+
+reset role;
+
+-- A completed refresh retains every decision step, appears in the private
+-- health/anomaly projections, and stale/crashed audit data is maintained.
+set role service_role;
+
+insert into public.tracking_sync_attempts (
+  id,
+  job_id,
+  package_id,
+  trigger,
+  configured_carrier,
+  previous_stage,
+  started_at
+) values (
+  '43000000-0000-0000-0000-000000000004',
+  '42000000-0000-0000-0000-000000000004',
+  '40000000-0000-0000-0000-000000000004',
+  'package',
+  'dpd-fr',
+  'pending',
+  now() - interval '2 seconds'
+);
+
+do $$
+declare
+  completed boolean;
+begin
+  select public.complete_tracking_sync_attempt(
+    '43000000-0000-0000-0000-000000000004',
+    jsonb_build_object(
+      'outcome', 'updated',
+      'source_carrier', 'dpd-fr',
+      'provider_status', 'delivered',
+      'reported_stage', 'delivered',
+      'selected_stage', 'delivered',
+      'status_text', 'Livré',
+      'events_received', 2,
+      'events_normalized', 1,
+      'anomaly_codes', jsonb_build_array('invalid_event_timestamp'),
+      'completed_at', now(),
+      'duration_ms', 2000
+    ),
+    jsonb_build_array(
+      jsonb_build_object(
+        'sequence', 1,
+        'step', 'fetch',
+        'status', 'succeeded',
+        'occurred_at', now(),
+        'duration_ms', 125,
+        'details', jsonb_build_object('source_carrier', 'dpd-fr')
+      ),
+      jsonb_build_object(
+        'sequence', 2,
+        'step', 'normalize',
+        'status', 'succeeded',
+        'occurred_at', now(),
+        'duration_ms', 2,
+        'details', jsonb_build_object('events_normalized', 1)
+      ),
+      jsonb_build_object(
+        'sequence', 3,
+        'step', 'complete',
+        'status', 'succeeded',
+        'occurred_at', now(),
+        'duration_ms', 2000,
+        'details', jsonb_build_object('outcome', 'updated')
+      )
+    )
+  ) into completed;
+
+  if not completed then
+    raise exception 'tracking audit attempt was not completed';
+  end if;
+  if not exists (
+    select 1
+    from public.tracking_sync_attempts
+    where id = '43000000-0000-0000-0000-000000000004'
+      and outcome = 'updated'
+      and source_carrier = 'dpd-fr'
+      and provider_status = 'delivered'
+      and selected_stage = 'delivered'
+      and status_text = 'Livré'
+      and events_received = 2
+      and events_normalized = 1
+      and anomaly_codes = array['invalid_event_timestamp']
+  ) then
+    raise exception 'tracking audit did not retain its classification decision';
+  end if;
+  if (
+    select count(*)
+    from public.tracking_sync_steps
+    where attempt_id = '43000000-0000-0000-0000-000000000004'
+  ) <> 3 then
+    raise exception 'tracking audit did not retain every supplied step';
+  end if;
+  if not exists (
+    select 1
+    from public.tracking_sync_health_24h
+    where configured_carrier = 'dpd-fr'
+      and attempts >= 1
+      and anomalous >= 1
+  ) or not exists (
+    select 1
+    from public.tracking_sync_recent_anomalies
+    where attempt_id = '43000000-0000-0000-0000-000000000004'
+      and package_id = '40000000-0000-0000-0000-000000000004'
+  ) then
+    raise exception 'tracking audit operator views omitted the completed anomaly';
+  end if;
+end;
+$$;
+
+insert into public.tracking_sync_attempts (
+  id, package_id, trigger, configured_carrier, started_at
+) values (
+  '44000000-0000-0000-0000-000000000004',
+  '40000000-0000-0000-0000-000000000004',
+  'scheduled',
+  'la-poste',
+  now() - interval '31 minutes'
+);
+
+insert into public.tracking_sync_attempts (
+  id,
+  package_id,
+  trigger,
+  configured_carrier,
+  outcome,
+  current_step,
+  started_at,
+  completed_at,
+  duration_ms
+) values (
+  '45000000-0000-0000-0000-000000000004',
+  '40000000-0000-0000-0000-000000000004',
+  'scheduled',
+  'la-poste',
+  'waiting',
+  'complete',
+  now() - interval '92 days',
+  now() - interval '91 days',
+  1000
+);
+
+do $$
+declare
+  maintenance record;
+begin
+  select * into maintenance from public.maintain_tracking_sync_audit();
+  if maintenance.abandoned < 1 or maintenance.purged < 1 then
+    raise exception 'tracking audit maintenance returned unexpected counts: %', maintenance;
+  end if;
+  if not exists (
+    select 1
+    from public.tracking_sync_attempts
+    where id = '44000000-0000-0000-0000-000000000004'
+      and outcome = 'abandoned'
+      and error_type = 'WorkerAbandonedAttempt'
+      and anomaly_codes @> array['worker_abandoned_attempt']
+  ) then
+    raise exception 'stale tracking audit was not marked abandoned';
+  end if;
+  if exists (
+    select 1
+    from public.tracking_sync_attempts
+    where id = '45000000-0000-0000-0000-000000000004'
+  ) then
+    raise exception 'expired tracking audit was not purged';
   end if;
 end;
 $$;

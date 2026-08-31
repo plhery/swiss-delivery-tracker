@@ -41,6 +41,7 @@
     "validate:production-config": "node scripts/validate-production-config.mjs"
   },
   "dependencies": {
+    "@sentry/node": "^10.72.0",
     "@serwist/next": "^9.5.12",
     "@supabase/supabase-js": "^2.112.1",
     "cheerio": "^1.2.0",

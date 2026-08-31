@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { NextRequest } from 'next/server';
 import { authenticator, SupabaseAuthError, type SupabaseUser } from './auth';
+import { captureOperationalError, logOperationalEvent } from './observability';
 import { RateLimiter } from './rateLimit';
 import { serviceClient } from './runtime';
 import {
@@ -148,8 +149,6 @@ function logRequest(
   error?: unknown,
 ): void {
   const payload: JsonObject = {
-    timestamp: new Date().toISOString(),
-    event: 'http_request',
     request_id: requestId,
     method: request.method,
     route: routeLabel(request),
@@ -157,7 +156,7 @@ function logRequest(
     duration_ms: Math.round((performance.now() - startedAt) * 10) / 10,
   };
   if (error) payload.error_class = error instanceof Error ? error.name : typeof error;
-  console.log(JSON.stringify(payload));
+  logOperationalEvent('http_request', payload, status >= 500 ? 'error' : 'info');
 }
 
 export function apiRoute<Parameters extends RouteParameters = RouteParameters>(
@@ -267,6 +266,14 @@ export function apiRoute<Parameters extends RouteParameters = RouteParameters>(
       headers,
     });
     logRequest(request, requestId, finalized.status, startedAt, caught);
+    if (caught && finalized.status >= 500) {
+      captureOperationalError(caught, {
+        component: 'api',
+        operation: 'request',
+        requestId,
+        route: routeLabel(request),
+      });
+    }
     return finalized;
   };
 }
