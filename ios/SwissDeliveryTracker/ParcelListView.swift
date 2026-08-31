@@ -118,16 +118,12 @@ private struct DeliveryListView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
                 if !hasCustomView, let nextParcel {
-                    Button { path.append(nextParcel.id) } label: {
-                        ExperimentalNextDeliveryPass(parcel: nextParcel, transition: parcelTransition)
-                    }
-                    .buttonStyle(ExperimentalLiftButtonStyle())
-                    .experimentalSwipeToArchive(
-                        title: localizer.text("parcel.archive"),
-                        cornerRadius: 30,
-                        action: { archive(nextParcel) }
+                    ExperimentalNextDeliveryPass(
+                        parcel: nextParcel,
+                        transition: parcelTransition,
+                        onOpen: { path.append(nextParcel.id) },
+                        onArchive: { archive(nextParcel) }
                     )
-                    .accessibilityHint(localizer.text("detail.label"))
                 }
 
                 if store.isDemo {
@@ -526,6 +522,8 @@ private struct DeliveryListView: View {
 private struct ExperimentalNextDeliveryPass: View {
     let parcel: Parcel
     let transition: Namespace.ID
+    let onOpen: () -> Void
+    let onArchive: () -> Void
 
     @EnvironmentObject private var localizer: Localizer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -544,7 +542,10 @@ private struct ExperimentalNextDeliveryPass: View {
                     isLive: parcel.currentStage == .outForDelivery
                 )
                 Spacer(minLength: 4)
-                ExperimentalCarrierToken(carrier: catalog.info(for: parcel.activeTrackingCarrier), tint: tint)
+                ExperimentalCarrierToken(
+                    carrier: catalog.info(for: parcel.activeTrackingCarrier),
+                    tint: tint
+                )
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -571,7 +572,8 @@ private struct ExperimentalNextDeliveryPass: View {
                 Image(systemName: "location.fill")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(tint)
-                Text(parcel.experimentalLatestLocation ?? catalog.info(for: parcel.activeTrackingCarrier).displayName)
+                Text(parcel.experimentalLatestLocation
+                    ?? catalog.info(for: parcel.activeTrackingCarrier).displayName)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                 Text("·")
@@ -589,11 +591,18 @@ private struct ExperimentalNextDeliveryPass: View {
         .padding(22)
         .experimentalSurface(tint: tint, cornerRadius: 30)
         .experimentalGlassSheen(cornerRadius: 30)
+        .matchedTransitionSource(id: parcel.id, in: transition)
+        .accessibilityElement(children: .combine)
+        .experimentalSwipeToArchive(
+            title: localizer.text("parcel.archive"),
+            cornerRadius: 30,
+            onOpen: onOpen,
+            action: onArchive
+        )
         .opacity(appeared ? 1 : 0)
         .scaleEffect(appeared ? 1 : 0.975)
         .offset(y: appeared ? 0 : 12)
-        .matchedTransitionSource(id: parcel.id, in: transition)
-        .accessibilityElement(children: .combine)
+        .accessibilityHint(localizer.text("detail.label"))
         .onAppear {
             withAnimation(reduceMotion ? nil : .smooth(duration: 0.56)) {
                 appeared = true
@@ -618,68 +627,65 @@ private struct ExperimentalParcelPassCard: View {
         let motionReduced = reduceMotion
 
         HStack(spacing: 0) {
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
-                        ExperimentalCarrierToken(
-                            carrier: catalog.info(for: parcel.activeTrackingCarrier),
-                            tint: tint
-                        )
-                        Spacer(minLength: 4)
-                        HStack(spacing: 3) {
-                            if parcel.currentStage == .outForDelivery {
-                                ExperimentalLiveDot(tint: tint, size: 5)
-                            }
-                            Text(localizer.parcelStatus(parcel))
-                                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    ExperimentalCarrierToken(
+                        carrier: catalog.info(for: parcel.activeTrackingCarrier),
+                        tint: tint
+                    )
+                    Spacer(minLength: 4)
+                    HStack(spacing: 3) {
+                        if parcel.currentStage == .outForDelivery {
+                            ExperimentalLiveDot(tint: tint, size: 5)
                         }
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(tint)
+                        Text(localizer.parcelStatus(parcel))
+                            .lineLimit(1)
                     }
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+                }
 
-                    Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
+                Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
 
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        if let expected = parcel.expectedDelivery, parcel.currentStage?.isFinal != true {
-                            Text(localizer.expectedDelivery(expected))
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(.primary)
-                        } else if let completed = localizer.parcelCompletionDate(parcel) {
-                            Text(completed)
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(.primary)
-                        }
-                        Spacer(minLength: 0)
-                        if let place = parcel.experimentalLatestLocation {
-                            Label(place, systemImage: "location.fill")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let expected = parcel.expectedDelivery, parcel.currentStage?.isFinal != true {
+                        Text(localizer.expectedDelivery(expected))
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.primary)
+                    } else if let completed = localizer.parcelCompletionDate(parcel) {
+                        Text(completed)
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.primary)
                     }
-
-                    if let notice {
-                        Label(notice, systemImage: "exclamationmark.circle.fill")
+                    Spacer(minLength: 0)
+                    if let place = parcel.experimentalLatestLocation {
+                        Label(place, systemImage: "location.fill")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.orange)
-                            .lineLimit(2)
-                    }
-
-                    if parcel.currentStage?.isFinal != true {
-                        ExperimentalJourneyRail(stage: parcel.currentStage, tint: tint, compact: true)
-                            .environmentObject(localizer)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
-                .padding(.vertical, 17)
-                .padding(.leading, 18)
-                .padding(.trailing, onArchive == nil ? 18 : 7)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+
+                if let notice {
+                    Label(notice, systemImage: "exclamationmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                }
+
+                if parcel.currentStage?.isFinal != true {
+                    ExperimentalJourneyRail(stage: parcel.currentStage, tint: tint, compact: true)
+                        .environmentObject(localizer)
+                }
             }
-            .buttonStyle(ExperimentalLiftButtonStyle())
+            .padding(.vertical, 17)
+            .padding(.leading, 18)
+            .padding(.trailing, onArchive == nil ? 18 : 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
 
             if let onArchive {
                 Menu {
@@ -702,6 +708,8 @@ private struct ExperimentalParcelPassCard: View {
         .experimentalSwipeToArchive(
             title: localizer.text("parcel.archive"),
             cornerRadius: 24,
+            protectedTrailingWidth: onArchive == nil ? 0 : 44,
+            onOpen: onOpen,
             action: onArchive
         )
         .scrollTransition(.animated(.snappy(duration: 0.42))) { content, phase in
@@ -729,49 +737,46 @@ private struct ExperimentalDeliveredParcelCard: View {
         let motionReduced = reduceMotion
 
         HStack(spacing: 0) {
-            Button(action: onOpen) {
-                HStack(spacing: 13) {
-                    ZStack {
-                        Circle().fill(tint.opacity(0.15))
-                        Circle().stroke(tint.opacity(0.22), lineWidth: 0.8)
-                        Image(systemName: "checkmark")
-                            .font(.subheadline.weight(.black))
-                            .foregroundStyle(tint)
-                            .symbolEffect(.bounce, value: appeared)
-                    }
-                    .frame(width: 40, height: 40)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-
-                        HStack(spacing: 6) {
-                            Image(systemName: "shippingbox.fill")
-                                .font(.caption2.weight(.bold))
-                            Text(catalog.info(for: parcel.activeTrackingCarrier).displayName)
-                                .lineLimit(1)
-                        }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    ExperimentalArrivalStamp(
-                        date: parcel.experimentalCompletionDate,
-                        label: localizer.text("stage.delivered"),
-                        tint: tint
-                    )
+            HStack(spacing: 13) {
+                ZStack {
+                    Circle().fill(tint.opacity(0.15))
+                    Circle().stroke(tint.opacity(0.22), lineWidth: 0.8)
+                    Image(systemName: "checkmark")
+                        .font(.subheadline.weight(.black))
+                        .foregroundStyle(tint)
+                        .symbolEffect(.bounce, value: appeared)
                 }
-                .padding(.vertical, 12)
-                .padding(.leading, 14)
-                .padding(.trailing, onArchive == nil ? 14 : 3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "shippingbox.fill")
+                            .font(.caption2.weight(.bold))
+                        Text(catalog.info(for: parcel.activeTrackingCarrier).displayName)
+                            .lineLimit(1)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 4)
+
+                ExperimentalArrivalStamp(
+                    date: parcel.experimentalCompletionDate,
+                    label: localizer.text("stage.delivered"),
+                    tint: tint
+                )
             }
-            .buttonStyle(ExperimentalLiftButtonStyle())
+            .padding(.vertical, 12)
+            .padding(.leading, 14)
+            .padding(.trailing, onArchive == nil ? 14 : 3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
 
             if let onArchive {
                 Menu {
@@ -795,6 +800,8 @@ private struct ExperimentalDeliveredParcelCard: View {
             title: localizer.text("parcel.archive"),
             cornerRadius: 22,
             shadow: false,
+            protectedTrailingWidth: onArchive == nil ? 0 : 38,
+            onOpen: onOpen,
             action: onArchive
         )
         .scrollTransition(.animated(.snappy(duration: 0.4))) { content, phase in
@@ -818,12 +825,16 @@ private extension View {
         title: String,
         cornerRadius: CGFloat,
         shadow: Bool = true,
+        protectedTrailingWidth: CGFloat = 0,
+        onOpen: @escaping () -> Void,
         action: (() -> Void)?
     ) -> some View {
         modifier(ExperimentalSwipeToArchiveModifier(
             title: title,
             cornerRadius: cornerRadius,
             shadow: shadow,
+            protectedTrailingWidth: protectedTrailingWidth,
+            onOpen: onOpen,
             action: action
         ))
     }
@@ -833,6 +844,8 @@ private struct ExperimentalSwipeToArchiveModifier: ViewModifier {
     let title: String
     let cornerRadius: CGFloat
     let shadow: Bool
+    let protectedTrailingWidth: CGFloat
+    let onOpen: () -> Void
     let action: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -857,23 +870,26 @@ private struct ExperimentalSwipeToArchiveModifier: ViewModifier {
                     )
                     .overlay(alignment: .trailing) {
                         Button {
-                            trigger(action)
+                            trigger(action, provideFeedback: true)
                         } label: {
-                            VStack(spacing: 5) {
-                                Image(systemName: "archivebox.fill")
-                                    .font(.title3.weight(.bold))
-                                    .symbolEffect(.bounce, value: archiveFeedback)
-                                Text(title)
-                                    .font(.caption2.weight(.bold))
-                                    .lineLimit(1)
-                            }
-                            .foregroundStyle(.white)
-                            .frame(width: actionWidth)
-                            .frame(maxHeight: .infinity)
-                            .contentShape(Rectangle())
+                            Label(title, systemImage: "archivebox.fill")
+                                .labelStyle(.iconOnly)
+                                .font(.system(size: 18, weight: .bold))
+                                .scaleEffect(archiveIconScale)
+                                .symbolEffect(.bounce, value: isCommitArmed)
+                                .animation(
+                                    reduceMotion
+                                        ? nil
+                                        : .snappy(duration: 0.22, extraBounce: 0.16),
+                                    value: isCommitArmed
+                                )
+                                .foregroundStyle(.white)
+                                .frame(width: max(actionWidth, revealedWidth))
+                                .frame(maxHeight: .infinity)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityHidden(currentOffset > -8)
+                        .accessibilityHidden(revealedWidth < 8)
                     }
                     .opacity(revealProgress)
 
@@ -892,10 +908,22 @@ private struct ExperimentalSwipeToArchiveModifier: ViewModifier {
             } action: { nextWidth in
                 width = nextWidth
             }
-            .simultaneousGesture(swipeGesture(action: action))
-            .sensoryFeedback(.warning, trigger: archiveFeedback)
+            .simultaneousGesture(tapGesture, including: .gesture)
+            .simultaneousGesture(swipeGesture(action: action), including: .gesture)
+            .sensoryFeedback(
+                .impact(weight: .medium, intensity: 0.9),
+                trigger: isCommitArmed
+            ) { wasArmed, isArmed in
+                !wasArmed && isArmed
+            }
+            .sensoryFeedback(.impact(weight: .medium, intensity: 0.8), trigger: archiveFeedback)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onOpen() }
         } else {
             content
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onOpen)
+                .accessibilityAddTraits(.isButton)
         }
     }
 
@@ -907,6 +935,30 @@ private struct ExperimentalSwipeToArchiveModifier: ViewModifier {
         min(1, max(0, -currentOffset / actionWidth))
     }
 
+    private var revealedWidth: CGFloat {
+        max(0, -currentOffset)
+    }
+
+    private var commitThreshold: CGFloat {
+        max(actionWidth * 1.75, width * 0.52)
+    }
+
+    private var isCommitArmed: Bool {
+        width > 0 && revealedWidth >= commitThreshold
+    }
+
+    private var archiveIconScale: CGFloat {
+        let revealScale = 0.76 + (revealProgress * 0.24)
+        return revealScale * (isCommitArmed ? 1.55 : 1)
+    }
+
+    private var tapGesture: some Gesture {
+        SpatialTapGesture()
+            .onEnded { value in
+                handleTap(at: value.location)
+            }
+    }
+
     private func swipeGesture(action: @escaping () -> Void) -> some Gesture {
         DragGesture(minimumDistance: 12, coordinateSpace: .local)
             .updating($dragOffset) { value, state, _ in
@@ -916,10 +968,13 @@ private struct ExperimentalSwipeToArchiveModifier: ViewModifier {
             .onEnded { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
 
+                let releasedOffset = max(
+                    -max(width, actionWidth),
+                    min(0, restingOffset + value.translation.width)
+                )
                 let projectedOffset = restingOffset + value.predictedEndTranslation.width
-                let fullSwipeThreshold = max(actionWidth * 2, width * 0.62)
-                if projectedOffset <= -fullSwipeThreshold {
-                    trigger(action)
+                if releasedOffset <= -commitThreshold {
+                    trigger(action, provideFeedback: false)
                 } else {
                     let shouldReveal = projectedOffset < -(actionWidth * 0.42)
                     withAnimation(reduceMotion ? nil : .snappy(duration: 0.3, extraBounce: 0.04)) {
@@ -929,12 +984,32 @@ private struct ExperimentalSwipeToArchiveModifier: ViewModifier {
             }
     }
 
-    private func trigger(_ action: @escaping () -> Void) {
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.24)) {
-            restingOffset = -actionWidth
+    private func handleTap(at location: CGPoint) {
+        if restingOffset < -1 {
+            guard location.x < width - revealedWidth else { return }
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.26, extraBounce: 0.03)) {
+                restingOffset = 0
+            }
+            return
         }
-        archiveFeedback += 1
+        guard location.x < width - protectedTrailingWidth else { return }
+        onOpen()
+    }
+
+    private func trigger(_ action: @escaping () -> Void, provideFeedback: Bool) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.02)) {
+            restingOffset = -max(width, actionWidth)
+        }
+        if provideFeedback { archiveFeedback += 1 }
         action()
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard restingOffset <= -actionWidth else { return }
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.3, extraBounce: 0.04)) {
+                restingOffset = 0
+            }
+        }
     }
 }
 
