@@ -303,6 +303,27 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertTrue(ParcelOrganizer.sections(from: [parcel]).contains { $0.kind == .archived })
     }
 
+    func testArchivedParcelsAreOrderedByNewestDisplayedDate() {
+        let olderID = UUID()
+        var older = makeParcel(
+            id: olderID,
+            events: [event(olderID, .delivered, "2026-08-05T12:00:00Z")]
+        )
+        older.archivedAt = "2026-08-10T12:00:00Z"
+
+        let newerID = UUID()
+        var newer = makeParcel(
+            id: newerID,
+            events: [event(newerID, .delivered, "2026-08-07T12:00:00Z")]
+        )
+        newer.archivedAt = "2026-08-09T12:00:00Z"
+
+        let archived = ParcelOrganizer.sections(from: [older, newer])
+            .first(where: { $0.kind == .archived })
+
+        XCTAssertEqual(archived?.parcels.map(\.id), [newerID, olderID])
+    }
+
     private func makeParcel(
         id: UUID = UUID(),
         trackingNumber: String = "1Z999AA10123456784",

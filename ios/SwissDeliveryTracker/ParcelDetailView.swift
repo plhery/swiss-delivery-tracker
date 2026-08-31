@@ -89,60 +89,49 @@ struct ParcelDetailView: View {
 
     private func liveParcelPass(_ parcel: Parcel) -> some View {
         let tint = ExperimentalPalette.tint(for: parcel)
-        let strings = ExperimentalCopy(language: localizer.language)
         let carrier = catalog.info(for: parcel.activeTrackingCarrier)
-        let origin = parcel.experimentalLatestLocation ?? carrier.displayName
         let trackingLinks = catalog.trackingLinks(for: parcel, language: localizer.language)
 
-        return VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 9) {
-                ExperimentalStatusPill(
-                    text: localizer.parcelStatus(parcel),
-                    symbol: parcel.currentStage?.metadata.symbol ?? "shippingbox.fill",
-                    tint: tint,
-                    isLive: parcel.currentStage == .outForDelivery
-                )
-                Spacer(minLength: 4)
-                ExperimentalCarrierToken(carrier: carrier, tint: tint)
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 6) {
+                Image(systemName: parcel.currentStage?.metadata.symbol ?? "shippingbox.fill")
+                    .foregroundStyle(tint)
+                Text(localizer.parcelStatus(parcel))
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                Text(carrier.displayName)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
             }
+            .font(.subheadline.weight(.semibold))
+            .lineLimit(1)
 
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(parcel.label.nonEmpty ?? localizer.text("common.parcel"))
-                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .font(.title2.weight(.semibold))
                     .lineLimit(2)
                 Text(parcel.expectedDelivery.map { localizer.expectedDelivery($0) }
                     ?? localizer.parcelStatus(parcel))
-                    .font(.system(size: 34, weight: .heavy, design: .rounded))
+                    .font(.title3.weight(.bold))
                     .contentTransition(.numericText())
                     .lineLimit(2)
-                    .minimumScaleFactor(0.72)
+                    .minimumScaleFactor(0.8)
             }
 
-            VStack(spacing: 7) {
-                HStack(spacing: 10) {
-                    Label(origin, systemImage: "location.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 12)
-                    Label(strings.home, systemImage: "house.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(tint)
-                }
-                ExperimentalRouteLine(
-                    tint: tint,
-                    animated: false
-                )
+            if let location = parcel.experimentalLatestLocation {
+                Label(location, systemImage: "location.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Divider()
-                .overlay(tint.opacity(0.16))
 
             shipmentIdentity(parcel, links: trackingLinks, tint: tint)
             syncStatus(parcel, tint: tint)
         }
-        .padding(22)
-        .experimentalSurface(tint: tint, cornerRadius: 30)
-        .experimentalGlassSheen(cornerRadius: 30, delay: 0.22)
+        .padding(18)
+        .experimentalSurface(tint: tint, cornerRadius: 24)
         .accessibilityElement(children: .contain)
     }
 
@@ -154,9 +143,7 @@ struct ParcelDetailView: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(localizer.text("detail.trackingNumber"))
-                    .font(.caption2.weight(.bold))
-                    .textCase(.uppercase)
-                    .tracking(0.35)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(CarrierCatalog.format(parcel.trackingNumber))
                     .font(.system(.subheadline, design: .monospaced, weight: .semibold))
@@ -172,8 +159,8 @@ struct ParcelDetailView: View {
             } label: {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
                     .font(.caption.weight(.bold))
-                    .frame(width: 32, height: 32)
-                    .background(tint.opacity(0.11), in: Circle())
+                    .frame(width: 30, height: 30)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(tint)
@@ -183,8 +170,8 @@ struct ParcelDetailView: View {
                 Link(destination: link.url) {
                     Image(systemName: "arrow.up.right")
                         .font(.caption.weight(.bold))
-                        .frame(width: 32, height: 32)
-                        .background(tint.opacity(0.11), in: Circle())
+                        .frame(width: 30, height: 30)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(tint)
@@ -196,8 +183,6 @@ struct ParcelDetailView: View {
     private func syncStatus(_ parcel: Parcel, tint: Color) -> some View {
         HStack(spacing: 7) {
             if let lastSyncedAt = parcel.lastSyncedAt {
-                Image(systemName: "clock")
-                    .font(.caption2.weight(.semibold))
                 Text(localizer.relativeTime(from: lastSyncedAt))
             }
 
@@ -214,8 +199,8 @@ struct ParcelDetailView: View {
                                 .font(.caption.weight(.bold))
                         }
                     }
-                    .frame(width: 27, height: 27)
-                    .background(tint.opacity(0.11), in: Circle())
+                    .frame(width: 26, height: 26)
+                    .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(tint)
@@ -234,10 +219,10 @@ struct ParcelDetailView: View {
         let olderEvents = Array(parcel.sortedEvents.dropFirst())
         let visibleEvents = showingFullJourney ? olderEvents : Array(olderEvents.prefix(2))
 
-        return VStack(alignment: .leading, spacing: 16) {
+        return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(localizer.text("detail.journey"))
-                    .font(.title2.weight(.bold))
+                    .font(.headline.weight(.semibold))
                 Spacer()
                 if olderEvents.count > 2 {
                     Button(showingFullJourney ? copy.lessJourney : copy.fullJourney) {
@@ -245,9 +230,9 @@ struct ParcelDetailView: View {
                             showingFullJourney.toggle()
                         }
                     }
-                    .font(.caption.weight(.bold))
+                    .font(.caption.weight(.semibold))
                     .buttonStyle(.plain)
-                    .foregroundStyle(Brand.ink)
+                    .foregroundStyle(.secondary)
                 }
             }
 
@@ -278,8 +263,8 @@ struct ParcelDetailView: View {
                 }
             }
         }
-        .padding(20)
-        .experimentalSurface(cornerRadius: 24, shadow: false)
+        .padding(16)
+        .experimentalSurface(cornerRadius: 18, shadow: false)
     }
 
     private func copy(_ value: String) {
@@ -328,33 +313,30 @@ private struct ExperimentalCurrentTimelineRow: View {
     var body: some View {
         let strings = ExperimentalCopy(language: localizer.language)
 
-        HStack(alignment: .top, spacing: 13) {
+        HStack(alignment: .top, spacing: 11) {
             VStack(spacing: 0) {
                 ZStack {
-                    Circle().fill(tint.opacity(0.16))
-                    Circle().stroke(tint.opacity(0.22), lineWidth: 0.8)
+                    Circle().fill(tint.opacity(0.13))
                     Image(systemName: event.stage.metadata.symbol)
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.primary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(tint)
                 }
-                .frame(width: 42, height: 42)
+                .frame(width: 34, height: 34)
 
                 if hasFollowingEvent {
                     Rectangle()
-                        .fill(tint.opacity(0.2))
-                        .frame(width: 2, height: 24)
+                        .fill(tint.opacity(0.16))
+                        .frame(width: 1, height: 24)
                 }
             }
-            .frame(width: 42)
+            .frame(width: 34)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(strings.currentUpdate)
-                    .font(.caption2.weight(.bold))
-                    .textCase(.uppercase)
-                    .tracking(0.4)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(tint)
                 Text(localizer.text(event.stage.localizationKey))
-                    .font(.title3.weight(.bold))
+                    .font(.headline.weight(.semibold))
                 Text(event.description)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -379,22 +361,22 @@ private struct ExperimentalTimelineRow: View {
     @EnvironmentObject private var localizer: Localizer
 
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
+        HStack(alignment: .top, spacing: 11) {
             VStack(spacing: 0) {
                 ZStack {
-                    Circle().fill(event.stage.metadata.tone.color.opacity(0.14))
+                    Circle().fill(event.stage.metadata.tone.color.opacity(0.11))
                     Image(systemName: event.stage.metadata.symbol)
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(width: 30, height: 30)
+                .frame(width: 26, height: 26)
                 if !isLast {
                     Rectangle()
-                        .fill(.secondary.opacity(0.13))
-                        .frame(width: 2, height: 56)
+                        .fill(.secondary.opacity(0.12))
+                        .frame(width: 1, height: 54)
                 }
             }
-            .frame(width: 42)
+            .frame(width: 34)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(localizer.text(event.stage.localizationKey))

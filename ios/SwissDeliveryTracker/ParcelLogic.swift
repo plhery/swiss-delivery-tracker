@@ -225,13 +225,19 @@ enum ParcelOrganizer {
         let onTheWay = active.filter {
             $0.attention(now: now) == nil && $0.expectedDayKey != dayKey(now)
         }
+        let archived = parcels.filter(\.isArchived).sorted { left, right in
+            let leftDate = archivedDisplayDate(left)
+            let rightDate = archivedDisplayDate(right)
+            if leftDate == rightDate { return left.id.uuidString < right.id.uuidString }
+            return leftDate > rightDate
+        }
         let values: [(ParcelSectionKind, [Parcel])] = [
             (.attention, attention),
             (.today, today),
             (.active, onTheWay),
             (.delivered, parcels.filter { !$0.isArchived && $0.isDelivered }),
             (.returned, parcels.filter { !$0.isArchived && $0.isReturned }),
-            (.archived, parcels.filter(\.isArchived)),
+            (.archived, archived),
         ]
         return values.compactMap { $0.1.isEmpty ? nil : ParcelSection(kind: $0.0, parcels: $0.1) }
     }
@@ -267,6 +273,21 @@ enum ParcelOrganizer {
 
     private static func updated(_ parcel: Parcel) -> String {
         parcel.currentEvent?.occurredAt ?? parcel.createdAt
+    }
+
+    private static func archivedDisplayDate(_ parcel: Parcel) -> Date {
+        if let event = parcel.currentEvent,
+           event.stage.isFinal,
+           let completionDate = DateParser.date(event.occurredAt) {
+            return completionDate
+        }
+        if let archivedAt = parcel.archivedAt.flatMap(DateParser.date) {
+            return archivedAt
+        }
+        if let eventDate = parcel.currentEvent.flatMap({ DateParser.date($0.occurredAt) }) {
+            return eventDate
+        }
+        return DateParser.date(parcel.createdAt) ?? .distantPast
     }
 
     static func dayKey(_ date: Date) -> String {
