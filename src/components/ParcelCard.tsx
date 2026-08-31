@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import {
   activeTrackingCarrierId,
   carrierInfo,
-  formatTrackingNumber,
 } from '../lib/carriers';
 import {
   localizedExpectedDelivery,
+  localizedRelativeTime,
   useI18n,
 } from '../i18n';
 import {
@@ -39,25 +39,43 @@ export function ParcelCard({
     : null;
   const statusLabel = t(parcelDisplayStatusKey(parcel));
   const completionDate = localizedParcelCompletionDate(parcel, languageTag);
+  const compact = final || Boolean(parcel.archivedAt);
+  const updated = current
+    ? localizedRelativeTime(current.occurredAt, t, languageTag)
+    : null;
   const statusSummary = completionDate
     ? `${statusLabel} ${t('parcel.onDate', { date: completionDate })}`
     : statusLabel;
   const parcelName = parcel.label || t('common.parcel');
   const dragStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const suppressClick = useRef(false);
+  const armedRef = useRef(false);
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [swipeArmed, setSwipeArmed] = useState(false);
   const [archiving, setArchiving] = useState(false);
+
+  function disarmSwipe() {
+    armedRef.current = false;
+    setSwipeArmed(false);
+  }
+
+  function suppressReleaseClick() {
+    suppressClick.current = true;
+    window.setTimeout(() => { suppressClick.current = false; }, 400);
+  }
 
   async function archive() {
     if (!onArchive || archiving) return;
     setArchiving(true);
-    setDragOffset(-88);
+    setSwipeArmed(true);
+    setDragOffset(-132);
     try {
       await onArchive(parcel);
     } catch {
       setArchiving(false);
       setDragOffset(0);
+      disarmSwipe();
     }
   }
 
@@ -76,7 +94,12 @@ export function ParcelCard({
     if (horizontal >= 0 || Math.abs(horizontal) <= Math.abs(vertical)) return;
     event.preventDefault();
     suppressClick.current = true;
-    setDragOffset(Math.max(-132, horizontal));
+    const nextOffset = Math.max(-132, horizontal);
+    const nextArmed = nextOffset <= -96;
+    if (nextArmed && !armedRef.current) navigator.vibrate?.(10);
+    armedRef.current = nextArmed;
+    setSwipeArmed(nextArmed);
+    setDragOffset(nextOffset);
   }
 
   function finishSwipe(event: PointerEvent<HTMLButtonElement>) {
@@ -86,27 +109,28 @@ export function ParcelCard({
     if (!start || start.pointerId !== event.pointerId) return;
     const horizontal = event.clientX - start.x;
     const vertical = event.clientY - start.y;
-    if (Math.abs(horizontal) > 8) suppressClick.current = true;
+    if (Math.abs(horizontal) > 8) suppressReleaseClick();
     if (horizontal <= -96 && Math.abs(horizontal) > Math.abs(vertical) * 1.25) {
       void archive();
     } else {
       setDragOffset(horizontal <= -36 && Math.abs(horizontal) > Math.abs(vertical) ? -88 : 0);
+      disarmSwipe();
     }
-    window.setTimeout(() => { suppressClick.current = false; }, 0);
   }
 
   function cancelSwipe() {
     dragStart.current = null;
     setDragging(false);
     setDragOffset(0);
-    window.setTimeout(() => { suppressClick.current = false; }, 0);
+    disarmSwipe();
+    suppressReleaseClick();
   }
 
   return (
     <div className={`parcel-card-swipe${onArchive ? ' parcel-card-swipe--enabled' : ''}`}>
       <button
         type="button"
-        className={`parcel-card parcel-card--${status.tone}${onArchive ? ' parcel-card--swipeable' : ''}${dragging ? ' parcel-card--dragging' : ''}`}
+        className={`parcel-card parcel-card--${status.tone}${compact ? ' parcel-card--compact' : ''}${parcel.archivedAt ? ' parcel-card--archived' : ''}${onArchive ? ' parcel-card--swipeable' : ''}${dragging ? ' parcel-card--dragging' : ''}`}
         style={onArchive ? { transform: `translateX(${dragOffset}px)` } : undefined}
         onClick={() => {
           if (suppressClick.current) return;
@@ -124,48 +148,56 @@ export function ParcelCard({
           ? t('parcel.ariaExpected', { name: parcelName, status: statusSummary, date: expectedDelivery })
           : t('parcel.aria', { name: parcelName, status: statusSummary })}
       >
-      <div className="parcel-card__body">
-        <div className="parcel-card__top">
-          <span className="parcel-card__carrier">{carrier.name}</span>
-        </div>
-        <span className="parcel-card__label">{parcelName}</span>
-        <span className="parcel-card__tracking">
-          {formatTrackingNumber(parcel.trackingNumber)}
-        </span>
-        <div className="parcel-card__status">
-          {final ? (
-            <span className={`status-badge status-badge--${status.tone}`}>
-              {statusLabel}
-            </span>
+        <span className={`parcel-card__glyph parcel-card__glyph--${status.tone}`} aria-hidden="true">
+          {compact ? (
+            <svg viewBox="0 0 24 24"><path d="m7 12 3.2 3.2L17.5 8" /></svg>
           ) : (
-            <span className={`parcel-card__state parcel-card__state--${status.tone}`}>
-              {statusLabel}
+            <svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5zM4 7.5l8 4.5 8-4.5M12 12v9" /></svg>
+          )}
+        </span>
+        <div className="parcel-card__body">
+          <div className="parcel-card__top">
+            <span className="parcel-card__label">{parcelName}</span>
+            {!compact && expectedDelivery && (
+              <span className="parcel-card__eta">{expectedDelivery}</span>
+            )}
+          </div>
+          <div className="parcel-card__meta">
+            <span className="parcel-card__carrier">{carrier.name}</span>
+            <span aria-hidden="true">·</span>
+            {compact ? (
+              <span className={`status-badge status-badge--${status.tone}`}>
+                {statusLabel}
+              </span>
+            ) : (
+              <span className={`parcel-card__state parcel-card__state--${status.tone}`}>
+                {statusLabel}
+              </span>
+            )}
+            {!compact && updated && <span className="parcel-card__updated">· {updated}</span>}
+          </div>
+          {!compact && current?.location && (
+            <p className="parcel-card__location">{current.location}</p>
+          )}
+          {compact && completionDate && (
+            <span className="parcel-card__delivery-date">
+              <span>{statusLabel}</span>
+              <strong className="parcel-card__completion">{completionDate}</strong>
             </span>
           )}
-          {completionDate && (
-            <span className="parcel-card__completion">
-              {t('parcel.onDate', { date: completionDate })}
-            </span>
+          {parcel.syncStatus === 'error' && (
+            <p className="parcel-card__sync-error">{t('parcel.syncAttention')}</p>
           )}
-          {expectedDelivery && (
-            <span className="parcel-card__eta">
-              {expectedDelivery}
-            </span>
+          {notice && parcel.syncStatus !== 'error' && (
+            <p className="parcel-card__notice">{notice}</p>
           )}
+          {!compact && <ProgressTrack stage={current?.stage ?? null} />}
         </div>
-        {parcel.syncStatus === 'error' && (
-          <p className="parcel-card__sync-error">{t('parcel.syncAttention')}</p>
-        )}
-        {notice && parcel.syncStatus !== 'error' && (
-          <p className="parcel-card__notice">{notice}</p>
-        )}
-        {!final && <ProgressTrack stage={current?.stage ?? null} />}
-      </div>
       </button>
       {onArchive && (
         <button
           type="button"
-          className="parcel-card-swipe__archive"
+          className={`parcel-card-swipe__archive${swipeArmed ? ' parcel-card-swipe__archive--armed' : ''}`}
           aria-label={t('parcel.archiveAria', { name: parcelName })}
           aria-hidden="true"
           aria-busy={archiving}
@@ -174,7 +206,10 @@ export function ParcelCard({
           onFocus={() => setDragOffset(-88)}
           onClick={() => void archive()}
         >
-          {archiving ? t('detail.archiving') : t('parcel.archive')}
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M5 8h14v11H5zM4 5h16v3H4zM9 12h6" />
+          </svg>
+          <span>{archiving ? t('detail.archiving') : t('parcel.archive')}</span>
         </button>
       )}
       {onArchive && (

@@ -5,7 +5,7 @@ import {
   isActiveParcel,
   parcelAttention,
 } from './parcelPriority';
-import { currentEvent, currentStage } from './stages';
+import { currentEvent, currentStage, isFinal } from './stages';
 import type { CarrierId, ParcelWithEvents } from '../types';
 
 export type ParcelStatusFilter =
@@ -71,6 +71,29 @@ export function parcelMatchesStatus(
 
 function updatedAt(parcel: ParcelWithEvents): string {
   return currentEvent(parcel.events)?.occurredAt ?? parcel.createdAt;
+}
+
+/**
+ * The date that best represents a parcel in its archive. A delivered or returned
+ * scan is more meaningful than the moment the user happened to archive it.
+ */
+export function archivedDisplayDate(parcel: ParcelWithEvents): string {
+  const completion = [...parcel.events]
+    .filter((event) => isFinal(event.stage))
+    .sort((first, second) => second.occurredAt.localeCompare(first.occurredAt))[0];
+  return completion?.occurredAt
+    ?? parcel.archivedAt
+    ?? currentEvent(parcel.events)?.occurredAt
+    ?? parcel.createdAt;
+}
+
+export function sortArchivedParcels(
+  parcels: ParcelWithEvents[],
+): ParcelWithEvents[] {
+  return [...parcels].sort((first, second) => {
+    const byDate = archivedDisplayDate(second).localeCompare(archivedDisplayDate(first));
+    return byDate !== 0 ? byDate : first.id.localeCompare(second.id);
+  });
 }
 
 export function parcelComparator(

@@ -160,8 +160,9 @@ describe('App', () => {
     renderApp();
     expect(await screen.findByText('Delivered', { selector: '.status-badge' }))
       .toBeInTheDocument();
-    expect(screen.getByText(/^on /, { selector: '.parcel-card__completion' }))
-      .toBeInTheDocument();
+    const deliveredDate = document.querySelector('.parcel-card__completion');
+    expect(deliveredDate).toHaveTextContent(/\d/);
+    expect(deliveredDate).not.toHaveTextContent(/^on /);
     expect(screen.getByText('Out for delivery')).toBeInTheDocument();
     expect(screen.getByText('At customs', { selector: '.parcel-card__state' })).toBeInTheDocument();
   });
@@ -793,21 +794,18 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /copy tracking number/i })).toHaveTextContent('Copied');
   });
 
-  it('mutes one parcel across the stored notification setting', async () => {
+  it('mutes one parcel from the discreet parcel actions menu', async () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByText('New sneakers 👟'));
 
-    const toggle = screen.getByRole('switch', { name: 'Parcel alerts' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    await user.click(toggle);
+    await user.click(screen.getByLabelText('Parcel actions'));
+    await user.click(screen.getByRole('button', { name: 'Mute this parcel' }));
+    await user.click(screen.getByLabelText('Parcel actions'));
 
-    expect(screen.getByRole('switch', { name: 'Parcel alerts' }))
-      .toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByRole('switch', { name: 'Parcel alerts' }))
-      .toHaveTextContent('Muted');
-    expect(screen.getByRole('dialog', { name: 'New sneakers 👟' }).lastElementChild)
-      .toHaveClass('detail__notification-footer');
+    expect(screen.getByRole('button', { name: 'Turn parcel alerts on' }))
+      .toBeInTheDocument();
+    expect(document.querySelector('.detail__notification-footer')).not.toBeInTheDocument();
   });
 
   it('opens notification deep links and clears the parcel query on back', async () => {
@@ -899,9 +897,11 @@ describe('App', () => {
     fireEvent.pointerDown(card!, { pointerId: 1, isPrimary: true, clientX: 240, clientY: 100 });
     fireEvent.pointerMove(card!, { pointerId: 1, isPrimary: true, clientX: 110, clientY: 105 });
     fireEvent.pointerUp(card!, { pointerId: 1, isPrimary: true, clientX: 110, clientY: 105 });
+    fireEvent.click(card!);
 
     expect(await screen.findByRole('status')).toHaveTextContent('Coffee beans ☕ archived');
     expect(screen.getByRole('region', { name: 'Archived' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Coffee beans ☕' })).not.toBeInTheDocument();
   });
 
   it('keeps archive failures inside the parcel dialog', async () => {

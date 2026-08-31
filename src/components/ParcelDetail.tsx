@@ -6,7 +6,11 @@ import {
   formatTrackingNumber,
   parcelTrackingLinks,
 } from '../lib/carriers';
-import { localizedExpectedDelivery, useI18n } from '../i18n';
+import {
+  localizedExpectedDelivery,
+  localizedRelativeTime,
+  useI18n,
+} from '../i18n';
 import {
   localizedParcelCompletionDate,
   parcelDisplayStatus,
@@ -16,7 +20,6 @@ import { currentEvent, isFinal } from '../lib/stages';
 import { isBackSwipe, type TouchPoint } from '../lib/swipe';
 import { useModalDialog } from '../lib/modal';
 import type { ParcelWithEvents } from '../types';
-import { ProgressTrack } from './ProgressTrack';
 import { Timeline } from './Timeline';
 
 export function ParcelDetail({
@@ -49,6 +52,9 @@ export function ParcelDetail({
   const statusLabel = t(parcelDisplayStatusKey(parcel));
   const completionDate = localizedParcelCompletionDate(parcel, languageTag);
   const trackingLinks = parcelTrackingLinks(parcel, locale);
+  const lastChecked = current
+    ? localizedRelativeTime(current.occurredAt, t, languageTag)
+    : null;
   const swipeStart = useRef<TouchPoint | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(parcel.label);
@@ -232,6 +238,16 @@ export function ParcelDetail({
             <span aria-hidden="true">•••</span>
           </summary>
           <div>
+            <button
+              type="button"
+              disabled={savingNotifications || deleting}
+              onClick={() => {
+                if (actionsMenu.current) actionsMenu.current.open = false;
+                void toggleNotifications();
+              }}
+            >
+              {parcel.notificationsMuted ? t('detail.unmute') : t('detail.mute')}
+            </button>
             {!parcel.archivedAt && (
               <button
                 type="button"
@@ -260,8 +276,18 @@ export function ParcelDetail({
         </details>
       </header>
 
-      <div className="detail__hero">
-        <p className="detail__eyebrow">{carrier.name}</p>
+      <section className="detail__hero">
+        <div className="detail__hero-meta">
+          <span className="detail__carrier">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5zM4 7.5l8 4.5 8-4.5M12 12v9" />
+            </svg>
+            {carrier.name}
+          </span>
+          <span className={`detail__state detail__state--${status.tone}`}>
+            {statusLabel}
+          </span>
+        </div>
         {editingTitle ? (
           <form className="detail__title-form" onSubmit={handleTitleSubmit}>
             <input
@@ -310,130 +336,99 @@ export function ParcelDetail({
             </button>
           </div>
         )}
-        <div className="detail__status">
-          {final ? (
-            <span className={`status-badge status-badge--${status.tone}`}>
-              {statusLabel}
-            </span>
-          ) : (
-            <span className={`detail__state detail__state--${status.tone}`}>
-              {statusLabel}
-            </span>
-          )}
-          {completionDate && (
-            <span className="detail__completion">
-              {t('parcel.onDate', { date: completionDate })}
-            </span>
-          )}
-        </div>
-        {!final && (
-          <ProgressTrack stage={current?.stage ?? null} />
+        {(completionDate || (parcel.expectedDelivery && !final)) && (
+          <p className="detail__arrival">
+            {completionDate
+              ? t('parcel.onDate', { date: completionDate })
+              : localizedExpectedDelivery(parcel.expectedDelivery!, t, languageTag)}
+          </p>
         )}
-        <div className="detail__tracking-ticket">
-          <span className="detail__tracking-label">{t('detail.trackingNumber')}</span>
-          <strong>{formatTrackingNumber(parcel.trackingNumber)}</strong>
-          <button
-            type="button"
-            className="detail__tracking-copy"
-            onClick={() => void copyTrackingNumber()}
-            aria-label={t('detail.copyTracking')}
-          >
-            {copyStatus === 'copied' ? t('detail.copied') : t('detail.copy')}
-          </button>
+        <div className="detail__shipment">
+          <div className="detail__tracking-ticket">
+            <span className="detail__tracking-label">{t('detail.trackingNumber')}</span>
+            <strong>{formatTrackingNumber(parcel.trackingNumber)}</strong>
+            <button
+              type="button"
+              className="detail__tracking-copy"
+              onClick={() => void copyTrackingNumber()}
+              aria-label={t('detail.copyTracking')}
+            >
+              {copyStatus === 'copied' ? t('detail.copied') : t('detail.copy')}
+            </button>
+          </div>
+          {trackingLinks.length > 0 && (
+            <div className="detail__carrier-links" aria-label={t('detail.trackingSources')}>
+              {trackingLinks.map((link) => (
+                <a
+                  key={link.carrier.id}
+                  className={`detail__carrier-link detail__carrier-link--${link.role}`}
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span>{t('detail.openCarrier', { carrier: link.carrier.name })}</span>
+                  {link.role !== 'active' && (
+                    <small>
+                      {link.role === 'waiting'
+                        ? t('detail.sourceWaiting')
+                        : t('detail.sourceHistory')}
+                    </small>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
         {copyStatus === 'error' && (
           <p className="detail__copy-error" role="alert">
             {t('detail.copyUnavailable')}
           </p>
         )}
-        {parcel.expectedDelivery && !final && (
-          <p className="detail__eta">
-            {localizedExpectedDelivery(parcel.expectedDelivery, t, languageTag)}
-          </p>
-        )}
         {parcel.syncError && (
           <p className="detail__sync-error" role="status">{parcel.syncError}</p>
         )}
-        {trackingLinks.length > 0 && (
-          <div className="detail__carrier-links" aria-label={t('detail.trackingSources')}>
-            {trackingLinks.map((link) => (
-              <a
-                key={link.carrier.id}
-                className={`detail__carrier-link detail__carrier-link--${link.role}`}
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <span>{t('detail.openCarrier', { carrier: link.carrier.name })}</span>
-                {link.role !== 'active' && (
-                  <small>
-                    {link.role === 'waiting'
-                      ? t('detail.sourceWaiting')
-                      : t('detail.sourceHistory')}
-                  </small>
-                )}
-              </a>
-            ))}
-          </div>
+        <div className="detail__freshness">
+          {lastChecked && <span>{t('detail.lastChecked', { date: lastChecked })}</span>}
+          {!parcel.archivedAt && (
+            <button
+              type="button"
+              className="detail__refresh"
+              onClick={() => void checkNow()}
+              disabled={checking}
+              aria-label={checking ? t('detail.queueing') : t('detail.checkNow')}
+            >
+              <svg className={checking ? 'spin' : undefined} aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M19 8a7.5 7.5 0 1 0 .2 7.6M19 4v4h-4" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {checkError && <p className="detail__check-error" role="alert">{checkError}</p>}
+        {checkNotice && <p className="detail__check-notice" role="status">{checkNotice}</p>}
+        {notificationError && (
+          <p className="detail__check-error" role="alert">{notificationError}</p>
         )}
-      </div>
+      </section>
 
       <section className="detail__timeline">
         <div className="detail__section-heading">
-          <p>{t('detail.history')}</p>
           <h2 className="detail__section-title">{t('detail.journey')}</h2>
         </div>
         <Timeline events={parcel.events} syncing={status.syncing} />
       </section>
 
-      <footer className="detail__footer detail__footer--single">
-        {checkError && <p className="detail__check-error" role="alert">{checkError}</p>}
-        {checkNotice && <p className="detail__check-notice" role="status">{checkNotice}</p>}
-        {parcel.archivedAt ? (
+      {parcel.archivedAt && (
+        <footer className="detail__footer detail__footer--single">
           <button
             type="button"
-            className="button button--primary"
+            className="detail__restore"
             onClick={() => void restoreNow()}
             disabled={restoring}
           >
             {restoring ? t('common.restoring') : t('detail.restore')}
           </button>
-        ) : (
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => void checkNow()}
-            disabled={checking}
-          >
-            {checking ? t('detail.queueing') : t('detail.checkNow')}
-          </button>
-        )}
-      </footer>
-
-      <section className="detail__notification-footer">
-        <div className="detail__notification-setting">
-          <div>
-            <strong>{t('detail.notifications')}</strong>
-            <span>{t('detail.notificationsDescription')}</span>
-          </div>
-          <button
-            type="button"
-            className={`detail__notification-toggle${parcel.notificationsMuted
-              ? ' detail__notification-toggle--muted'
-              : ''}`}
-            role="switch"
-            aria-checked={!parcel.notificationsMuted}
-            aria-label={t('detail.notifications')}
-            disabled={savingNotifications}
-            onClick={() => void toggleNotifications()}
-          >
-            {parcel.notificationsMuted ? t('detail.muted') : t('detail.alertsOn')}
-          </button>
-        </div>
-        {notificationError && (
-          <p className="detail__check-error" role="alert">{notificationError}</p>
-        )}
-      </section>
+        </footer>
+      )}
 
       {confirmingDelete && (
         <DeleteParcelDialog

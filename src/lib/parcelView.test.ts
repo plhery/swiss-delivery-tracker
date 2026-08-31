@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parcelMatchesSearch, parcelMatchesStatus, viewParcels } from './parcelView';
+import {
+  parcelMatchesSearch,
+  parcelMatchesStatus,
+  sortArchivedParcels,
+  viewParcels,
+} from './parcelView';
 import type { ParcelWithEvents, Stage } from '../types';
 
 const NOW = new Date(2026, 7, 5, 12).getTime();
@@ -66,5 +71,21 @@ describe('parcel view', () => {
     expect(viewParcels([swiss, ups, delivered], {
       query: 'coffee', status: 'all', carrier: 'swiss-post', sort: 'newest', now: NOW,
     }).map((item) => item.id)).toEqual(['long-name', 'past']);
+  });
+
+  it('orders archived parcels by their latest completion, newest first', () => {
+    const olderDelivery = {
+      ...parcel('older', 'delivered'),
+      archivedAt: '2026-08-31T12:00:00Z',
+    };
+    olderDelivery.events[0].occurredAt = '2026-08-20T08:00:00Z';
+    const newerDelivery = {
+      ...parcel('newer', 'delivered'),
+      archivedAt: '2026-08-21T12:00:00Z',
+    };
+    newerDelivery.events[0].occurredAt = '2026-08-30T08:00:00Z';
+
+    expect(sortArchivedParcels([olderDelivery, newerDelivery]).map(({ id }) => id))
+      .toEqual(['newer', 'older']);
   });
 });

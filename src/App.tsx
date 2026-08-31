@@ -19,6 +19,7 @@ import {
 } from './lib/parcelPriority';
 import {
   parcelComparator,
+  sortArchivedParcels,
   viewParcels,
   type ParcelSort,
   type ParcelStatusFilter,
@@ -239,8 +240,14 @@ export default function App({
     [visibleParcels],
   );
   const archivedParcels = useMemo(
-    () => visibleParcels.filter((parcel) => Boolean(parcel.archivedAt)),
+    () => sortArchivedParcels(
+      visibleParcels.filter((parcel) => Boolean(parcel.archivedAt)),
+    ),
     [visibleParcels],
+  );
+  const deliveredTotalCount = useMemo(
+    () => parcels.filter((parcel) => isDelivered(parcel.events)).length,
+    [parcels],
   );
   const lastDpdPostcode = useMemo(
     () => [...parcels]
@@ -316,57 +323,64 @@ export default function App({
       <header className="app__header">
         <div className="app__masthead">
           <div className="app__brand">
-            <svg className="app__brand-mark" aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 22V12" />
-              <path d="m16 17 2 2 4-4" />
-              <path d="M21 11.127V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l1.32-.753" />
-              <path d="M3.29 7 12 12l8.71-5" />
-              <path d="m7.5 4.27 8.997 5.148" />
-            </svg>
-            <div>
-              <p className="app__eyebrow">{t('app.eyebrow')}</p>
-              <h1 className="app__title">{t('app.title')}</h1>
-            </div>
+            <span className="app__brand-mark" aria-hidden="true">P</span>
+            <h1 className="app__title">{t('app.title')}</h1>
           </div>
-          <div className="app__header-actions">
-            {(!accountEmail || !onSignOut) && (
-              <LanguageControl className="language-control--header" />
-            )}
-            {mode === 'api' && <NotificationControl apiAuth={apiAuth} />}
+          <div className="app__header-cluster">
+            <div className="app__header-actions">
+              {(!accountEmail || !onSignOut) && (
+                <LanguageControl className="language-control--header" />
+              )}
+              {mode === 'api' && <NotificationControl apiAuth={apiAuth} />}
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={refreshing ? t('app.refreshing') : t('app.refresh')}
+                aria-busy={refreshing}
+                onClick={() => void refreshAll()}
+                disabled={refreshing}
+              >
+                <svg
+                  className={refreshing ? 'spin' : undefined}
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M19 8a7.5 7.5 0 1 0 .2 7.6M19 4v4h-4" />
+                </svg>
+              </button>
+              {accountEmail && onSignOut && (
+                <AccountMenu
+                  email={accountEmail}
+                  onExport={onExportAccount}
+                  onDelete={onDeleteAccount}
+                  onSignOut={onSignOut}
+                />
+              )}
+            </div>
             <button
               type="button"
-              className="icon-button"
-              aria-label={refreshing ? t('app.refreshing') : t('app.refresh')}
-              aria-busy={refreshing}
-              onClick={() => void refreshAll()}
-              disabled={refreshing}
+              className="app__add-button"
+              aria-label={t('app.addParcelAria')}
+              onClick={() => setAdding(true)}
             >
-              <svg
-                className={refreshing ? 'spin' : undefined}
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-              >
-                <path d="M19 8a7.5 7.5 0 1 0 .2 7.6M19 4v4h-4" />
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
               </svg>
+              <span>{t('app.addParcel')}</span>
             </button>
-            {accountEmail && onSignOut && (
-              <AccountMenu
-                email={accountEmail}
-                onExport={onExportAccount}
-                onDelete={onDeleteAccount}
-                onSignOut={onSignOut}
-              />
-            )}
           </div>
         </div>
         <div className="app__summary" aria-live="polite">
-          <div className="app__summary-count">
-            <strong>{loading ? '—' : activeCount}</strong>
-            <span>
-              {activeCount === 1 ? t('app.parcel.one') : t('app.parcel.many')}
-              <br />
-              {t('app.onTheWay')}
-            </span>
+          <div className="app__summary-overview">
+            <p className="app__summary-kicker">{t('app.eyebrow')}</p>
+            <div className="app__summary-count">
+              <strong>{loading ? '—' : activeCount}</strong>
+              <span>
+                {activeCount === 1 ? t('app.parcel.one') : t('app.parcel.many')}
+                <br />
+                {t('app.onTheWay')}
+              </span>
+            </div>
           </div>
           {nextParcel ? (
             <button
@@ -376,15 +390,30 @@ export default function App({
               aria-haspopup="dialog"
               onClick={() => openParcelDetail(nextParcel.id)}
             >
-              <span>{t('app.nextUp')}</span>
-              <strong>{nextParcel.label || t('common.parcel')}</strong>
-              <small>
-                {nextParcel.expectedDelivery
-                  ? localizedExpectedDelivery(nextParcel.expectedDelivery, t, languageTag)
-                  : t(parcelDisplayStatusKey(nextParcel))}
-              </small>
+              <span className="app__next-copy">
+                <span>{t('app.nextUp')}</span>
+                <strong>{nextParcel.label || t('common.parcel')}</strong>
+                <small>
+                  {nextParcel.expectedDelivery
+                    ? localizedExpectedDelivery(nextParcel.expectedDelivery, t, languageTag)
+                    : t(parcelDisplayStatusKey(nextParcel))}
+                </small>
+              </span>
+              <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m8 5 5 5-5 5" /></svg>
             </button>
           ) : summaryMessage ? <p className="app__subtitle">{summaryMessage}</p> : null}
+          {!loading && parcels.length > 0 && (
+            <div className="app__summary-stats">
+              <span>
+                <strong>{parcels.length}</strong>
+                {parcels.length === 1 ? t('app.parcel.one') : t('app.parcel.many')}
+              </span>
+              <span>
+                <strong>{deliveredTotalCount}</strong>
+                {t('stage.delivered')}
+              </span>
+            </div>
+          )}
         </div>
       </header>
 
@@ -634,20 +663,6 @@ export default function App({
         )}
         </div>
       </main>
-
-      <button
-        type="button"
-        className="fab"
-        aria-label={t('app.addParcelAria')}
-        onClick={() => setAdding(true)}
-      >
-        <span aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </span>
-        {t('app.addParcel')}
-      </button>
 
       {adding && (
         <AddParcelSheet

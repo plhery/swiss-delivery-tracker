@@ -33,6 +33,7 @@ export function Timeline({
           <li
             key={event.id}
             className={`timeline__item${isCurrent ? ' timeline__item--latest' : ''}`}
+            aria-current={isCurrent ? 'step' : undefined}
           >
             <span
               className={`timeline__dot timeline__dot--${meta.tone}`}
