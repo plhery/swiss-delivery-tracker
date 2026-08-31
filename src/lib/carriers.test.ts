@@ -140,7 +140,7 @@ describe('detectCarrier', () => {
   });
 
   it('recognises distinctive deep French carrier identifiers without guessing broad numbers', () => {
-    expect(detectCarrier('250803383035673')).toBe('dpd-fr');
+    expect(detectCarrier('250123456789012')).toBe('dpd-fr');
     expect(detectCarrier('CC200000000401')).toBe('relais-colis');
     expect(detectCarrierMatch('10594002378611')).toMatchObject({
       carrier: 'unknown',
@@ -152,7 +152,7 @@ describe('detectCarrier', () => {
       confidence: 'low',
       candidates: ['mondial-relay', 'heppner'],
     });
-    expect(detectCarrier('PRJV50T7DP')).toBe('c-chez-vous');
+    expect(detectCarrier('FGRC45BKLM')).toBe('c-chez-vous');
     expect(detectCarrier('ASE12345678')).toBe('asendia');
   });
 
@@ -236,17 +236,17 @@ describe('parseTrackingInput', () => {
     ['dhl', '1234567890'],
     ['ups', '1Z999AA10123456784'],
     ['fedex', '123456789012'],
-    ['gls-ch', '37463502621'],
+    ['gls-ch', '993990103198'],
     ['dpd', '01234567890123'],
-    ['dpd-fr', '250803383035673'],
+    ['dpd-fr', '250123456789012'],
     ['la-poste', '8G12345678901'],
     ['chronopost', '12345678901234Q'],
     ['gls-fr', '00AB12CD'],
     ['colis-prive', '99112233445575012'],
     ['geodis', '1G123GEODIS0'],
     ['colisweb', '87654321'],
-    ['c-chez-vous', 'PRJV50T7DP'],
-    ['ciblex', '99996007756925'],
+    ['c-chez-vous', 'FGRC45BKLM'],
+    ['ciblex', '12345678901234'],
     ['paack', 'PAACK12345'],
     ['asendia', 'ASE12345678'],
   ] as const)('round-trips a generated %s tracking link', (carrier, trackingNumber) => {

@@ -265,7 +265,7 @@ select public.create_owned_package(
 );
 
 select public.create_owned_package(
-  '250803383035673', 'DPD France parcel', 'dpd-fr', null, null
+  '250123456789012', 'DPD France parcel', 'dpd-fr', null, null
 );
 
 select public.create_owned_package(
@@ -301,7 +301,7 @@ select public.create_owned_package(
 );
 
 select public.create_owned_package(
-  '37463502621', 'GLS Switzerland parcel', 'gls-ch', null, '8000'
+  '993990103198', 'GLS Switzerland parcel', 'gls-ch', null, '8000'
 );
 
 select public.create_owned_package(
@@ -309,15 +309,15 @@ select public.create_owned_package(
 );
 
 select public.create_owned_package(
-  'PRJV50T7DP', 'C Chez Vous delivery', 'c-chez-vous', null, null
+  'FGRC45BKLM', 'C Chez Vous delivery', 'c-chez-vous', null, null
 );
 
 select public.create_owned_package(
-  '25461320', 'Heppner shipment', 'heppner', null, '92410'
+  '23456789', 'Heppner shipment', 'heppner', null, '75001'
 );
 
 select public.create_owned_package(
-  '99996007756925', 'Ciblex parcel', 'ciblex', null, null
+  '12345678901234', 'Ciblex parcel', 'ciblex', null, null
 );
 
 select public.create_owned_package(
@@ -383,7 +383,7 @@ begin
 
   if not exists (
     select 1 from public.packages
-    where tracking_number = '37463502621'
+    where tracking_number = '993990103198'
       and carrier = 'gls-ch'
       and dpd_postcode = '8000'
       and user_id = '10000000-0000-0000-0000-000000000001'
@@ -393,9 +393,9 @@ begin
 
   if not exists (
     select 1 from public.packages
-    where tracking_number = '25461320'
+    where tracking_number = '23456789'
       and carrier = 'heppner'
-      and dpd_postcode = '92410'
+      and dpd_postcode = '75001'
       and user_id = '10000000-0000-0000-0000-000000000001'
   ) then
     raise exception 'Heppner postcode was not stored for its owner';
@@ -425,7 +425,7 @@ begin
     from public.packages
     where user_id = '10000000-0000-0000-0000-000000000001'
       and (tracking_number, carrier) in (
-        ('250803383035673', 'dpd-fr'),
+        ('250123456789012', 'dpd-fr'),
         ('76434219', 'mondial-relay'),
         ('CC200000000401', 'relais-colis'),
         ('8G12345678901', 'la-poste'),
@@ -444,11 +444,11 @@ begin
     where user_id = '10000000-0000-0000-0000-000000000001'
       and (tracking_number, carrier) in (
         ('1234ABC789', 'swiss-post-cargo'),
-        ('37463502621', 'gls-ch'),
+        ('993990103198', 'gls-ch'),
         ('12345678', 'colisweb'),
-        ('PRJV50T7DP', 'c-chez-vous'),
-        ('25461320', 'heppner'),
-        ('99996007756925', 'ciblex'),
+        ('FGRC45BKLM', 'c-chez-vous'),
+        ('23456789', 'heppner'),
+        ('12345678901234', 'ciblex'),
         ('PAACK12345', 'paack'),
         ('ASE12345678', 'asendia')
       )
@@ -517,7 +517,7 @@ begin
 
   begin
     perform public.create_owned_package(
-      '37463502622', '', 'gls-ch', null, '800'
+      '993990103199', '', 'gls-ch', null, '800'
     );
     raise exception 'invalid GLS Switzerland postcode was accepted';
   exception when invalid_parameter_value then
@@ -526,7 +526,7 @@ begin
 
   begin
     perform public.create_owned_package(
-      '25461321', '', 'heppner', null, '924100'
+      '23456790', '', 'heppner', null, '750010'
     );
     raise exception 'invalid Heppner postcode was accepted';
   exception when invalid_parameter_value then

@@ -7,18 +7,16 @@ import {
   parseCiblexTrackingHtml,
 } from './ciblex';
 
-// Public historical tracking number indexed from Ciblex's official page:
-// https://secure.extranet.ciblex.fr/extranet/client/corps.php?colis=99996007756925&module=colis&source=extranet
-// The provider no longer retains its 2021/2022 events. This deterministic fixture
-// mirrors the official four-column response and uses the publicly quoted statuses.
-const PUBLIC_TRACKING_NUMBER = '99996007756925';
+// Fully synthetic identifier paired with a deterministic provider-shaped HTML
+// fixture. Ciblex does not publish a reusable demo shipment number.
+const TEST_TRACKING_NUMBER = '12345678901234';
 
 function trackingPage(options: {
   trackingNumber?: string;
   rows?: Array<[string, string, string, string]>;
   privateDetail?: string;
 } = {}): string {
-  const trackingNumber = options.trackingNumber ?? PUBLIC_TRACKING_NUMBER;
+  const trackingNumber = options.trackingNumber ?? TEST_TRACKING_NUMBER;
   const rows = options.rows ?? [
     ['30/12/2021', '05:29', 'Colis Livré', ''],
     ['30/12/2021', '05:24', 'Mis en livraison', 'Sausheim 68 (68)'],
@@ -41,38 +39,38 @@ function trackingPage(options: {
   </body></html>`;
 }
 
-function emptyTrackingPage(trackingNumber = PUBLIC_TRACKING_NUMBER): string {
+function emptyTrackingPage(trackingNumber = TEST_TRACKING_NUMBER): string {
   return trackingPage({ trackingNumber, rows: [] });
 }
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('Ciblex anonymous tracking input', () => {
-  it('accepts public fourteen-digit Ciblex barcodes and builds the official URL', () => {
-    expect(normalizeCiblexTrackingNumber('99 9960 0775 6925')).toBe(PUBLIC_TRACKING_NUMBER);
-    const url = new URL(ciblexTrackingUrl(PUBLIC_TRACKING_NUMBER));
+  it('accepts fourteen-digit Ciblex barcodes and builds the official URL', () => {
+    expect(normalizeCiblexTrackingNumber('12 3456 7890 1234')).toBe(TEST_TRACKING_NUMBER);
+    const url = new URL(ciblexTrackingUrl(TEST_TRACKING_NUMBER));
     expect(url.origin).toBe('https://secure.extranet.ciblex.fr');
     expect(url.pathname).toBe('/extranet/client/corps.php');
     expect(Object.fromEntries(url.searchParams)).toEqual({
       module: 'colis',
-      colis: PUBLIC_TRACKING_NUMBER,
+      colis: TEST_TRACKING_NUMBER,
     });
   });
 
   it('rejects unsupported lengths, non-ASCII input, and parameter injection', () => {
     for (const value of [
-      '9999600775692',
-      '999960077569250',
-      '9999600775692A',
-      '9999600775692É',
-      '99996007756925&module=admin',
+      '1234567890123',
+      '123456789012345',
+      '1234567890123A',
+      '1234567890123É',
+      '12345678901234&module=admin',
     ]) expect(() => normalizeCiblexTrackingNumber(value)).toThrow('exactly 14 digits');
   });
 });
 
 describe('Ciblex response normalization', () => {
-  it('normalizes the public provider-shaped history without retaining unrelated or unsafe fields', () => {
-    const result = parseCiblexTrackingHtml(trackingPage(), PUBLIC_TRACKING_NUMBER);
+  it('normalizes a provider-shaped history without retaining unrelated or unsafe fields', () => {
+    const result = parseCiblexTrackingHtml(trackingPage(), TEST_TRACKING_NUMBER);
 
     expect(result).toMatchObject({
       status: 'delivered',
@@ -114,7 +112,7 @@ describe('Ciblex response normalization', () => {
       ['02/05/2022', '09:00', 'Disponible au relais', 'VITROLLES 13 (13)'],
       ['01/05/2022', '09:00', 'Colis pris en charge', 'VITROLLES 13 (13)'],
       ['30/04/2022', '09:00', 'Statut provider nouveau', 'VITROLLES 13 (13)'],
-    ] }), PUBLIC_TRACKING_NUMBER);
+    ] }), TEST_TRACKING_NUMBER);
     expect(result).toMatchObject({
       status: 'exception',
       events: [
@@ -129,7 +127,7 @@ describe('Ciblex response normalization', () => {
   it('treats the provider empty-table wrong-number response as a clean 404', () => {
     let error: unknown;
     try {
-      parseCiblexTrackingHtml(emptyTrackingPage(), PUBLIC_TRACKING_NUMBER);
+      parseCiblexTrackingHtml(emptyTrackingPage(), TEST_TRACKING_NUMBER);
     } catch (caught) {
       error = caught;
     }
@@ -138,20 +136,20 @@ describe('Ciblex response normalization', () => {
       status: 404,
       message: 'Ciblex could not locate the shipment',
     });
-    expect(() => parseCiblexTrackingHtml('', PUBLIC_TRACKING_NUMBER))
+    expect(() => parseCiblexTrackingHtml('', TEST_TRACKING_NUMBER))
       .toThrow('empty tracking response');
   });
 
   it('rejects mismatched and malformed provider pages', () => {
     expect(() => parseCiblexTrackingHtml(
-      trackingPage({ trackingNumber: '01101471951111' }),
-      PUBLIC_TRACKING_NUMBER,
+      trackingPage({ trackingNumber: '99999999999999' }),
+      TEST_TRACKING_NUMBER,
     )).toThrow('different shipment');
-    expect(() => parseCiblexTrackingHtml('<html>generic page</html>', PUBLIC_TRACKING_NUMBER))
+    expect(() => parseCiblexTrackingHtml('<html>generic page</html>', TEST_TRACKING_NUMBER))
       .toThrow('shipment identifier');
     expect(() => parseCiblexTrackingHtml(
       '<html><p class="f_erreur">CODE BORDEREAU OBLIGATOIRE !</p></html>',
-      PUBLIC_TRACKING_NUMBER,
+      TEST_TRACKING_NUMBER,
     )).toThrow(CiblexTrackingError);
   });
 });
@@ -163,10 +161,10 @@ describe('Ciblex tracker', () => {
       { headers: { 'Content-Type': 'text/html; charset=UTF-8' } },
     ));
 
-    await expect(new CiblexTracker(1_000).fetch(PUBLIC_TRACKING_NUMBER))
+    await expect(new CiblexTracker(1_000).fetch(TEST_TRACKING_NUMBER))
       .resolves.toMatchObject({ status: 'delivered' });
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(String(fetcher.mock.calls[0]?.[0])).toBe(ciblexTrackingUrl(PUBLIC_TRACKING_NUMBER));
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(ciblexTrackingUrl(TEST_TRACKING_NUMBER));
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ cache: 'no-store', redirect: 'error' });
     expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get('Referer'))
       .toBe('https://ciblex.eu/suivi-colis-express/');

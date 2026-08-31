@@ -9,15 +9,16 @@ import {
   parsePaackTrackingResponse,
 } from './paack';
 
-// This historical real shipment and its timeline were posted publicly in a
-// customer-support thread. It is expired now; fixtures avoid all live calls.
-const PUBLIC_HISTORICAL_NUMBER = 'C24072005024499';
-const PUBLIC_HISTORICAL_POSTCODE = '46691';
+// Paack publishes this synthetic exchange order in its official Postman
+// examples: https://www.postman.com/paacklogistics/paack-apis/folder/1uuw6iw/orders-api
+// The response below is a fully synthetic provider-shaped fixture.
+const OFFICIAL_EXAMPLE_NUMBER = 'EXCHANGE000001D';
+const OFFICIAL_EXAMPLE_POSTCODE = '08006';
 
 function successRoute(overrides: Record<string, unknown> = {}): unknown {
   return {
     orderTrackData: {
-      external_id: PUBLIC_HISTORICAL_NUMBER,
+      external_id: OFFICIAL_EXAMPLE_NUMBER,
       order_id: 'PRIVATE INTERNAL ORDER',
       expected_delivery_ts: {
         start: '2024-07-28T08:00:00+02:00',
@@ -88,8 +89,8 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('Paack anonymous tracking request', () => {
   it('validates the order and 3- to 10-character destination postcode independently', () => {
-    expect(normalizePaackTrackingNumber(` ${PUBLIC_HISTORICAL_NUMBER.toLowerCase()} `))
-      .toBe(PUBLIC_HISTORICAL_NUMBER);
+    expect(normalizePaackTrackingNumber(` ${OFFICIAL_EXAMPLE_NUMBER.toLowerCase()} `))
+      .toBe(OFFICIAL_EXAMPLE_NUMBER);
     expect(normalizePaackPostcode(' 75 001 ')).toBe('75001');
     expect(normalizePaackPostcode('4445-027')).toBe('4445-027');
     expect(normalizePaackPostcode('1201')).toBe('1201');
@@ -121,20 +122,20 @@ describe('Paack anonymous tracking request', () => {
 
   it('builds the official two-factor query without allowing parameter injection', () => {
     const url = new URL(paackTrackingUrl(
-      PUBLIC_HISTORICAL_NUMBER,
-      PUBLIC_HISTORICAL_POSTCODE,
+      OFFICIAL_EXAMPLE_NUMBER,
+      OFFICIAL_EXAMPLE_POSTCODE,
     ));
     expect(url.origin).toBe('https://mydeliveries.paack.app');
     expect(url.pathname).toBe('/tracking/order');
-    expect(url.searchParams.get('tracking_number')).toBe(PUBLIC_HISTORICAL_NUMBER);
-    expect(url.searchParams.get('postal_code')).toBe(PUBLIC_HISTORICAL_POSTCODE);
+    expect(url.searchParams.get('tracking_number')).toBe(OFFICIAL_EXAMPLE_NUMBER);
+    expect(url.searchParams.get('postal_code')).toBe(OFFICIAL_EXAMPLE_POSTCODE);
     expect([...url.searchParams]).toHaveLength(2);
   });
 });
 
 describe('Paack response normalization', () => {
-  it('parses a sanitized historical real shape while excluding order and event variables', () => {
-    const result = parsePaackTrackingResponse(successRoute(), PUBLIC_HISTORICAL_NUMBER);
+  it('parses a provider-shaped fixture while excluding order and event variables', () => {
+    const result = parsePaackTrackingResponse(successRoute(), OFFICIAL_EXAMPLE_NUMBER);
 
     expect(result).toMatchObject({
       status: 'delivered',
@@ -172,7 +173,7 @@ describe('Paack response normalization', () => {
   });
 
   it('extracts the Remix loader response from provider HTML', () => {
-    expect(parsePaackTrackingHtml(trackingPage(), PUBLIC_HISTORICAL_NUMBER))
+    expect(parsePaackTrackingHtml(trackingPage(), OFFICIAL_EXAMPLE_NUMBER))
       .toMatchObject({ status: 'delivered', last_status_text: 'Delivered' });
   });
 
@@ -189,7 +190,7 @@ describe('Paack response normalization', () => {
         label: 'inProgress',
         time: '2024-07-28T12:05:00+02:00',
       },
-    }), PUBLIC_HISTORICAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(result).toMatchObject({
       status: 'out_for_delivery',
       expected_delivery: '2024-07-28',
@@ -208,7 +209,7 @@ describe('Paack response normalization', () => {
         id: 'not-delivered',
         label: 'notDelivered',
       },
-    }), PUBLIC_HISTORICAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(result).toMatchObject({
       status: 'exception',
       events: [{ stage: 'failed_attempt' }],
@@ -227,7 +228,7 @@ describe('Paack response normalization', () => {
         id: 'returnedToSender',
         label: 'returnedToSender',
       },
-    }), PUBLIC_HISTORICAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(returned).toMatchObject({
       status: 'exception',
       events: [{ stage: 'returned' }],
@@ -244,7 +245,7 @@ describe('Paack response normalization', () => {
         id: 'absent',
         label: 'absent',
       },
-    }), PUBLIC_HISTORICAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(absent).toMatchObject({
       status: 'exception',
       events: [{ stage: 'failed_attempt' }],
@@ -262,7 +263,7 @@ describe('Paack response normalization', () => {
           timeline: true,
         }],
         activeEvent: { id: identifier, label: identifier },
-      }), PUBLIC_HISTORICAL_NUMBER);
+      }), OFFICIAL_EXAMPLE_NUMBER);
       expect(result).toMatchObject({
         status: 'exception',
         events: [{ stage: 'failed_attempt' }],
@@ -282,7 +283,7 @@ describe('Paack response normalization', () => {
         id: 'returnedToSender',
         label: 'returnedToSender',
       },
-    }), PUBLIC_HISTORICAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(result).toMatchObject({
       status: 'exception',
       last_status_text: 'Shipment returned',
@@ -306,7 +307,7 @@ describe('Paack response normalization', () => {
         timeline: true,
       }],
       activeEvent: { id: label, label },
-    }), PUBLIC_HISTORICAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(result).toMatchObject({
       status,
       events: [{ stage }],
@@ -316,14 +317,14 @@ describe('Paack response normalization', () => {
 
   it('rejects mismatched or malformed success data and maps explicit not-found', () => {
     expect(() => parsePaackTrackingResponse(successRoute({
-      orderTrackData: { external_id: 'E24090600017810' },
-    }), PUBLIC_HISTORICAL_NUMBER)).toThrow('different shipment');
+      orderTrackData: { external_id: 'EXCHANGE000001R' },
+    }), OFFICIAL_EXAMPLE_NUMBER)).toThrow('different shipment');
     expect(() => parsePaackTrackingResponse({ orderTrackData: {
-      external_id: PUBLIC_HISTORICAL_NUMBER,
-    } }, PUBLIC_HISTORICAL_NUMBER)).toThrow('incomplete tracking details');
+      external_id: OFFICIAL_EXAMPLE_NUMBER,
+    } }, OFFICIAL_EXAMPLE_NUMBER)).toThrow('incomplete tracking details');
     expect(() => parsePaackTrackingHtml(
       '<main>Order not found. Incorrect order number or postal code.</main>',
-      PUBLIC_HISTORICAL_NUMBER,
+      OFFICIAL_EXAMPLE_NUMBER,
     )).toThrow(PaackTrackingError);
   });
 });
@@ -333,12 +334,12 @@ describe('Paack tracker', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(trackingPage()));
 
     await expect(new PaackTracker(1_000).fetch(
-      PUBLIC_HISTORICAL_NUMBER,
-      PUBLIC_HISTORICAL_POSTCODE,
+      OFFICIAL_EXAMPLE_NUMBER,
+      OFFICIAL_EXAMPLE_POSTCODE,
     )).resolves.toMatchObject({ status: 'delivered' });
     expect(fetcher.mock.calls[0]?.[0]).toBe(paackTrackingUrl(
-      PUBLIC_HISTORICAL_NUMBER,
-      PUBLIC_HISTORICAL_POSTCODE,
+      OFFICIAL_EXAMPLE_NUMBER,
+      OFFICIAL_EXAMPLE_POSTCODE,
     ));
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
       cache: 'no-store',

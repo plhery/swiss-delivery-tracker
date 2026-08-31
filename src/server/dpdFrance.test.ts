@@ -8,16 +8,12 @@ import {
   parseDPDFranceTrackingHtml,
 } from './dpdFrance';
 
-// Publicly posted by a merchant in a 2026 customer-service response:
-// https://fr.trustpilot.com/review/furnicher.com?page=6
-// The fixture keeps only the public shipment timeline; no mailbox or recipient
-// data is used. The return number is exposed with its outbound leg on DPD's
-// indexed public trace page:
-// https://trace.dpd.fr/trace-particuliers/10654000122441
-const PUBLIC_TRACKING_NUMBER = '250803383035673';
-const PUBLIC_RETURN_NUMBER = '10658000986984';
+// Fully synthetic identifiers paired with provider-shaped HTML. The live suite
+// verifies DPD France separately with a privacy-safe wrong-number canary.
+const TEST_TRACKING_NUMBER = '250123456789012';
+const TEST_RETURN_NUMBER = '10612345678901';
 
-function publicDeliveredFixture(trackingNumber = PUBLIC_TRACKING_NUMBER): string {
+function trackingFixture(trackingNumber = TEST_TRACKING_NUMBER): string {
   return `<!doctype html><html><body>
     <div id="iconsAller">
       <span class="infosTitle parcelNumberAller">Votre colis ${trackingNumber}</span>
@@ -56,19 +52,19 @@ afterEach(() => vi.restoreAllMocks());
 describe('DPD France tracking input', () => {
   it('accepts the official 12-to-15-digit formats and builds the public URL', () => {
     expect(normalizeDPDFranceTrackingNumber('1059 4002 3786 11')).toBe('10594002378611');
-    expect(normalizeDPDFranceTrackingNumber('250.803.383.035.673')).toBe(PUBLIC_TRACKING_NUMBER);
+    expect(normalizeDPDFranceTrackingNumber('250.123.456.789.012')).toBe(TEST_TRACKING_NUMBER);
     expect(normalizeDPDFranceTrackingNumber('012345678901')).toBe('012345678901');
-    expect(dpdFranceTrackingUrl(PUBLIC_TRACKING_NUMBER))
-      .toBe(`https://trace.dpd.fr/fr/trace/${PUBLIC_TRACKING_NUMBER}`);
+    expect(dpdFranceTrackingUrl(TEST_TRACKING_NUMBER))
+      .toBe(`https://trace.dpd.fr/fr/trace/${TEST_TRACKING_NUMBER}`);
   });
 
   it('rejects unsafe or non-France identifiers', () => {
     for (const value of [
-      '25080338303',
-      '2508033830356730',
-      '350803383035673',
-      '25080338303567A',
-      '250803383035673?admin=true',
+      '25012345678',
+      '2501234567890120',
+      '350123456789012',
+      '25012345678901A',
+      '250123456789012?admin=true',
     ]) {
       expect(() => normalizeDPDFranceTrackingNumber(value)).toThrow('12 to 15 digits');
     }
@@ -76,8 +72,8 @@ describe('DPD France tracking input', () => {
 });
 
 describe('DPD France rendered tracking', () => {
-  it('parses a real public shipment fixture and excludes private page sections', () => {
-    const result = parseDPDFranceTrackingHtml(publicDeliveredFixture(), PUBLIC_TRACKING_NUMBER);
+  it('parses a provider-shaped fixture and excludes private page sections', () => {
+    const result = parseDPDFranceTrackingHtml(trackingFixture(), TEST_TRACKING_NUMBER);
 
     expect(result).toMatchObject({
       status: 'exception',
@@ -127,52 +123,52 @@ describe('DPD France rendered tracking', () => {
   it('rejects browser challenges, unknown shipments, and mismatched responses', () => {
     expect(() => parseDPDFranceTrackingHtml(
       '<title>Just a moment...</title><p>Performing security verification</p>',
-      PUBLIC_TRACKING_NUMBER,
+      TEST_TRACKING_NUMBER,
     )).toThrow(DPDFranceChallengeError);
     expect(() => parseDPDFranceTrackingHtml(
       '<p>Nous ne sommes pas en mesure de retrouver le numéro de colis recherché.</p>',
-      PUBLIC_TRACKING_NUMBER,
+      TEST_TRACKING_NUMBER,
     )).toThrow(DPDFranceTrackingError);
     expect(() => parseDPDFranceTrackingHtml(
-      publicDeliveredFixture('250803383035649'),
-      PUBLIC_TRACKING_NUMBER,
+      trackingFixture('250123456789099'),
+      TEST_TRACKING_NUMBER,
     )).toThrow('different shipment');
   });
 
   it('selects the requested return leg without mixing outbound events', () => {
     const html = `<!doctype html><html><body>
-      <span class="parcelNumberAller">Votre colis 10654000122441</span>
-      <span class="parcelNumberRetour">Votre colis ${PUBLIC_RETURN_NUMBER}</span>
-      <div id="infos1"><ul class="tableInfosAR"><li><strong>N° colis</strong></li><li class="tdInfos">10654000122441</li></ul></div>
-      <div id="infos2"><ul class="tableInfosAR"><li><strong>N° colis</strong></li><li class="tdInfos">${PUBLIC_RETURN_NUMBER}</li></ul></div>
+      <span class="parcelNumberAller">Votre colis 10612345678900</span>
+      <span class="parcelNumberRetour">Votre colis ${TEST_RETURN_NUMBER}</span>
+      <div id="infos1"><ul class="tableInfosAR"><li><strong>N° colis</strong></li><li class="tdInfos">10612345678900</li></ul></div>
+      <div id="infos2"><ul class="tableInfosAR"><li><strong>N° colis</strong></li><li class="tdInfos">${TEST_RETURN_NUMBER}</li></ul></div>
       <table id="tableTrace">
         <tr class="tabTraceColisAller"><td>18/11/2024</td><td>12:20</td><td>Votre colis est livré</td><td>Outbound location</td></tr>
         <tr class="tabTraceColisRetour"><td>19/11/2024</td><td>09:01</td><td>Votre colis est en transit dans notre réseau</td><td>Return location</td></tr>
       </table>
     </body></html>`;
 
-    expect(parseDPDFranceTrackingHtml(html, PUBLIC_RETURN_NUMBER)).toMatchObject({
+    expect(parseDPDFranceTrackingHtml(html, TEST_RETURN_NUMBER)).toMatchObject({
       status: 'in_transit',
       events: [{ location: 'Return location', stage: 'in_transit' }],
     });
-    expect(JSON.stringify(parseDPDFranceTrackingHtml(html, PUBLIC_RETURN_NUMBER)))
+    expect(JSON.stringify(parseDPDFranceTrackingHtml(html, TEST_RETURN_NUMBER)))
       .not.toContain('Outbound location');
   });
 
   it('uses direct HTTP when Cloudflare permits it', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
-      publicDeliveredFixture(),
+      trackingFixture(),
       { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     ));
 
-    await expect(new DPDFranceTracker({ timeoutMs: 2_000 }).fetch(PUBLIC_TRACKING_NUMBER))
+    await expect(new DPDFranceTracker({ timeoutMs: 2_000 }).fetch(TEST_TRACKING_NUMBER))
       .resolves.toMatchObject({
         status: 'exception',
-        tracking_url: dpdFranceTrackingUrl(PUBLIC_TRACKING_NUMBER),
+        tracking_url: dpdFranceTrackingUrl(TEST_TRACKING_NUMBER),
         tracking_source: 'rendered-page',
       });
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(String(fetcher.mock.calls[0]![0])).toBe(dpdFranceTrackingUrl(PUBLIC_TRACKING_NUMBER));
+    expect(String(fetcher.mock.calls[0]![0])).toBe(dpdFranceTrackingUrl(TEST_TRACKING_NUMBER));
     expect(fetcher.mock.calls[0]![1]).toMatchObject({
       cache: 'no-store',
       redirect: 'follow',
@@ -189,20 +185,20 @@ describe('DPD France rendered tracking', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({
         tier: 3,
         statusCode: 200,
-        html: publicDeliveredFixture(),
+        html: trackingFixture(),
         cookies: [],
       }), { headers: { 'Content-Type': 'application/json' } }));
 
     await expect(new DPDFranceTracker({
       timeoutMs: 2_000,
       trawlUrl: 'http://trawl.internal:8191/v1',
-    }).fetch(PUBLIC_TRACKING_NUMBER)).resolves.toMatchObject({ status: 'exception' });
+    }).fetch(TEST_TRACKING_NUMBER)).resolves.toMatchObject({ status: 'exception' });
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[1]![0])).toBe('http://trawl.internal:8191/scrape');
     const trawlRequest = JSON.parse(String(fetcher.mock.calls[1]![1]?.body));
     expect(trawlRequest).toEqual({
-      url: dpdFranceTrackingUrl(PUBLIC_TRACKING_NUMBER),
+      url: dpdFranceTrackingUrl(TEST_TRACKING_NUMBER),
       skipHttp: true,
       maxTier: 3,
       maxTimeout: 2_000,
@@ -216,6 +212,6 @@ describe('DPD France rendered tracking', () => {
     ));
 
     await expect(new DPDFranceTracker({ timeoutMs: 2_000, trawlUrl: '' })
-      .fetch(PUBLIC_TRACKING_NUMBER)).rejects.toThrow('configure FLARESOLVERR_URL');
+      .fetch(TEST_TRACKING_NUMBER)).rejects.toThrow('configure FLARESOLVERR_URL');
   });
 });

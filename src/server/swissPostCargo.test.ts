@@ -83,10 +83,10 @@ describe('Swiss Post Cargo tracking', () => {
   });
 
   it('turns the official null-data response into a clean unannounced error', () => {
-    expect(() => parseSwissPostCargoResponse({ Data: null }, '000000000000000'))
+    expect(() => parseSwissPostCargoResponse({ Data: null }, 'CODEXINVALID20260831'))
       .toThrow(SwissPostCargoTrackingError);
     try {
-      parseSwissPostCargoResponse({ Data: null }, '000000000000000');
+      parseSwissPostCargoResponse({ Data: null }, 'CODEXINVALID20260831');
     } catch (error) {
       expect(error).toMatchObject({ status: 404 });
     }

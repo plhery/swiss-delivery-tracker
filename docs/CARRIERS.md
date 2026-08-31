@@ -150,8 +150,11 @@ Cargo, Planzer and Quickpac, Cainiao, SunYou, Hermes, Spring GDS,
 PostLogistics, Dachser, UPS, GLS Switzerland, DPD Switzerland, DPD France,
 Mondial Relay, Relais Colis, La Poste and Chronopost, GLS France, Colis Privé,
 GEODIS, Colisweb, C Chez Vous, Heppner, Ciblex and Paack. It also checks
-publicly documented historical C Chez Vous, Heppner and Hermes shipments where
-stable examples are available.
+the still-resolving shipment number published by Swiss Post Cargo as its own
+example and Hermes's public delivered sample. Retired official examples from
+C Chez Vous, GLS Switzerland and Paack exercise the providers' current clean
+not-found paths. Customer-posted tracking credentials are deliberately excluded
+from committed fixtures, even when they remain publicly searchable.
 
 Several canaries intentionally have different expectations. Colisweb's wrong-number
 test asserts the observed empty upstream HTTP 500 is reported as an

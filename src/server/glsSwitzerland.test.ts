@@ -11,22 +11,24 @@ import {
   parseGLSSwitzerlandTrackingResponse,
 } from './glsSwitzerland';
 
-// Publicly posted by ManoMano in a 2026 customer-service response:
-// https://www.trustpilot.com/review/manomano.es?b=MTYxNzA4MzM1MjAwMHw2MDYyYmJkOGY4NWQ3NTA4NzAzZDA4ZDM
-// GLS's official rstt029 endpoint resolved that public Track ID to the numeric
-// parcel number below on 2026-08-30. The fixture is the exact privacy-safe
-// overview shape returned by GLS; it contains no recipient data.
-const PUBLIC_TRACK_ID = 'Z79RDTST';
-const PUBLIC_PARCEL_NUMBER = '37463502621';
+// Intentional test identifiers from official documentation. Swiss Post's GLS
+// guide publishes parcel 993990103198 alongside fictional “Test Entreprise”
+// data, while GLS ShipIT publishes YZ8YO11K as a Track ID example:
+// https://www.post.ch/-/media/post/gk/dokumente/anleitung-pakete-gls.pdf
+// https://gls-shipit.gls-group.eu/webservices/5_0_15/doxygen/WS-REST-API/rest_tracking.html
+// The delivered payload below is fully synthetic and exercises only the public
+// provider shape; neither official example currently has retained live history.
+const OFFICIAL_TEST_TRACK_ID = 'YZ8YO11K';
+const OFFICIAL_TEST_PARCEL_NUMBER = '993990103198';
 const WRONG_PARCEL_NUMBER = '88888888888';
 const FIXED_MILLIS = 1_788_120_000_000;
 
-function publicDeliveredOverview() {
+function deliveredOverviewFixture() {
   return {
     tuStatus: [{
       postalCode: '',
       emailNotificationCard: false,
-      tuNo: PUBLIC_PARCEL_NUMBER,
+      tuNo: OFFICIAL_TEST_PARCEL_NUMBER,
       progressBar: {
         level: 100,
         statusBar: [
@@ -53,7 +55,7 @@ function publicDeliveredOverview() {
   };
 }
 
-function detailedFixture(parcelNumber = PUBLIC_PARCEL_NUMBER) {
+function detailedFixture(parcelNumber = OFFICIAL_TEST_PARCEL_NUMBER) {
   return {
     tuNo: parcelNumber,
     progressBar: {
@@ -104,31 +106,35 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('GLS Switzerland tracking input', () => {
   it('accepts official parcel and Track ID forms and builds public URLs', () => {
-    expect(normalizeGLSSwitzerlandTrackingNumber('z79r-dt.st')).toBe(PUBLIC_TRACK_ID);
-    expect(normalizeGLSSwitzerlandTrackingNumber('37 463 502 621')).toBe(PUBLIC_PARCEL_NUMBER);
+    expect(normalizeGLSSwitzerlandTrackingNumber('yz8y-o1.1k')).toBe(OFFICIAL_TEST_TRACK_ID);
+    expect(normalizeGLSSwitzerlandTrackingNumber('99 399 010 3198'))
+      .toBe(OFFICIAL_TEST_PARCEL_NUMBER);
     expect(normalizeGLSSwitzerlandPostcode(' 8000 ')).toBe('8000');
     expect(normalizeGLSSwitzerlandPostcode(' 0800 ')).toBe('0800');
-    expect(glsSwitzerlandTrackingUrl(PUBLIC_TRACK_ID)).toBe(
-      `https://gls-group.eu/EU/en/parcel-tracking?match=${PUBLIC_TRACK_ID}`,
+    expect(glsSwitzerlandTrackingUrl(OFFICIAL_TEST_TRACK_ID)).toBe(
+      `https://gls-group.eu/EU/en/parcel-tracking?match=${OFFICIAL_TEST_TRACK_ID}`,
     );
 
-    const overview = new URL(glsSwitzerlandOverviewApiUrl(PUBLIC_PARCEL_NUMBER, FIXED_MILLIS));
+    const overview = new URL(glsSwitzerlandOverviewApiUrl(
+      OFFICIAL_TEST_PARCEL_NUMBER,
+      FIXED_MILLIS,
+    ));
     expect(overview.pathname).toBe('/app/service/open/rest/GROUP/en/rstt029');
     expect(Object.fromEntries(overview.searchParams)).toEqual({
-      match: PUBLIC_PARCEL_NUMBER,
+      match: OFFICIAL_TEST_PARCEL_NUMBER,
       type: '',
       caller: 'witt002',
       millis: String(FIXED_MILLIS),
     });
 
     const detail = new URL(glsSwitzerlandDetailApiUrl(
-      PUBLIC_PARCEL_NUMBER,
+      OFFICIAL_TEST_PARCEL_NUMBER,
       '8000',
       FIXED_MILLIS,
       'CH01',
     ));
     expect(detail.pathname).toBe(
-      `/app/service/open/rest/GROUP/en/rstt028/${PUBLIC_PARCEL_NUMBER}`,
+      `/app/service/open/rest/GROUP/en/rstt028/${OFFICIAL_TEST_PARCEL_NUMBER}`,
     );
     expect(Object.fromEntries(detail.searchParams)).toEqual({
       caller: 'witt002',
@@ -145,8 +151,8 @@ describe('GLS Switzerland tracking input', () => {
       '12345678',
       'ABC123456',
       '1234567890',
-      'Z79RDT/S',
-      'Z79RDTST?x=1',
+      'YZ8YO1/1K',
+      'YZ8YO11K?x=1',
     ]) {
       expect(() => normalizeGLSSwitzerlandTrackingNumber(value)).toThrow(
         '8-character Track ID or an 11-to-14-digit parcel number',
@@ -159,9 +165,9 @@ describe('GLS Switzerland tracking input', () => {
 });
 
 describe('GLS Switzerland response normalization', () => {
-  it('parses a genuine public GLS response resolved by parcel number or Track ID', () => {
-    for (const identifier of [PUBLIC_PARCEL_NUMBER, PUBLIC_TRACK_ID]) {
-      expect(parseGLSSwitzerlandTrackingResponse(publicDeliveredOverview(), identifier)).toEqual({
+  it('parses a privacy-safe provider-shaped response for official test identifiers', () => {
+    for (const identifier of [OFFICIAL_TEST_PARCEL_NUMBER, OFFICIAL_TEST_TRACK_ID]) {
+      expect(parseGLSSwitzerlandTrackingResponse(deliveredOverviewFixture(), identifier)).toEqual({
         status: 'delivered',
         current_stage: 'delivered',
         last_status_text: 'The parcel has been delivered. For more information, please see the detailed shipment tracking below.',
@@ -176,7 +182,7 @@ describe('GLS Switzerland response normalization', () => {
   it('normalizes detailed history and excludes recipient, address, and reference data', () => {
     const result = parseGLSSwitzerlandTrackingResponse(
       detailedFixture(),
-      PUBLIC_PARCEL_NUMBER,
+      OFFICIAL_TEST_PARCEL_NUMBER,
     );
     expect(result).toMatchObject({
       status: 'delivered',
@@ -209,13 +215,16 @@ describe('GLS Switzerland response normalization', () => {
   });
 
   it('rejects malformed, empty, and mismatched responses', () => {
-    expect(() => parseGLSSwitzerlandTrackingResponse({}, PUBLIC_PARCEL_NUMBER))
+    expect(() => parseGLSSwitzerlandTrackingResponse({}, OFFICIAL_TEST_PARCEL_NUMBER))
       .toThrow('did not return tracking details');
-    expect(() => parseGLSSwitzerlandTrackingResponse({ tuStatus: [] }, PUBLIC_PARCEL_NUMBER))
+    expect(() => parseGLSSwitzerlandTrackingResponse(
+      { tuStatus: [] },
+      OFFICIAL_TEST_PARCEL_NUMBER,
+    ))
       .toThrow(GLSSwitzerlandTrackingError);
     expect(() => parseGLSSwitzerlandTrackingResponse(
-      detailedFixture('37463502699'),
-      PUBLIC_PARCEL_NUMBER,
+      detailedFixture('993990103199'),
+      OFFICIAL_TEST_PARCEL_NUMBER,
     )).toThrow('different shipment');
   });
 
@@ -234,7 +243,7 @@ describe('GLS Switzerland response normalization', () => {
 describe('GLS Switzerland tracker', () => {
   it('uses the anonymous overview and postcode-gated detail requests', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify(publicDeliveredOverview()), {
+      .mockResolvedValueOnce(new Response(JSON.stringify(deliveredOverviewFixture()), {
         headers: { 'Content-Type': 'application/json' },
       }))
       .mockResolvedValueOnce(new Response(JSON.stringify(detailedFixture()), {
@@ -242,16 +251,16 @@ describe('GLS Switzerland tracker', () => {
       }));
 
     await expect(new GLSSwitzerlandTracker(1_000, () => FIXED_MILLIS)
-      .fetch(PUBLIC_PARCEL_NUMBER, '8000')).resolves.toMatchObject({
+      .fetch(OFFICIAL_TEST_PARCEL_NUMBER, '8000')).resolves.toMatchObject({
       status: 'delivered',
       events: [{ stage: 'delivered' }, { stage: 'in_transit' }],
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toBe(
-      glsSwitzerlandOverviewApiUrl(PUBLIC_PARCEL_NUMBER, FIXED_MILLIS),
+      glsSwitzerlandOverviewApiUrl(OFFICIAL_TEST_PARCEL_NUMBER, FIXED_MILLIS),
     );
     expect(String(fetcher.mock.calls[1]?.[0])).toBe(
-      glsSwitzerlandDetailApiUrl(PUBLIC_PARCEL_NUMBER, '8000', FIXED_MILLIS),
+      glsSwitzerlandDetailApiUrl(OFFICIAL_TEST_PARCEL_NUMBER, '8000', FIXED_MILLIS),
     );
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
       cache: 'no-store',

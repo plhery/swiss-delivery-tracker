@@ -7,13 +7,14 @@ import {
   parseCChezVousTrackingHtml,
 } from './cChezVous';
 
-// Publicly posted by C Chez Vous in a LinkedIn customer interview. The captured
-// response below is deliberately sanitized and no live call runs in this suite.
-const PUBLIC_REAL_NUMBER = 'PRJV50T7DP';
+// C Chez Vous publishes this identifier as an example on its official tracking
+// page: https://www.cchezvous.fr/suivi-colis. The response below is a fully
+// synthetic provider-shaped fixture; no customer shipment data is retained.
+const OFFICIAL_EXAMPLE_NUMBER = 'FGRC45BKLM';
 
 function trackingPage(overrides: Record<string, unknown> = {}): string {
   const payload = {
-    package_number: PUBLIC_REAL_NUMBER,
+    package_number: OFFICIAL_EXAMPLE_NUMBER,
     shop_name: 'PRIVATE SHOP',
     parcels: [{
       parcelStep: 4,
@@ -41,8 +42,8 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('C Chez Vous combined tracking credential', () => {
   it('accepts order IDs and restores the official --postcode composite form', () => {
-    expect(normalizeCChezVousCredential(` ${PUBLIC_REAL_NUMBER.toLowerCase()} `))
-      .toBe(PUBLIC_REAL_NUMBER);
+    expect(normalizeCChezVousCredential(` ${OFFICIAL_EXAMPLE_NUMBER.toLowerCase()} `))
+      .toBe(OFFICIAL_EXAMPLE_NUMBER);
     expect(normalizeCChezVousCredential('4TZKO156790--59600')).toBe('4TZKO156790--59600');
     // The shared package normalizer removes punctuation before carrier dispatch.
     expect(normalizeCChezVousCredential('4TZKO15679059600')).toBe('4TZKO156790--59600');
@@ -50,26 +51,26 @@ describe('C Chez Vous combined tracking credential', () => {
     for (const value of [
       'SHORT',
       'ABCDEFGHIJ',
-      'PRJV50T7DP--59600',
+      'FGRC45BKLM--59600',
       '4TZKO156790--96000',
       '4TZKO156790--ABCDE',
       '4TZKO156790--5960',
-      'PRJV50T7DP?admin=true',
-      'PRJV50T7DÉ',
+      'FGRC45BKLM?admin=true',
+      'FGRC45BKLÉ',
     ]) expect(() => normalizeCChezVousCredential(value)).toThrow();
   });
 
   it('builds the official path without allowing path or query injection', () => {
-    expect(cChezVousTrackingUrl(PUBLIC_REAL_NUMBER))
-      .toBe(`https://www.cchezvous.fr/suivi-colis/${PUBLIC_REAL_NUMBER}`);
+    expect(cChezVousTrackingUrl(OFFICIAL_EXAMPLE_NUMBER))
+      .toBe(`https://www.cchezvous.fr/suivi-colis/${OFFICIAL_EXAMPLE_NUMBER}`);
     expect(cChezVousTrackingUrl('4TZKO15679059600'))
       .toBe('https://www.cchezvous.fr/suivi-colis/4TZKO156790--59600');
   });
 });
 
 describe('C Chez Vous response normalization', () => {
-  it('parses a sanitized real provider shape and excludes all recipient and merchant fields', () => {
-    const result = parseCChezVousTrackingHtml(trackingPage(), PUBLIC_REAL_NUMBER);
+  it('parses a provider-shaped fixture and excludes all recipient and merchant fields', () => {
+    const result = parseCChezVousTrackingHtml(trackingPage(), OFFICIAL_EXAMPLE_NUMBER);
 
     expect(result).toEqual({
       status: 'out_for_delivery',
@@ -99,7 +100,7 @@ describe('C Chez Vous response normalization', () => {
         { parcelStep: 5, date: '2024-01-02T07:00:00Z' },
         { parcelStep: 3, date: '2024-01-03T07:00:00Z' },
       ],
-    }), PUBLIC_REAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(result).toMatchObject({
       status: 'in_transit',
       expected_delivery: '2024-01-03',
@@ -108,22 +109,22 @@ describe('C Chez Vous response normalization', () => {
 
     const delivered = parseCChezVousTrackingHtml(trackingPage({
       parcels: [{ parcelStep: 5, date: '2024-01-02T07:00:00Z' }],
-    }), PUBLIC_REAL_NUMBER);
+    }), OFFICIAL_EXAMPLE_NUMBER);
     expect(delivered).toMatchObject({ status: 'delivered', expected_delivery: null });
   });
 
   it('rejects mismatched, not-found, and malformed pages', () => {
     expect(() => parseCChezVousTrackingHtml(
       trackingPage({ package_number: 'ZZZZZZZZZ0' }),
-      PUBLIC_REAL_NUMBER,
+      OFFICIAL_EXAMPLE_NUMBER,
     )).toThrow('different shipment');
     expect(() => parseCChezVousTrackingHtml(
       '<div class="alert">La commande est introuvable</div>',
-      PUBLIC_REAL_NUMBER,
+      OFFICIAL_EXAMPLE_NUMBER,
     )).toThrow(CChezVousTrackingError);
     expect(() => parseCChezVousTrackingHtml(
       '<html><body>Generic tracking page</body></html>',
-      PUBLIC_REAL_NUMBER,
+      OFFICIAL_EXAMPLE_NUMBER,
     )).toThrow('did not return tracking details');
   });
 });
@@ -132,9 +133,9 @@ describe('C Chez Vous tracker', () => {
   it('uses a bounded direct request and parses a matching page', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(trackingPage()));
 
-    await expect(new CChezVousTracker(1_000).fetch(PUBLIC_REAL_NUMBER))
+    await expect(new CChezVousTracker(1_000).fetch(OFFICIAL_EXAMPLE_NUMBER))
       .resolves.toMatchObject({ status: 'out_for_delivery' });
-    expect(fetcher.mock.calls[0]?.[0]).toBe(cChezVousTrackingUrl(PUBLIC_REAL_NUMBER));
+    expect(fetcher.mock.calls[0]?.[0]).toBe(cChezVousTrackingUrl(OFFICIAL_EXAMPLE_NUMBER));
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
       cache: 'no-store',
       redirect: 'manual',

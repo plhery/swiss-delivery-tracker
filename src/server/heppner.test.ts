@@ -11,15 +11,13 @@ import {
   parseHeppnerTrackingResponse,
 } from './heppner';
 
-// Public capability link published by the merchant in a verified-customer response:
-// https://www.avis-verifies.com/avis-clients/homifab.com?p=25gst
-// It remains provider-readable as of 2026-08-30. The fixture below retains only
-// provider status fields and adds conspicuous private data to prove it is discarded.
-const PUBLIC_TRACKING_NUMBER = '25461320';
-const PUBLIC_POSTCODE = '92410';
-const PUBLIC_CAPABILITY = 'MjU0NjEzMjAmOTI0MTAmRlI=';
+// Fully synthetic provider-shaped values. Live tests deliberately use only a
+// wrong-number canary because Heppner does not publish a reusable demo shipment.
+const TEST_TRACKING_NUMBER = '23456789';
+const TEST_POSTCODE = '75001';
+const TEST_CAPABILITY = 'MjM0NTY3ODkmNzUwMDEmRlI=';
 
-function trackingPayload(receipt: string | number = PUBLIC_TRACKING_NUMBER): unknown {
+function trackingPayload(receipt: string | number = TEST_TRACKING_NUMBER): unknown {
   return [{
     receipt,
     sender_name: 'PRIVATE SENDER',
@@ -68,63 +66,63 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('Heppner anonymous tracking input', () => {
   it('normalizes the current eight-digit form and infers France or Switzerland from postcode length', () => {
-    expect(normalizeHeppnerTrackingNumber('25 461 320')).toBe(PUBLIC_TRACKING_NUMBER);
-    expect(normalizeHeppnerCredential(PUBLIC_TRACKING_NUMBER, PUBLIC_POSTCODE)).toEqual({
-      trackingNumber: PUBLIC_TRACKING_NUMBER,
-      postcode: PUBLIC_POSTCODE,
+    expect(normalizeHeppnerTrackingNumber('23 456 789')).toBe(TEST_TRACKING_NUMBER);
+    expect(normalizeHeppnerCredential(TEST_TRACKING_NUMBER, TEST_POSTCODE)).toEqual({
+      trackingNumber: TEST_TRACKING_NUMBER,
+      postcode: TEST_POSTCODE,
       countryCode: 'FR',
     });
-    expect(normalizeHeppnerCredential(PUBLIC_TRACKING_NUMBER, '1201')).toEqual({
-      trackingNumber: PUBLIC_TRACKING_NUMBER,
+    expect(normalizeHeppnerCredential(TEST_TRACKING_NUMBER, '1201')).toEqual({
+      trackingNumber: TEST_TRACKING_NUMBER,
       postcode: '1201',
       countryCode: 'CH',
     });
   });
 
   it('rejects unsupported identifiers, postcodes, and parameter injection', () => {
-    for (const value of ['2546132', '254613200', '2546-1320', '2546132A', '25461320&admin=true']) {
+    for (const value of ['2345678', '234567890', '2345-6789', '2345678A', '23456789&admin=true']) {
       expect(() => normalizeHeppnerTrackingNumber(value)).toThrow('exactly 8 digits');
     }
     for (const postcode of ['750', '750010', '75A01', '75001&countryCode=CH']) {
-      expect(() => normalizeHeppnerCredential(PUBLIC_TRACKING_NUMBER, postcode))
+      expect(() => normalizeHeppnerCredential(TEST_TRACKING_NUMBER, postcode))
         .toThrow('delivery postcode');
     }
   });
 
   it('constructs the exact official search URL and verifies the returned capability', () => {
-    const search = new URL(heppnerSearchUrl(PUBLIC_TRACKING_NUMBER, PUBLIC_POSTCODE));
+    const search = new URL(heppnerSearchUrl(TEST_TRACKING_NUMBER, TEST_POSTCODE));
     expect(search.origin).toBe('https://myportal.heppner-group.com');
     expect(search.pathname).toBe('/api/recipient/search/expedition');
     expect(Object.fromEntries(search.searchParams)).toEqual({
-      zipCode: PUBLIC_POSTCODE,
-      receipt: PUBLIC_TRACKING_NUMBER,
+      zipCode: TEST_POSTCODE,
+      receipt: TEST_TRACKING_NUMBER,
       countryCode: 'FR',
     });
     expect(parseHeppnerCapability(
-      ` ${PUBLIC_CAPABILITY}\n`,
-      PUBLIC_TRACKING_NUMBER,
-      PUBLIC_POSTCODE,
-    )).toBe(PUBLIC_CAPABILITY);
-    expect(heppnerDetailUrl(PUBLIC_CAPABILITY)).toBe(
-      `https://myportal.heppner-group.com/api/recipient/search/detailexpedition?expedition=${encodeURIComponent(PUBLIC_CAPABILITY)}`,
+      ` ${TEST_CAPABILITY}\n`,
+      TEST_TRACKING_NUMBER,
+      TEST_POSTCODE,
+    )).toBe(TEST_CAPABILITY);
+    expect(heppnerDetailUrl(TEST_CAPABILITY)).toBe(
+      `https://myportal.heppner-group.com/api/recipient/search/detailexpedition?expedition=${encodeURIComponent(TEST_CAPABILITY)}`,
     );
-    expect(heppnerTrackingPageUrl(PUBLIC_CAPABILITY)).toBe(
-      `https://myportal.heppner-group.com/tracking/${encodeURIComponent(PUBLIC_CAPABILITY)}`,
+    expect(heppnerTrackingPageUrl(TEST_CAPABILITY)).toBe(
+      `https://myportal.heppner-group.com/tracking/${encodeURIComponent(TEST_CAPABILITY)}`,
     );
   });
 
   it('rejects capabilities for another shipment or malformed base64', () => {
-    const wrong = Buffer.from('99999999&92410&FR').toString('base64');
-    expect(() => parseHeppnerCapability(wrong, PUBLIC_TRACKING_NUMBER, PUBLIC_POSTCODE))
+    const wrong = Buffer.from('99999999&75001&FR').toString('base64');
+    expect(() => parseHeppnerCapability(wrong, TEST_TRACKING_NUMBER, TEST_POSTCODE))
       .toThrow('different shipment');
-    expect(() => parseHeppnerCapability('not-a-capability', PUBLIC_TRACKING_NUMBER, PUBLIC_POSTCODE))
+    expect(() => parseHeppnerCapability('not-a-capability', TEST_TRACKING_NUMBER, TEST_POSTCODE))
       .toThrow('invalid tracking capability');
   });
 });
 
 describe('Heppner response normalization', () => {
-  it('parses the sanitized real provider timeline and excludes shipment parties and credentials', () => {
-    const result = parseHeppnerTrackingResponse(trackingPayload(), PUBLIC_TRACKING_NUMBER);
+  it('parses a provider-shaped timeline and excludes shipment parties and credentials', () => {
+    const result = parseHeppnerTrackingResponse(trackingPayload(), TEST_TRACKING_NUMBER);
 
     expect(result).toMatchObject({
       status: 'exception',
@@ -177,40 +175,40 @@ describe('Heppner response normalization', () => {
   });
 
   it('rejects empty, malformed, mismatched, and incomplete payloads', () => {
-    expect(() => parseHeppnerTrackingResponse([], PUBLIC_TRACKING_NUMBER))
+    expect(() => parseHeppnerTrackingResponse([], TEST_TRACKING_NUMBER))
       .toThrow(HeppnerTrackingError);
-    expect(() => parseHeppnerTrackingResponse({}, PUBLIC_TRACKING_NUMBER))
+    expect(() => parseHeppnerTrackingResponse({}, TEST_TRACKING_NUMBER))
       .toThrow('invalid tracking response');
-    expect(() => parseHeppnerTrackingResponse(trackingPayload('99999999'), PUBLIC_TRACKING_NUMBER))
+    expect(() => parseHeppnerTrackingResponse(trackingPayload('99999999'), TEST_TRACKING_NUMBER))
       .toThrow('different shipment');
     expect(() => parseHeppnerTrackingResponse([{
-      receipt: PUBLIC_TRACKING_NUMBER,
+      receipt: TEST_TRACKING_NUMBER,
       events: [],
-    }], PUBLIC_TRACKING_NUMBER)).toThrow('tracking history');
+    }], TEST_TRACKING_NUMBER)).toThrow('tracking history');
   });
 });
 
 describe('Heppner tracker', () => {
   it('performs the bounded official search then detail requests', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
-    fetcher.mockResolvedValueOnce(new Response(PUBLIC_CAPABILITY, {
+    fetcher.mockResolvedValueOnce(new Response(TEST_CAPABILITY, {
       headers: { 'Content-Type': 'text/plain' },
     }));
     fetcher.mockResolvedValueOnce(new Response(JSON.stringify(trackingPayload()), {
       headers: { 'Content-Type': 'application/json' },
     }));
 
-    await expect(new HeppnerTracker(1_000).fetch(PUBLIC_TRACKING_NUMBER, PUBLIC_POSTCODE))
+    await expect(new HeppnerTracker(1_000).fetch(TEST_TRACKING_NUMBER, TEST_POSTCODE))
       .resolves.toMatchObject({ status: 'exception' });
 
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0]?.[0])).toBe(
-      heppnerSearchUrl(PUBLIC_TRACKING_NUMBER, PUBLIC_POSTCODE),
+      heppnerSearchUrl(TEST_TRACKING_NUMBER, TEST_POSTCODE),
     );
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ cache: 'no-store', redirect: 'error' });
-    expect(String(fetcher.mock.calls[1]?.[0])).toBe(heppnerDetailUrl(PUBLIC_CAPABILITY));
+    expect(String(fetcher.mock.calls[1]?.[0])).toBe(heppnerDetailUrl(TEST_CAPABILITY));
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get('Referer'))
-      .toBe(heppnerTrackingPageUrl(PUBLIC_CAPABILITY));
+      .toBe(heppnerTrackingPageUrl(TEST_CAPABILITY));
   });
 
   it('turns the official wrong-number response into a clean privacy-safe 404', async () => {

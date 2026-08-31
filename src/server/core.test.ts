@@ -302,7 +302,7 @@ describe('input validation', () => {
       dpdPostcode: '5965',
     })).toThrow('five-digit');
     expect(newPackageValues({
-      trackingNumber: '37463502621',
+      trackingNumber: '993990103198',
       label: 'GLS parcel',
       carrier: 'gls-ch',
       trackingUrl: '',
@@ -312,7 +312,7 @@ describe('input validation', () => {
       dpdPostcode: '8000',
     });
     expect(newPackageValues({
-      trackingNumber: '25461320',
+      trackingNumber: '23456789',
       label: 'Heppner shipment',
       carrier: 'heppner',
       trackingUrl: '',

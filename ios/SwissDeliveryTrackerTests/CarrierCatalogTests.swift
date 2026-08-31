@@ -8,9 +8,9 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.detect("1Z999AA10123456784").carrier, .ups)
         XCTAssertEqual(catalog.detect("443412345678901234").carrier, .quickpac)
         XCTAssertEqual(catalog.detect("RA123456785CH").carrier, .swissPost)
-        XCTAssertEqual(catalog.detect("250803383035673").carrier, .dpdFr)
+        XCTAssertEqual(catalog.detect("250123456789012").carrier, .dpdFr)
         XCTAssertEqual(catalog.detect("CC200000000401").carrier, .relaisColis)
-        XCTAssertEqual(catalog.detect("PRJV50T7DP").carrier, .cChezVous)
+        XCTAssertEqual(catalog.detect("FGRC45BKLM").carrier, .cChezVous)
         XCTAssertEqual(catalog.detect("ASE12345678").carrier, .asendia)
     }
 
@@ -77,18 +77,18 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertFalse(mondialRelay.accepts("8004"))
 
         let gls = try XCTUnwrap(
-            catalog.requirements(for: .glsCh, trackingNumber: "37463502621")
+            catalog.requirements(for: .glsCh, trackingNumber: "993990103198")
                 .first(where: { $0.field == .dpdPostcode })
         )
         XCTAssertTrue(gls.accepts("8000"))
         XCTAssertFalse(gls.accepts("75001"))
 
         let heppner = try XCTUnwrap(
-            catalog.requirements(for: .heppner, trackingNumber: "25461320")
+            catalog.requirements(for: .heppner, trackingNumber: "23456789")
                 .first(where: { $0.field == .dpdPostcode })
         )
         XCTAssertTrue(heppner.accepts("1201"))
-        XCTAssertTrue(heppner.accepts("92410"))
+        XCTAssertTrue(heppner.accepts("75001"))
 
         let paack = try XCTUnwrap(
             catalog.requirements(for: .paack, trackingNumber: "PAACK12345")

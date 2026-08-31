@@ -6,7 +6,7 @@ describe('postcode API contract', () => {
     const pattern = new RegExp(
       contract.components.schemas.CreatePackageRequest.properties.dpdPostcode.pattern,
     );
-    for (const value of ['8000', '92410', '75 001', 'SW1A 1AA', '4445-027']) {
+    for (const value of ['8000', '75001', '75 001', 'SW1A 1AA', '4445-027']) {
       expect(pattern.test(value), value).toBe(true);
     }
     for (const value of ['ABC', '12--345', '12 - 345', '75001_']) {
@@ -18,7 +18,7 @@ describe('postcode API contract', () => {
     const pattern = new RegExp(
       contract.components.schemas.PackageRow.properties.dpd_postcode.pattern,
     );
-    for (const value of ['8000', '92410', 'SW1A1AA', '4445-027']) {
+    for (const value of ['8000', '75001', 'SW1A1AA', '4445-027']) {
       expect(pattern.test(value), value).toBe(true);
     }
     for (const value of ['SW1A 1AA', 'abc1', '12--345']) {
