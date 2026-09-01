@@ -12,6 +12,7 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.detect("CC200000000401").carrier, .relaisColis)
         XCTAssertEqual(catalog.detect("FGRC45BKLM").carrier, .cChezVous)
         XCTAssertEqual(catalog.detect("ASE12345678").carrier, .asendia)
+        XCTAssertEqual(catalog.detect("FR1234567890").carrier, .amazonLogistics)
     }
 
     func testKeepsAmbiguousCarrierForConfirmation() {
@@ -47,6 +48,7 @@ final class CarrierCatalogTests: XCTestCase {
             .laPoste, .chronopost, .glsFr, .colisPrive, .geodis,
             .swissPostCargo, .glsCh, .colisweb, .cChezVous,
             .heppner, .ciblex, .paack,
+            .amazonLogistics,
         ] {
             XCTAssertTrue(catalog.selectableCarriers.contains(carrier), carrier.rawValue)
             XCTAssertTrue(catalog.tracksAutomatically(carrier), carrier.rawValue)

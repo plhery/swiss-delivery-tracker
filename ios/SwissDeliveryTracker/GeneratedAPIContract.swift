@@ -25,6 +25,7 @@ enum CarrierID: String, Codable, CaseIterable, Hashable, Sendable, Identifiable 
     case dachser
     case dhl
     case ups
+    case amazonLogistics = "amazon-logistics"
     case fedex
     case glsCh = "gls-ch"
     case dpd

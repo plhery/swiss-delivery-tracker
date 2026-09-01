@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AmazonLogisticsTracker } from './amazonLogistics';
 import { secondsUntilNextSync, workerPollDelay } from './background';
 import { normalizeCarrierResult, type CarrierResult } from './carrierResult';
 import { ColisPriveTracker, ColisPriveTrackingError } from './colisPrive';
@@ -64,6 +65,8 @@ describe('regional carrier dispatch', () => {
       .mockResolvedValue({ status: 'in_transit' });
     const paack = vi.spyOn(PaackTracker.prototype, 'fetch')
       .mockResolvedValue({ status: 'in_transit' });
+    const amazonLogistics = vi.spyOn(AmazonLogisticsTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
     const adapter = new CarrierTrackingAdapter();
 
     await adapter.fetch('la-poste', '8G12345678901', null);
@@ -81,6 +84,7 @@ describe('regional carrier dispatch', () => {
     await adapter.fetch('heppner', '23456789', null, '75001');
     await adapter.fetch('ciblex', '12345678901234', null);
     await adapter.fetch('paack', 'ORDER1234', null, '75001');
+    await adapter.fetch('amazon-logistics', 'FR1234567890', null);
 
     expect(laPoste).toHaveBeenNthCalledWith(1, '8G12345678901');
     expect(laPoste).toHaveBeenNthCalledWith(2, 'PZ123456785JF');
@@ -97,6 +101,7 @@ describe('regional carrier dispatch', () => {
     expect(heppner).toHaveBeenCalledWith('23456789', '75001');
     expect(ciblex).toHaveBeenCalledWith('12345678901234');
     expect(paack).toHaveBeenCalledWith('ORDER1234', '75001');
+    expect(amazonLogistics).toHaveBeenCalledWith('FR1234567890');
   });
 });
 

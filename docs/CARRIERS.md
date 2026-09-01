@@ -17,6 +17,7 @@ Delivery Tracker can refresh these French, Swiss and international carriers auto
 | DPD Switzerland | Automatic through the myDPD guest flow. The parcel's delivery postcode unlocks verified scans and delivery windows. |
 | GLS Switzerland | Automatic through GLS's public tracking services. The four-digit recipient postcode unlocks the detailed event history. |
 | UPS | Automatic. Direct HTTP is tried first; a private TRAWL instance can handle browser challenges. |
+| Amazon Shipping France | Automatic through Amazon Shipping's anonymous recipient tracker for `FR` followed by ten digits. |
 | DPD France | Automatic through the recipient trace page. Direct HTTP is tried first; a private TRAWL instance is required when Cloudflare challenges it. |
 | Mondial Relay | Automatic through the recipient web flow. Requires the five-digit recipient postcode and can use private TRAWL for Cloudflare. |
 | Relais Colis | Automatic through the public recipient form and its CSRF-bound session. |
@@ -44,7 +45,7 @@ UPU S10 identifiers must pass their check digit before automatic detection.
 
 ## French carrier handling and privacy
 
-DPD France, Mondial Relay, Relais Colis, La Poste / Colissimo, Chronopost, GLS
+Amazon Shipping France, DPD France, Mondial Relay, Relais Colis, La Poste / Colissimo, Chronopost, GLS
 France, Colis Privé, GEODIS, Colisweb, C Chez Vous, Heppner, Ciblex and Paack
 are visible in the manual carrier picker on the web and in both iPhone
 interfaces. Recognized tracking links and distinctive number formats can still
@@ -108,6 +109,14 @@ checks, and privacy-safe projections; failures remain visible for retry. La
 Poste's supported Okapi-key API is the preferred future production path when
 deployment credentials are available.
 
+Amazon Shipping's public France tracker exposes the shipment summary and event
+history used by its recipient page. The adapter retains only status, dates,
+event codes and coarse city/region/country locations. It discards recipient,
+full-address, postcode, shipper and proof-of-delivery fields. Amazon does not
+echo the requested tracking ID in this response, so the adapter validates the
+request format and response structure but cannot perform an echoed identifier
+check. Detailed history is normally retained for only 45 days.
+
 ## Swiss carrier handling and privacy
 
 Swiss Post Cargo uses the anonymous endpoint called by its official public
@@ -147,14 +156,17 @@ npm run test:carriers:live
 The opt-in suite sends validly shaped, deliberately wrong shipment numbers
 through every automatic adapter family. That includes Swiss Post, Swiss Post
 Cargo, Planzer and Quickpac, Cainiao, SunYou, Hermes, Spring GDS,
-PostLogistics, Dachser, UPS, GLS Switzerland, DPD Switzerland, DPD France,
+PostLogistics, Dachser, UPS, Amazon Shipping France, GLS Switzerland, DPD Switzerland, DPD France,
 Mondial Relay, Relais Colis, La Poste and Chronopost, GLS France, Colis Privé,
 GEODIS, Colisweb, C Chez Vous, Heppner, Ciblex and Paack. It also checks
 the still-resolving shipment number published by Swiss Post Cargo as its own
 example and Hermes's public delivered sample. Retired official examples from
 C Chez Vous, GLS Switzerland and Paack exercise the providers' current clean
 not-found paths. Customer-posted tracking credentials are deliberately excluded
-from committed fixtures, even when they remain publicly searchable.
+from committed fixtures, even when they remain publicly searchable. Amazon's
+live suite always tests the official wrong-number response; set
+`AMAZON_LOGISTICS_LIVE_TRACKING_NUMBER` to additionally exercise a real shipment
+without committing that tracking credential.
 
 Several canaries intentionally have different expectations. Colisweb's wrong-number
 test asserts the observed empty upstream HTTP 500 is reported as an

@@ -11,6 +11,7 @@ import {
   carrierTimezone,
   supportsSwissPostHandoff,
 } from './carriers';
+import { AmazonLogisticsTracker } from './amazonLogistics';
 import { ColisPriveTracker } from './colisPrive';
 import { ColiswebTracker } from './colisweb';
 import { CChezVousTracker } from './cChezVous';
@@ -76,6 +77,7 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
     readonly heppner = new HeppnerTracker(),
     readonly ciblex = new CiblexTracker(),
     readonly paack = new PaackTracker(),
+    readonly amazonLogistics = new AmazonLogisticsTracker(),
   ) {}
 
   async fetch(
@@ -125,6 +127,8 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
       result = await this.ciblex.fetch(trackingNumber);
     } else if (adapter === 'paack') {
       result = await this.paack.fetch(trackingNumber, dpdPostcode ?? '');
+    } else if (adapter === 'amazon-logistics') {
+      result = await this.amazonLogistics.fetch(trackingNumber);
     } else if (adapter === 'planzer' && trackingUrl) {
       result = await this.planzerShared.fetch(trackingNumber, trackingUrl);
     } else {

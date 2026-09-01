@@ -339,6 +339,32 @@ export const CARRIER_CAPABILITIES = {
       }
     ]
   },
+  "amazon-logistics": {
+    "displayName": "Amazon Shipping",
+    "color": "#ff9900",
+    "selectable": true,
+    "timezone": "Europe/Paris",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "amazon-logistics"
+    },
+    "canaryUrl": "https://track.amazon.fr/",
+    "trackingUrlTemplate": "https://track.amazon.fr/tracking/{trackingNumber}",
+    "linkRules": [
+      {
+        "domains": [
+          "track.amazon.fr"
+        ],
+        "path": "^/tracking/([^/?#]+)/?$"
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^FR\\d{10}$",
+        "confidence": "high"
+      }
+    ]
+  },
   "fedex": {
     "displayName": "FedEx",
     "color": "#4d148c",
@@ -994,6 +1020,7 @@ export const CARRIER_IDS = [
   "dachser",
   "dhl",
   "ups",
+  "amazon-logistics",
   "fedex",
   "gls-ch",
   "dpd",

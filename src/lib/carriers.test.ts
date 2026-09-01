@@ -166,6 +166,11 @@ describe('detectCarrier', () => {
     expect(detectCarrier('1Z999AA10123456784')).toBe('ups');
   });
 
+  it('recognises Amazon Shipping France identifiers', () => {
+    expect(detectCarrier('FR1234567890')).toBe('amazon-logistics');
+    expect(detectCarrier('fr 1234-567890')).toBe('amazon-logistics');
+  });
+
   it('recognises DHL waybills and parcel codes', () => {
     expect(detectCarrierMatch('1234567890')).toMatchObject({
       carrier: 'unknown',
@@ -235,6 +240,7 @@ describe('parseTrackingInput', () => {
     ['spring-gds', 'LX123456789DE'],
     ['dhl', '1234567890'],
     ['ups', '1Z999AA10123456784'],
+    ['amazon-logistics', 'FR1234567890'],
     ['fedex', '123456789012'],
     ['gls-ch', '993990103198'],
     ['dpd', '01234567890123'],
