@@ -15,6 +15,7 @@ describe('public carrier catalog route', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toContain('max-age=300');
+    expect(response.headers.get('cache-control')).not.toContain('no-store');
     const etag = response.headers.get('etag');
     expect(etag).toMatch(/^"[0-9a-f]{64}"$/);
     const body = await response.json() as {

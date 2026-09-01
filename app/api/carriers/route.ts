@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import contract from '../../../contracts/openapi.json';
-import { apiRoute, json } from '../../../src/server/api';
+import { apiRoute } from '../../../src/server/api';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -25,10 +25,13 @@ export const GET = apiRoute(
     if (matchesETag(request.headers.get('if-none-match'))) {
       return new Response(null, { status: 304, headers: cacheHeaders });
     }
-    return json({
-      version: `sha256-${digest}`,
-      'x-carriers': carriers,
-    }, 200, cacheHeaders);
+    return Response.json(
+      {
+        version: `sha256-${digest}`,
+        'x-carriers': carriers,
+      },
+      { headers: cacheHeaders },
+    );
   },
   { authenticated: false, loadService: false },
 );
