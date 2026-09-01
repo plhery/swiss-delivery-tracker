@@ -4051,6 +4051,7 @@ body {
 
 @media (max-width: 699px) {
   .app {
+    overflow-x: clip;
     padding: calc(12px + env(safe-area-inset-top)) 14px calc(102px + env(safe-area-inset-bottom));
   }
 
