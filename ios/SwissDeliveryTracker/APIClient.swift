@@ -3,7 +3,7 @@ import UIKit
 
 enum DeliveryAPIError: LocalizedError {
     case authenticationExpired
-    case duplicateTracking
+    case duplicateTracking(UUID)
     case invalidResponse
     case labelTooLong
     case notificationsDenied
@@ -55,6 +55,23 @@ final class DeliveryAPIClient {
             "/api/packages/\(id.uuidString)",
             method: "PATCH",
             body: RenamePackageRequest(label: label)
+        )
+    }
+
+    func changeCarrier(
+        id: UUID,
+        carrier: CarrierID,
+        trackingURL: String?,
+        dpdPostcode: String?
+    ) async throws -> ChangePackageCarrierResponse {
+        try await request(
+            "/api/packages/\(id.uuidString)/carrier",
+            method: "PATCH",
+            body: ChangePackageCarrierRequest(
+                carrier: carrier,
+                trackingURL: trackingURL,
+                dpdPostcode: dpdPostcode
+            )
         )
     }
 
@@ -295,6 +312,9 @@ final class DeliveryAPIClient {
         }
         guard (200..<300).contains(result.1.statusCode) else {
             let error = try? JSONDecoder().decode(ErrorResponse.self, from: result.0)
+            if result.1.statusCode == 409, let packageID = error?.packageID {
+                throw DeliveryAPIError.duplicateTracking(packageID)
+            }
             if let message = error?.error { throw DeliveryAPIError.service(message) }
             throw DeliveryAPIError.serviceFailed(result.1.statusCode)
         }

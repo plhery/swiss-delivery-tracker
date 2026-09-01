@@ -36,6 +36,11 @@ export interface NewPackageValues {
   dpdPostcode: string | null;
 }
 
+export type PackageCarrierValues = Pick<
+  NewPackageValues,
+  'carrier' | 'trackingUrl' | 'dpdPostcode'
+>;
+
 export function newPackageValues(payload: JsonObject): NewPackageValues {
   const rawTracking = payload.trackingNumber ?? '';
   const rawLabel = payload.label ?? '';
@@ -85,6 +90,27 @@ export function newPackageValues(payload: JsonObject): NewPackageValues {
     label: rawLabel.trim(),
     carrier,
     ...extras,
+  };
+}
+
+export function packageCarrierValues(
+  payload: JsonObject,
+  trackingNumber: string,
+): PackageCarrierValues {
+  if (typeof payload.carrier !== 'string') {
+    throw new HttpError(400, 'Carrier must be text');
+  }
+  const values = newPackageValues({
+    trackingNumber,
+    label: '',
+    carrier: payload.carrier,
+    trackingUrl: payload.trackingUrl ?? '',
+    dpdPostcode: payload.dpdPostcode ?? '',
+  });
+  return {
+    carrier: values.carrier,
+    trackingUrl: values.trackingUrl,
+    dpdPostcode: values.dpdPostcode,
   };
 }
 

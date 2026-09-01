@@ -1155,6 +1155,50 @@
         }
       }
     },
+    "/api/packages/{packageId}/carrier": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/PackageId"
+        }
+      ],
+      "patch": {
+        "operationId": "changePackageCarrier",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePackageCarrierRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Carrier changed and a fresh tracking check queued when the parcel is active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePackageCarrierResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
     "/api/packages/{packageId}/permanent": {
       "parameters": [
         {
@@ -2097,6 +2141,48 @@
           }
         }
       },
+      "ChangePackageCarrierRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "carrier"
+        ],
+        "properties": {
+          "carrier": {
+            "$ref": "#/components/schemas/CarrierId"
+          },
+          "trackingUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Required for Planzer shared-link and Dachser shipments. These capability URLs are private credentials."
+          },
+          "dpdPostcode": {
+            "type": "string",
+            "pattern": "^(?=.{3,10}$)(?=.*[0-9])[A-Za-z0-9]+(?:[ -][A-Za-z0-9]+)*$",
+            "description": "Recipient postcode required by DPD and GLS Switzerland, Mondial Relay, Heppner or Paack."
+          }
+        }
+      },
+      "ChangePackageCarrierResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "package",
+          "jobIds"
+        ],
+        "properties": {
+          "package": {
+            "$ref": "#/components/schemas/PackageRow"
+          },
+          "jobIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "PackageNotificationRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -2155,6 +2241,11 @@
         "properties": {
           "error": {
             "type": "string"
+          },
+          "packageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Present when a package creation conflict identifies the existing owned parcel."
           }
         }
       },

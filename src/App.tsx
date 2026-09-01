@@ -87,6 +87,7 @@ export default function App({
     mode,
     addParcel,
     renameParcel,
+    changeParcelCarrier,
     setParcelNotificationsMuted,
     removeParcel,
     restoreParcel,
@@ -668,6 +669,7 @@ export default function App({
         <AddParcelSheet
           onAdd={addParcel}
           onClose={() => setAdding(false)}
+          onOpenParcel={(parcelId) => openParcelDetail(parcelId)}
           lastDpdPostcode={lastDpdPostcode}
           initialLabel={sharedParcelInput?.label}
           initialTrackingInput={sharedParcelInput?.trackingInput}
@@ -679,6 +681,7 @@ export default function App({
           parcel={openParcel}
           onBack={closeParcelDetail}
           onRename={(p, label) => renameParcel(p.id, label)}
+          onChangeCarrier={(p, input) => changeParcelCarrier(p.id, input)}
           onSetNotificationsMuted={(p, muted) =>
             setParcelNotificationsMuted(p.id, muted)}
           onRefresh={(p) => refreshParcel(p.id)}

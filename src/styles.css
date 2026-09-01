@@ -3983,6 +3983,56 @@ body {
   cursor: pointer;
 }
 
+.sheet__error a {
+  color: inherit;
+  font-weight: 780;
+  text-underline-offset: 3px;
+}
+
+.change-carrier-sheet {
+  max-height: min(780px, calc(100dvh - 24px));
+  overflow-y: auto;
+}
+
+.detail__carrier--editable {
+  min-height: 36px;
+  margin: -8px 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.detail__carrier--editable:hover {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.detail__carrier--editable > span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.detail__footer--archived {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+}
+
+.detail__delete {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: #a74b16;
+  font-size: 12px;
+  font-weight: 680;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 @media (hover: hover) {
   .app__add-button:hover {
     background: #2a2a2d;

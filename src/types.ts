@@ -56,12 +56,29 @@ export interface NewParcelInput {
   dpdPostcode?: string;
 }
 
+export interface ParcelCarrierInput {
+  carrier: CarrierId;
+  trackingUrl?: string;
+  dpdPostcode?: string;
+}
+
+export class ParcelAlreadyExistsError extends Error {
+  constructor(
+    message: string,
+    readonly parcelId: string,
+  ) {
+    super(message);
+    this.name = 'ParcelAlreadyExistsError';
+  }
+}
+
 /** Storage backends: the shared server API in production, local demo in development. */
 export interface ParcelRepo {
   readonly mode: 'api' | 'demo';
   list(): Promise<ParcelWithEvents[]>;
   add(input: NewParcelInput): Promise<ParcelWithEvents>;
   rename(id: string, label: string): Promise<ParcelWithEvents>;
+  changeCarrier?(id: string, input: ParcelCarrierInput): Promise<ParcelWithEvents>;
   setNotificationsMuted?(id: string, muted: boolean): Promise<ParcelWithEvents>;
   /** Soft-delete an active parcel so it can still be restored. */
   remove(id: string): Promise<void>;

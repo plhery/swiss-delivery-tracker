@@ -643,6 +643,29 @@ describe('App', () => {
     expect(sheet).toBeInTheDocument();
   });
 
+  it('links a duplicate tracking number to its existing parcel', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByText('Coffee beans ☕');
+
+    await user.click(screen.getByRole('button', { name: /add a parcel/i }));
+    const sheet = screen.getByRole('dialog', { name: /add a parcel/i });
+    await user.type(
+      within(sheet).getByLabelText(/tracking number/i),
+      '993412345678901234',
+    );
+    await user.click(within(sheet).getByRole('button', { name: /add parcel/i }));
+
+    const alert = await within(sheet).findByRole('alert');
+    expect(alert).toHaveTextContent('already in your delivery box');
+    const link = within(alert).getByRole('link', { name: 'Open the existing parcel' });
+    expect(link).toHaveAttribute('href', expect.stringContaining('parcel='));
+    await user.click(link);
+
+    expect(screen.queryByRole('dialog', { name: 'Add a parcel' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Coffee beans ☕' })).toBeInTheDocument();
+  });
+
   it('requires a tracking number before submitting', async () => {
     const user = userEvent.setup();
     renderApp();
@@ -991,7 +1014,6 @@ describe('App', () => {
     const archive = await screen.findByRole('region', { name: 'Archived' });
     await user.click(within(archive).getByText('Archived'));
     await user.click(within(archive).getByRole('button', { name: /old delivery/i }));
-    await user.click(screen.getByLabelText('Parcel actions'));
     await user.click(screen.getByRole('button', { name: 'Delete permanently' }));
 
     expect(screen.getByRole('dialog', { name: /permanently delete old delivery/i }))
@@ -1004,6 +1026,63 @@ describe('App', () => {
     expect(screen.queryByRole('dialog', { name: 'Old delivery' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Archived' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Old delivery permanently deleted');
+  });
+
+  it('changes a parcel carrier and replaces stale tracking history', async () => {
+    const parcel: ParcelWithEvents = {
+      id: 'parcel-wrong-carrier',
+      trackingNumber: '993412345612345678',
+      label: 'Wrong carrier',
+      carrier: 'swiss-post',
+      createdAt: '2026-08-10T10:00:00Z',
+      syncStatus: 'ok',
+      events: [{
+        id: 'stale-event',
+        parcelId: 'parcel-wrong-carrier',
+        stage: 'in_transit',
+        description: 'Stale provider event',
+        occurredAt: '2026-08-11T10:00:00Z',
+      }],
+    };
+    const changed: ParcelWithEvents = {
+      ...parcel,
+      carrier: 'ups',
+      syncStatus: 'pending',
+      events: [{
+        id: 'reset-event',
+        parcelId: parcel.id,
+        stage: 'pending',
+        description: 'Carrier changed; waiting for tracking',
+        occurredAt: '2026-09-01T10:00:00Z',
+      }],
+    };
+    const changeCarrier = vi.fn().mockResolvedValue(changed);
+    const repo: ParcelRepo = {
+      mode: 'api',
+      list: vi.fn().mockResolvedValue([parcel]),
+      add: vi.fn(),
+      rename: vi.fn(),
+      changeCarrier,
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([parcel]),
+    };
+    const user = userEvent.setup();
+    renderApp(repo);
+
+    await user.click(await screen.findByRole('button', { name: /^Wrong carrier —/ }));
+    await user.click(screen.getByRole('button', { name: 'Change carrier from Swiss Post' }));
+    const sheet = screen.getByRole('dialog', { name: 'Change carrier' });
+    await user.selectOptions(within(sheet).getByLabelText('Carrier'), 'ups');
+    await user.click(within(sheet).getByRole('button', { name: 'Save carrier' }));
+
+    expect(changeCarrier).toHaveBeenCalledWith(parcel.id, {
+      carrier: 'ups',
+      trackingUrl: undefined,
+      dpdPostcode: undefined,
+    });
+    expect(await screen.findByRole('button', { name: 'Change carrier from UPS' }))
+      .toBeInTheDocument();
+    expect(screen.queryByText('Stale provider event')).not.toBeInTheDocument();
   });
 
   it('carefully deletes an active parcel directly from its detail screen', async () => {

@@ -9,7 +9,11 @@ import {
   SELECTABLE_CARRIERS,
   tracksAutomatically,
 } from '../lib/carriers';
-import type { CarrierId, NewParcelInput } from '../types';
+import {
+  ParcelAlreadyExistsError,
+  type CarrierId,
+  type NewParcelInput,
+} from '../types';
 import { useModalDialog } from '../lib/modal';
 import { useI18n } from '../i18n';
 
@@ -19,9 +23,11 @@ export function AddParcelSheet({
   lastDpdPostcode,
   initialLabel = '',
   initialTrackingInput = '',
+  onOpenParcel,
 }: {
   onAdd: (input: NewParcelInput) => Promise<unknown>;
   onClose: () => void;
+  onOpenParcel?: (parcelId: string) => void;
   lastDpdPostcode?: string;
   initialLabel?: string;
   initialTrackingInput?: string;
@@ -40,6 +46,7 @@ export function AddParcelSheet({
   const [showCarrierPicker, setShowCarrierPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existingParcelId, setExistingParcelId] = useState<string | null>(null);
   const [pasteError, setPasteError] = useState<string | null>(null);
   const trackingInput = useRef<HTMLTextAreaElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, onClose, trackingInput);
@@ -96,6 +103,7 @@ export function AddParcelSheet({
     if (!trackingNumber.trim() || saving) return;
     setSaving(true);
     setError(null);
+    setExistingParcelId(null);
     try {
       await onAdd({
         trackingNumber: trackingNumber.trim(),
@@ -110,7 +118,12 @@ export function AddParcelSheet({
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('add.failed'));
+      if (err instanceof ParcelAlreadyExistsError) {
+        setError(t('add.alreadyExists'));
+        setExistingParcelId(err.parcelId);
+      } else {
+        setError(err instanceof Error ? err.message : t('add.failed'));
+      }
       setSaving(false);
     }
   }
@@ -162,7 +175,13 @@ export function AddParcelSheet({
               ref={trackingInput}
               value={trackingInputValue}
               placeholder={t('add.trackingPlaceholder')}
-              onChange={(e) => setTrackingInputValue(e.target.value)}
+              onChange={(e) => {
+                setTrackingInputValue(e.target.value);
+                if (existingParcelId) {
+                  setExistingParcelId(null);
+                  setError(null);
+                }
+              }}
               autoCapitalize="characters"
               autoCorrect="off"
               spellCheck={false}
@@ -285,7 +304,21 @@ export function AddParcelSheet({
           </label>
           {error && (
             <p className="sheet__error" role="alert">
-              {error}
+              <span>{error}</span>
+              {existingParcelId && onOpenParcel && (
+                <>{' '}
+                  <a
+                    href={`/?parcel=${encodeURIComponent(existingParcelId)}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onClose();
+                      onOpenParcel(existingParcelId);
+                    }}
+                  >
+                    {t('add.openExisting')}
+                  </a>
+                </>
+              )}
             </p>
           )}
           <div className="sheet__actions">

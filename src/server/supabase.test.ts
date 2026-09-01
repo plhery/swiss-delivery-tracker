@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SupabaseServiceClient } from './supabase';
+import { SupabaseServiceClient, SupabaseUserClient } from './supabase';
 
 describe('tracking audit PostgREST client', () => {
   it('starts and transactionally completes a private sync attempt', async () => {
@@ -48,5 +48,41 @@ describe('tracking audit PostgREST client', () => {
     vi.spyOn(client, 'request').mockResolvedValue([{ abandoned: 2, purged: 7 }]);
 
     await expect(client.maintainSyncAudit()).resolves.toEqual({ abandoned: 2, purged: 7 });
+  });
+});
+
+describe('owner package PostgREST client', () => {
+  it('looks up duplicates by normalized tracking number', async () => {
+    const client = new SupabaseUserClient('https://database.example', 'public-key', 'token');
+    const request = vi.spyOn(client, 'request').mockResolvedValue([{ id: 'package-1' }]);
+
+    await expect(client.getPackageByTrackingNumber('FR3182317025'))
+      .resolves.toEqual({ id: 'package-1' });
+
+    expect(request).toHaveBeenCalledWith(expect.stringMatching(
+      /^\/rest\/v1\/packages\?select=.*&tracking_number=eq\.FR3182317025&limit=1$/,
+    ));
+  });
+
+  it('changes carriers through the owner-scoped reset RPC', async () => {
+    const client = new SupabaseUserClient('https://database.example', 'public-key', 'token');
+    const request = vi.spyOn(client, 'request').mockResolvedValue(true);
+
+    await expect(client.changePackageCarrier(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'mondial-relay',
+      null,
+      '59650',
+    )).resolves.toBe(true);
+
+    expect(request).toHaveBeenCalledWith('/rest/v1/rpc/change_owned_package_carrier', {
+      method: 'POST',
+      body: {
+        p_package_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        p_carrier: 'mondial-relay',
+        p_tracking_url: null,
+        p_dpd_postcode: '59650',
+      },
+    });
   });
 });

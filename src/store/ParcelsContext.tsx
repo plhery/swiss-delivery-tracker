@@ -8,7 +8,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { NewParcelInput, ParcelRepo, ParcelWithEvents } from '../types';
+import {
+  ParcelAlreadyExistsError,
+  type NewParcelInput,
+  type ParcelCarrierInput,
+  type ParcelRepo,
+  type ParcelWithEvents,
+} from '../types';
 import { ApiAuthenticationError } from '../lib/apiClient';
 
 interface ParcelsState {
@@ -21,6 +27,7 @@ interface ParcelsState {
   mode: ParcelRepo['mode'];
   addParcel: (input: NewParcelInput) => Promise<ParcelWithEvents>;
   renameParcel: (id: string, label: string) => Promise<ParcelWithEvents>;
+  changeParcelCarrier: (id: string, input: ParcelCarrierInput) => Promise<ParcelWithEvents>;
   setParcelNotificationsMuted: (id: string, muted: boolean) => Promise<void>;
   removeParcel: (id: string) => Promise<void>;
   restoreParcel: (id: string) => Promise<void>;
@@ -107,7 +114,7 @@ export function ParcelsProvider({
         await reload();
         return parcel;
       } catch (error) {
-        rememberError(error);
+        if (!(error instanceof ParcelAlreadyExistsError)) rememberError(error);
         throw error;
       }
     },
@@ -139,6 +146,27 @@ export function ParcelsProvider({
           setAuthenticationRequired(false);
         }
         return renamed;
+      } catch (error) {
+        rememberError(error);
+        throw error;
+      }
+    },
+    [repo, rememberError],
+  );
+
+  const changeParcelCarrier = useCallback(
+    async (id: string, input: ParcelCarrierInput) => {
+      try {
+        if (!repo.changeCarrier) throw new Error('Changing parcel carriers is unavailable');
+        const updated = await repo.changeCarrier(id, input);
+        if (mounted.current) {
+          setParcels((current) =>
+            current.map((parcel) => parcel.id === updated.id ? updated : parcel),
+          );
+          setError(null);
+          setAuthenticationRequired(false);
+        }
+        return updated;
       } catch (error) {
         rememberError(error);
         throw error;
@@ -247,6 +275,7 @@ export function ParcelsProvider({
       mode: repo.mode,
       addParcel,
       renameParcel,
+      changeParcelCarrier,
       setParcelNotificationsMuted,
       removeParcel,
       restoreParcel,
@@ -265,6 +294,7 @@ export function ParcelsProvider({
       repo.mode,
       addParcel,
       renameParcel,
+      changeParcelCarrier,
       setParcelNotificationsMuted,
       removeParcel,
       restoreParcel,

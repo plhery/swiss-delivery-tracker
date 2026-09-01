@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { currentStage, isDelivered } from '../lib/stages';
 import { createDemoRepo, DEMO_STORAGE_KEY, nextStage } from './demoRepo';
+import { ParcelAlreadyExistsError } from '../types';
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -55,6 +56,20 @@ describe('createDemoRepo', () => {
 
     const listed = await repo.list();
     expect(listed.some((p) => p.id === parcel.id)).toBe(true);
+  });
+
+  it('links duplicate additions to the existing parcel, including archives', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    const parcel = await repo.add({ trackingNumber: '123456789012', label: 'Original' });
+    await repo.remove(parcel.id);
+
+    const error = await repo.add({
+      trackingNumber: '1234.5678.9012',
+      label: 'Duplicate',
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(ParcelAlreadyExistsError);
+    expect(error).toMatchObject({ parcelId: parcel.id });
   });
 
   it('lists newest parcels first', async () => {
@@ -157,6 +172,22 @@ describe('createDemoRepo', () => {
     expect(renamed.label).toBe('New title');
     const reloaded = await createDemoRepo(window.localStorage).list();
     expect(reloaded.find((candidate) => candidate.id === parcel.id)?.label).toBe('New title');
+  });
+
+  it('changes carriers without mixing the old tracking history', async () => {
+    const repo = createDemoRepo(window.localStorage);
+    const parcel = await repo.add({ trackingNumber: '123456789012', label: 'Wrong carrier' });
+    await repo.refreshParcel!(parcel.id);
+    expect((await repo.list()).find((candidate) => candidate.id === parcel.id)?.events)
+      .toHaveLength(2);
+
+    const changed = await repo.changeCarrier!(parcel.id, { carrier: 'ups' });
+
+    expect(changed).toMatchObject({ carrier: 'ups', syncStatus: 'pending' });
+    expect(changed.events).toHaveLength(1);
+    expect(changed.events[0].stage).toBe('pending');
+    expect(changed.expectedDelivery).toBeUndefined();
+    expect(changed.trackingSource).toBeUndefined();
   });
 
   it('applies the title length limit when renaming', async () => {

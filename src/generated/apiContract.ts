@@ -1120,6 +1120,17 @@ export interface ApiRenamePackageRequest {
   "label": string;
 }
 
+export interface ApiChangePackageCarrierRequest {
+  "carrier": ApiCarrierId;
+  "trackingUrl"?: string;
+  "dpdPostcode"?: string;
+}
+
+export interface ApiChangePackageCarrierResponse {
+  "package": ApiPackageRow;
+  "jobIds": Array<string>;
+}
+
 export interface ApiPackageNotificationRequest {
   "muted": boolean;
 }
@@ -1136,6 +1147,7 @@ export interface ApiOkResponse {
 
 export interface ApiErrorResponse {
   "error": string;
+  "packageId"?: string;
 }
 
 export interface ApiPushConfigResponse {

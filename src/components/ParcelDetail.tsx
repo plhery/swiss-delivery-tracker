@@ -19,13 +19,15 @@ import {
 import { currentEvent, isFinal } from '../lib/stages';
 import { isBackSwipe, type TouchPoint } from '../lib/swipe';
 import { useModalDialog } from '../lib/modal';
-import type { ParcelWithEvents } from '../types';
+import type { ParcelCarrierInput, ParcelWithEvents } from '../types';
+import { ChangeCarrierSheet } from './ChangeCarrierSheet';
 import { Timeline } from './Timeline';
 
 export function ParcelDetail({
   parcel,
   onBack,
   onRename,
+  onChangeCarrier,
   onSetNotificationsMuted,
   onRefresh,
   onRestore,
@@ -35,6 +37,10 @@ export function ParcelDetail({
   parcel: ParcelWithEvents;
   onBack: () => void;
   onRename: (parcel: ParcelWithEvents, label: string) => Promise<unknown>;
+  onChangeCarrier: (
+    parcel: ParcelWithEvents,
+    input: ParcelCarrierInput,
+  ) => Promise<unknown>;
   onSetNotificationsMuted: (
     parcel: ParcelWithEvents,
     muted: boolean,
@@ -57,6 +63,7 @@ export function ParcelDetail({
     : null;
   const swipeStart = useRef<TouchPoint | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingCarrier, setEditingCarrier] = useState(false);
   const [title, setTitle] = useState(parcel.label);
   const [savingTitle, setSavingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -73,6 +80,10 @@ export function ParcelDetail({
   const backButton = useRef<HTMLButtonElement>(null);
   const actionsMenu = useRef<HTMLDetailsElement>(null);
   const dialog = useModalDialog<HTMLDivElement>(true, () => {
+    if (editingCarrier) {
+      setEditingCarrier(false);
+      return;
+    }
     if (confirmingDelete) {
       if (!deleting) {
         setConfirmingDelete(false);
@@ -240,6 +251,16 @@ export function ParcelDetail({
           <div>
             <button
               type="button"
+              disabled={deleting}
+              onClick={() => {
+                if (actionsMenu.current) actionsMenu.current.open = false;
+                setEditingCarrier(true);
+              }}
+            >
+              {t('detail.changeCarrier')}
+            </button>
+            <button
+              type="button"
               disabled={savingNotifications || deleting}
               onClick={() => {
                 if (actionsMenu.current) actionsMenu.current.open = false;
@@ -260,30 +281,38 @@ export function ParcelDetail({
                 {archiving ? t('detail.archiving') : t('detail.archive')}
               </button>
             )}
-            <button
-              type="button"
-              className="detail__actions-menu-danger"
-              disabled={archiving || deleting}
-              onClick={() => {
-                if (actionsMenu.current) actionsMenu.current.open = false;
-                setCheckError(null);
-                setConfirmingDelete(true);
-              }}
-            >
-              {t('detail.delete')}
-            </button>
+            {!parcel.archivedAt && (
+              <button
+                type="button"
+                className="detail__actions-menu-danger"
+                disabled={archiving || deleting}
+                onClick={() => {
+                  if (actionsMenu.current) actionsMenu.current.open = false;
+                  setCheckError(null);
+                  setConfirmingDelete(true);
+                }}
+              >
+                {t('detail.delete')}
+              </button>
+            )}
           </div>
         </details>
       </header>
 
       <section className="detail__hero">
         <div className="detail__hero-meta">
-          <span className="detail__carrier">
+          <button
+            type="button"
+            className="detail__carrier detail__carrier--editable"
+            onClick={() => setEditingCarrier(true)}
+            aria-label={t('detail.changeCarrierFrom', { carrier: carrier.name })}
+          >
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5zM4 7.5l8 4.5 8-4.5M12 12v9" />
             </svg>
             {carrier.name}
-          </span>
+            <span aria-hidden="true">›</span>
+          </button>
           <span className={`detail__state detail__state--${status.tone}`}>
             {statusLabel}
           </span>
@@ -418,7 +447,7 @@ export function ParcelDetail({
       </section>
 
       {parcel.archivedAt && (
-        <footer className="detail__footer detail__footer--single">
+        <footer className="detail__footer detail__footer--archived">
           <button
             type="button"
             className="detail__restore"
@@ -427,7 +456,26 @@ export function ParcelDetail({
           >
             {restoring ? t('common.restoring') : t('detail.restore')}
           </button>
+          <button
+            type="button"
+            className="detail__delete"
+            onClick={() => {
+              setCheckError(null);
+              setConfirmingDelete(true);
+            }}
+            disabled={restoring || deleting}
+          >
+            {t('detail.delete')}
+          </button>
         </footer>
+      )}
+
+      {editingCarrier && (
+        <ChangeCarrierSheet
+          parcel={parcel}
+          onChange={(input) => onChangeCarrier(parcel, input)}
+          onClose={() => setEditingCarrier(false)}
+        />
       )}
 
       {confirmingDelete && (

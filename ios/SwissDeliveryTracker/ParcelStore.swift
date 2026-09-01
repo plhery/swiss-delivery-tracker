@@ -207,6 +207,37 @@ final class ParcelStore: ObservableObject {
         upsert(updated)
     }
 
+    func changeCarrier(
+        _ parcel: Parcel,
+        carrier: CarrierID,
+        trackingURL: String?,
+        dpdPostcode: String?
+    ) async throws {
+        let cleanedURL = trackingURL?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        let cleanedPostcode = dpdPostcode?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        let updated: Parcel
+        if isDemo {
+            updated = try demo.changeCarrier(
+                id: parcel.id,
+                carrier: carrier,
+                trackingURL: cleanedURL,
+                dpdPostcode: cleanedPostcode
+            )
+        } else {
+            let response = try await api.changeCarrier(
+                id: parcel.id,
+                carrier: carrier,
+                trackingURL: cleanedURL,
+                dpdPostcode: cleanedPostcode
+            )
+            updated = response.package
+            monitorJobs(response.jobIDs)
+        }
+        upsert(updated)
+    }
+
     func setMuted(_ parcel: Parcel, muted: Bool) async throws {
         let updated = isDemo
             ? try demo.setMuted(id: parcel.id, muted: muted)
@@ -1003,8 +1034,8 @@ private final class DemoRepository {
     func add(_ request: CreatePackageRequest) throws -> Parcel {
         guard let carrier = request.carrier else { throw DeliveryAPIError.invalidResponse }
         var all = load()
-        if all.contains(where: { $0.trackingNumber == request.trackingNumber }) {
-            throw DeliveryAPIError.duplicateTracking
+        if let existing = all.first(where: { $0.trackingNumber == request.trackingNumber }) {
+            throw DeliveryAPIError.duplicateTracking(existing.id)
         }
         let id = UUID()
         let now = DateParser.isoString(Date())
@@ -1040,6 +1071,36 @@ private final class DemoRepository {
     func rename(id: UUID, label: String) throws -> Parcel {
         guard label.count <= 80 else { throw DeliveryAPIError.labelTooLong }
         return try update(id: id) { $0.label = label }
+    }
+
+    func changeCarrier(
+        id: UUID,
+        carrier: CarrierID,
+        trackingURL: String?,
+        dpdPostcode: String?
+    ) throws -> Parcel {
+        try update(id: id) { parcel in
+            let now = DateParser.isoString(Date())
+            parcel.carrier = carrier
+            parcel.trackingURL = trackingURL
+            parcel.dpdPostcode = dpdPostcode
+            parcel.expectedDelivery = nil
+            parcel.lastStatusText = nil
+            parcel.lastSyncedAt = nil
+            parcel.syncStatus = .pending
+            parcel.syncError = nil
+            parcel.carrierData = CarrierCatalog.supportsSwissPostHandoff(parcel.trackingNumber)
+                ? CarrierData(activeTrackingCarrier: .aliexpress, swissPostReady: false)
+                : nil
+            parcel.trackingEvents = [TrackingEvent(
+                id: UUID(),
+                packageID: id,
+                stage: .pending,
+                description: "Carrier changed; waiting for tracking",
+                location: nil,
+                occurredAt: now
+            )]
+        }
     }
 
     func setMuted(id: UUID, muted: Bool) throws -> Parcel {

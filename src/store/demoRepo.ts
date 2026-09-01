@@ -5,12 +5,14 @@ import {
 } from '../lib/carriers';
 import { currentStage, isFinal, latestEvent } from '../lib/stages';
 import { uid } from '../lib/uid';
-import type {
-  NewParcelInput,
-  ParcelRepo,
-  ParcelWithEvents,
-  Stage,
-  TrackingEvent,
+import {
+  ParcelAlreadyExistsError,
+  type NewParcelInput,
+  type ParcelCarrierInput,
+  type ParcelRepo,
+  type ParcelWithEvents,
+  type Stage,
+  type TrackingEvent,
 } from '../types';
 
 export const DEMO_STORAGE_KEY = 'sdt.demo.parcels.v1';
@@ -161,7 +163,7 @@ function seedParcels(now: number): ParcelWithEvents[] {
 
   const sneakers: ParcelWithEvents = {
     id: uid(),
-    trackingNumber: '1234567890',
+    trackingNumber: '1234567899',
     label: 'New sneakers 👟',
     carrier: 'dhl',
     createdAt: iso(30 * HOUR),
@@ -259,6 +261,13 @@ export function createDemoRepo(
     async add(input: NewParcelInput) {
       const parcels = getAll();
       const trackingNumber = normalizeTrackingNumber(input.trackingNumber);
+      const existing = parcels.find((candidate) => candidate.trackingNumber === trackingNumber);
+      if (existing) {
+        throw new ParcelAlreadyExistsError(
+          'This tracking number is already in your delivery box',
+          existing.id,
+        );
+      }
       const createdAt = new Date(now()).toISOString();
       const parcel: ParcelWithEvents = {
         id: uid(),
@@ -294,6 +303,35 @@ export function createDemoRepo(
         parcels.map((candidate) => candidate.id === id ? renamed : candidate),
       );
       return renamed;
+    },
+
+    async changeCarrier(id: string, input: ParcelCarrierInput) {
+      const parcels = getAll();
+      const parcel = parcels.find((candidate) => candidate.id === id);
+      if (!parcel) throw new Error('Parcel not found');
+      const changedAt = new Date(now()).toISOString();
+      const updated: ParcelWithEvents = {
+        id: parcel.id,
+        trackingNumber: parcel.trackingNumber,
+        label: parcel.label,
+        carrier: input.carrier,
+        createdAt: parcel.createdAt,
+        trackingUrl: input.trackingUrl?.trim() || undefined,
+        dpdPostcode: input.dpdPostcode?.trim() || undefined,
+        archivedAt: parcel.archivedAt,
+        notificationsMuted: parcel.notificationsMuted,
+        syncStatus: 'pending',
+        events: [event(parcel.id, 'pending', changedAt)],
+      };
+      if (supportsSwissPostHandoff(parcel.trackingNumber)) {
+        updated.trackingSource = 'aliexpress';
+        updated.swissPostReady = false;
+      }
+      save(
+        storage,
+        parcels.map((candidate) => candidate.id === id ? updated : candidate),
+      );
+      return updated;
     },
 
     async setNotificationsMuted(id: string, muted: boolean) {

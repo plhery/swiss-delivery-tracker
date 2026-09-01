@@ -41,9 +41,11 @@ export const POST = apiRoute(async (context) => {
       });
     }
     if (error instanceof SupabaseError && error.status === 409) {
-      throw new HttpError(409, 'This tracking number is already in your delivery box', undefined, {
-        cause: error,
-      });
+      const existing = await client.getPackageByTrackingNumber(values.trackingNumber);
+      return json({
+        error: 'This tracking number is already in your delivery box',
+        ...(typeof existing?.id === 'string' ? { packageId: existing.id } : {}),
+      }, 409);
     }
     throw error;
   }

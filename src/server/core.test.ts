@@ -35,6 +35,7 @@ import {
   newPackageValues,
   notificationPreferences,
   packageLabel,
+  packageCarrierValues,
   pushEndpoint,
   pushSubscription,
 } from './validation';
@@ -365,6 +366,23 @@ describe('input validation', () => {
     expect(packageLabel({ label: '  Coffee  ' })).toBe('Coffee');
     expect(() => packageLabel({ label: '😀'.repeat(81) })).toThrow('80 characters');
     expect(() => packageLabel({ label: 42 })).toThrow('text');
+  });
+
+  it('validates carrier corrections against the existing tracking number', () => {
+    expect(packageCarrierValues({
+      carrier: 'mondial-relay',
+      dpdPostcode: '59650',
+    }, '76434219')).toEqual({
+      carrier: 'mondial-relay',
+      trackingUrl: null,
+      dpdPostcode: '59650',
+    });
+    expect(() => packageCarrierValues({ carrier: 'mondial-relay' }, '76434219'))
+      .toThrow('five-digit');
+    expect(() => packageCarrierValues({ carrier: 42 }, '76434219'))
+      .toThrow('Carrier must be text');
+    expect(packageCarrierValues({ carrier: 'ups' }, '440012345612345678'))
+      .toMatchObject({ carrier: 'quickpac' });
   });
 
   it('allowlists browser push services without accepting lookalike hosts', () => {

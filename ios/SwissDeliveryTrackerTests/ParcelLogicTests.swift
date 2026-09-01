@@ -111,6 +111,18 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(packageJSON["trackingUrl"] as? String, packageRequest.trackingURL)
         XCTAssertNil(packageJSON["trackingURL"])
 
+        let carrierRequest = ChangePackageCarrierRequest(
+            carrier: .mondialRelay,
+            dpdPostcode: "59650"
+        )
+        let carrierJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.deliveryTracker.encode(carrierRequest)
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(carrierJSON["carrier"] as? String, "mondial-relay")
+        XCTAssertEqual(carrierJSON["dpdPostcode"] as? String, "59650")
+
         let pushRequest = NativePushDeviceRequest(
             token: "device-token",
             environment: .production,
@@ -146,6 +158,21 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(liveJSON["installationId"] as? String, installationID.uuidString)
         XCTAssertEqual(liveJSON["parcelId"] as? String, parcelID.uuidString)
         XCTAssertEqual(liveJSON["activityId"] as? String, "activity-1")
+    }
+
+    func testDuplicateErrorDecodesItsExistingParcelLink() throws {
+        let packageID = UUID()
+        let error = try JSONDecoder.deliveryTracker.decode(
+            ErrorResponse.self,
+            from: Data("""
+            {
+              "error": "This tracking number is already in your delivery box",
+              "packageId": "\(packageID.uuidString)"
+            }
+            """.utf8)
+        )
+
+        XCTAssertEqual(error.packageID, packageID)
     }
 
     func testFutureCarrierIdentifierDecodesAndEncodesWithoutAnAppRelease() throws {

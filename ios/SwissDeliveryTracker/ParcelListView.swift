@@ -61,7 +61,10 @@ private struct DeliveryListView: View {
             .safeAreaInset(edge: .bottom, spacing: 8) { bottomControls }
         }
         .sheet(isPresented: $showingAdd) {
-            AddParcelView(draft: sharedDraft)
+            AddParcelView(draft: sharedDraft) { parcelID in
+                showingAdd = false
+                path = [parcelID]
+            }
                 .environmentObject(store)
                 .environmentObject(localizer)
         }

@@ -142,6 +142,15 @@ export class SupabaseClient {
     return rows(await this.request(`/rest/v1/packages?${query(params)}`))[0] ?? null;
   }
 
+  async getPackageByTrackingNumber(trackingNumber: string): Promise<JsonObject | null> {
+    const params: Array<[string, string]> = [
+      ['select', PACKAGE_SELECT],
+      ['tracking_number', `eq.${trackingNumber}`],
+      ['limit', '1'],
+    ];
+    return rows(await this.request(`/rest/v1/packages?${query(params)}`))[0] ?? null;
+  }
+
   async createPackage(
     trackingNumber: string,
     label: string,
@@ -740,6 +749,23 @@ export class SupabaseUserClient extends SupabaseClient {
       throw new TypeError('User-scoped package updates must use an approved mutation');
     }
     if (changed !== true) throw new SupabaseError('Package not found', 404);
+  }
+
+  async changePackageCarrier(
+    packageId: string,
+    carrier: string,
+    trackingUrl?: string | null,
+    dpdPostcode?: string | null,
+  ): Promise<boolean> {
+    return await this.request('/rest/v1/rpc/change_owned_package_carrier', {
+      method: 'POST',
+      body: {
+        p_package_id: packageId,
+        p_carrier: carrier,
+        p_tracking_url: trackingUrl ?? null,
+        p_dpd_postcode: dpdPostcode ?? null,
+      },
+    }) === true;
   }
 
   override async deleteArchivedPackage(packageId: string): Promise<boolean> {

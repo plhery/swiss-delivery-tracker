@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import contractFixture from '../../contracts/fixtures/delivery-api.json';
 import { ApiAuthenticationError } from '../lib/apiClient';
+import { ParcelAlreadyExistsError } from '../types';
 import { API_CACHE_KEY, browserStorage, clearApiCache, createApiRepo } from './apiRepo';
 
 const packageRow = contractFixture.packageList.packages[0];
@@ -226,6 +227,53 @@ describe('createApiRepo', () => {
         redirect: 'manual',
       }),
     );
+  });
+
+  it('changes a parcel carrier and starts monitoring its fresh tracking job', async () => {
+    const changedRow = {
+      ...packageRow,
+      carrier: 'ups' as const,
+      current_stage: 'pending' as const,
+      expected_delivery: null,
+      last_status_text: null,
+      last_synced_at: null,
+      sync_status: 'pending' as const,
+      tracking_events: [],
+    };
+    const fetch = vi.fn().mockResolvedValue(response({
+      package: changedRow,
+      jobIds: [],
+    }));
+    vi.stubGlobal('fetch', fetch);
+
+    const parcel = await createApiRepo().changeCarrier!(packageRow.id, { carrier: 'ups' });
+
+    expect(parcel).toMatchObject({ carrier: 'ups', syncStatus: 'pending', events: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/packages/${packageRow.id}/carrier`,
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ carrier: 'ups' }),
+        cache: 'no-store',
+        redirect: 'manual',
+      }),
+    );
+  });
+
+  it('preserves the existing parcel id on duplicate creation errors', async () => {
+    const fetch = vi.fn().mockResolvedValue(response({
+      error: 'This tracking number is already in your delivery box',
+      packageId: packageRow.id,
+    }, false, 409));
+    vi.stubGlobal('fetch', fetch);
+
+    const error = await createApiRepo().add({
+      trackingNumber: packageRow.tracking_number,
+      label: '',
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(ParcelAlreadyExistsError);
+    expect(error).toMatchObject({ parcelId: packageRow.id });
   });
 
   it('permanently deletes a parcel through its guarded endpoint', async () => {

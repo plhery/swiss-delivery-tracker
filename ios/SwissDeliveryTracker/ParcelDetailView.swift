@@ -14,6 +14,8 @@ struct ParcelDetailView: View {
     @State private var copied = false
     @State private var working = false
     @State private var errorMessage: String?
+    @State private var showingCarrierEditor = false
+    @State private var showingDeleteConfirmation = false
 
     @ObservedObject private var catalog = CarrierCatalog.shared
 
@@ -50,6 +52,9 @@ struct ParcelDetailView: View {
                         Button(localizer.text("detail.copyTracking"), systemImage: "doc.on.doc") {
                             copy(parcel.trackingNumber)
                         }
+                        Button(localizer.text("detail.changeCarrier"), systemImage: "truck.box") {
+                            showingCarrierEditor = true
+                        }
                         Button(
                             localizer.text(parcel.notificationsMuted ? "detail.unmute" : "detail.mute"),
                             systemImage: parcel.notificationsMuted ? "bell.fill" : "bell.slash"
@@ -69,6 +74,13 @@ struct ParcelDetailView: View {
                                 archive(parcel)
                             }
                         }
+                        Divider()
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label(localizer.text("detail.delete"), systemImage: "trash")
+                        }
+                        .disabled(working)
                     } label: {
                         Image(systemName: "ellipsis")
                     }
@@ -82,6 +94,25 @@ struct ParcelDetailView: View {
             Button(localizer.text("common.close"), role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
+        }
+        .sheet(isPresented: $showingCarrierEditor) {
+            if let parcel {
+                ChangeCarrierView(parcel: parcel)
+                    .environmentObject(store)
+                    .environmentObject(localizer)
+            }
+        }
+        .confirmationDialog(
+            localizer.text("detail.deleteQuestion"),
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(localizer.text("detail.delete"), role: .destructive) {
+                if let parcel { delete(parcel) }
+            }
+            Button(localizer.text("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(localizer.text("detail.deleteDescription"))
         }
     }
 
@@ -291,6 +322,13 @@ struct ParcelDetailView: View {
         }
     }
 
+    private func delete(_ parcel: Parcel) {
+        run {
+            try await store.permanentlyDelete(parcel)
+            dismiss()
+        }
+    }
+
     private func run(_ operation: @escaping @MainActor () async throws -> Void) {
         guard !working else { return }
         working = true
@@ -299,6 +337,184 @@ struct ParcelDetailView: View {
             do { try await operation() }
             catch { errorMessage = localizer.errorMessage(error) }
             working = false
+        }
+    }
+}
+
+private struct ChangeCarrierView: View {
+    let parcel: Parcel
+
+    @EnvironmentObject private var store: ParcelStore
+    @EnvironmentObject private var localizer: Localizer
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selectedCarrier: CarrierID
+    @State private var trackingURL: String
+    @State private var deliveryPostcode: String
+    @State private var saving = false
+    @State private var errorMessage: String?
+
+    @ObservedObject private var catalog = CarrierCatalog.shared
+
+    init(parcel: Parcel) {
+        self.parcel = parcel
+        _selectedCarrier = State(initialValue: parcel.carrier)
+        _trackingURL = State(initialValue: parcel.trackingURL ?? "")
+        _deliveryPostcode = State(initialValue: parcel.dpdPostcode ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text(CarrierCatalog.format(parcel.trackingNumber))
+                        .font(.system(.body, design: .monospaced, weight: .semibold))
+                    Text(localizer.text("detail.changeCarrierDescription", [
+                        "number": CarrierCatalog.format(parcel.trackingNumber),
+                    ]))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+
+                Section(localizer.text("add.carrier")) {
+                    Picker(localizer.text("add.carrier"), selection: $selectedCarrier) {
+                        ForEach(catalog.selectableCarriers) { carrier in
+                            Text(catalog.info(for: carrier).displayName).tag(carrier)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .onChange(of: selectedCarrier) { _, carrier in
+                        trackingURL = carrier == parcel.carrier ? parcel.trackingURL ?? "" : ""
+                        deliveryPostcode = carrier == parcel.carrier ? parcel.dpdPostcode ?? "" : ""
+                        errorMessage = nil
+                    }
+                }
+
+                if !requirements.isEmpty {
+                    Section {
+                        ForEach(requirements, id: \.field) { requirement in
+                            requirementField(requirement)
+                        }
+                    }
+                }
+
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle(localizer.text("detail.changeCarrier"))
+            .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(saving)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(localizer.text("common.cancel")) { dismiss() }
+                        .disabled(saving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving
+                        ? localizer.text("detail.changingCarrier")
+                        : localizer.text("detail.saveCarrier")) {
+                        save()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(!canSave || saving)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var requirements: [CarrierRequirement] {
+        catalog.requirements(for: selectedCarrier, trackingNumber: parcel.trackingNumber)
+    }
+
+    private var trackingURLRequirement: CarrierRequirement? {
+        requirements.first(where: { $0.field == .trackingURL })
+    }
+
+    private var postcodeRequirement: CarrierRequirement? {
+        requirements.first(where: { $0.field == .dpdPostcode })
+    }
+
+    private var canSave: Bool {
+        guard changed else { return false }
+        for requirement in requirements {
+            switch requirement.field {
+            case .trackingURL:
+                let value = requirement.normalizedValue(trackingURL)
+                guard requirement.accepts(value),
+                      let url = URL(string: value),
+                      url.scheme == "https",
+                      url.host != nil else { return false }
+            case .dpdPostcode:
+                guard requirement.accepts(deliveryPostcode) else { return false }
+            }
+        }
+        return true
+    }
+
+    private var changed: Bool {
+        selectedCarrier != parcel.carrier
+            || normalizedTrackingURL != (parcel.trackingURL ?? "")
+            || normalizedPostcode != (parcel.dpdPostcode ?? "")
+    }
+
+    private var normalizedTrackingURL: String {
+        guard let trackingURLRequirement else { return "" }
+        return trackingURLRequirement.normalizedValue(trackingURL)
+    }
+
+    private var normalizedPostcode: String {
+        guard let postcodeRequirement else { return "" }
+        return postcodeRequirement.normalizedValue(deliveryPostcode)
+    }
+
+    @ViewBuilder
+    private func requirementField(_ requirement: CarrierRequirement) -> some View {
+        switch requirement.field {
+        case .trackingURL:
+            TextField(
+                localizer.text("add.requirement.trackingUrl"),
+                text: $trackingURL,
+                axis: .vertical
+            )
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+        case .dpdPostcode:
+            TextField(
+                localizer.text("add.requirement.dpdPostcode"),
+                text: $deliveryPostcode
+            )
+            .keyboardType(requirement.inputMode == "numeric" ? .numberPad : .asciiCapable)
+            .textContentType(.postalCode)
+            .onChange(of: deliveryPostcode) { _, value in
+                deliveryPostcode = requirement.normalizedValue(value)
+            }
+        }
+    }
+
+    private func save() {
+        guard canSave, !saving else { return }
+        saving = true
+        errorMessage = nil
+        Task {
+            do {
+                try await store.changeCarrier(
+                    parcel,
+                    carrier: selectedCarrier,
+                    trackingURL: normalizedTrackingURL.nonEmpty,
+                    dpdPostcode: normalizedPostcode.nonEmpty
+                )
+                dismiss()
+            } catch {
+                errorMessage = localizer.errorMessage(error)
+                saving = false
+            }
         }
     }
 }

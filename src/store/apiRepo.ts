@@ -3,6 +3,8 @@ import { authenticatedFetch, type ApiAuth } from '../lib/apiClient';
 import type {
   ApiCreatePackageResponse,
   ApiCreatePackageRequest,
+  ApiChangePackageCarrierRequest,
+  ApiChangePackageCarrierResponse,
   ApiOkResponse,
   ApiPackageListResponse,
   ApiPackageRow,
@@ -12,11 +14,13 @@ import type {
   ApiTrackingEventRow,
   ApiSyncJobResponse,
 } from '../generated/apiContract';
-import type {
-  NewParcelInput,
-  ParcelRepo,
-  ParcelWithEvents,
-  TrackingEvent,
+import {
+  ParcelAlreadyExistsError,
+  type NewParcelInput,
+  type ParcelCarrierInput,
+  type ParcelRepo,
+  type ParcelWithEvents,
+  type TrackingEvent,
 } from '../types';
 
 export const API_CACHE_KEY = 'parcel-post.api-cache.v1';
@@ -110,8 +114,16 @@ function toParcel(row: ApiPackageRow): ParcelWithEvents {
 
 async function request<T>(path: string, auth: ApiAuth | undefined, init?: RequestInit): Promise<T> {
   const response = await authenticatedFetch(path, auth, init);
-  const payload = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
+  const payload = (await response.json().catch(() => null)) as (
+    T & { error?: string; packageId?: string }
+  ) | null;
   if (!response.ok) {
+    if (response.status === 409 && typeof payload?.packageId === 'string') {
+      throw new ParcelAlreadyExistsError(
+        payload.error ?? 'This tracking number is already in your delivery box',
+        payload.packageId,
+      );
+    }
     throw new Error(payload?.error ?? `Delivery service failed (${response.status})`);
   }
   if (payload === null) throw new Error('The delivery service returned an empty response');
@@ -217,6 +229,24 @@ export function createApiRepo(
         },
       );
       return toParcel(row);
+    },
+
+    async changeCarrier(id: string, input: ParcelCarrierInput): Promise<ParcelWithEvents> {
+      const body: ApiChangePackageCarrierRequest = {
+        carrier: input.carrier,
+        trackingUrl: input.trackingUrl?.trim() || undefined,
+        dpdPostcode: input.dpdPostcode?.trim() || undefined,
+      };
+      const payload = await request<ApiChangePackageCarrierResponse>(
+        `/api/packages/${encodeURIComponent(id)}/carrier`,
+        auth,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        },
+      );
+      monitorJobs(payload.jobIds);
+      return toParcel(payload.package);
     },
 
     async setNotificationsMuted(id: string, muted: boolean): Promise<ParcelWithEvents> {

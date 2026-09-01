@@ -3,6 +3,8 @@ import UIKit
 import VisionKit
 
 struct AddParcelView: View {
+    let onOpenParcel: (UUID) -> Void
+
     @EnvironmentObject private var store: ParcelStore
     @EnvironmentObject private var localizer: Localizer
     @Environment(\.dismiss) private var dismiss
@@ -15,6 +17,7 @@ struct AddParcelView: View {
     @State private var showingScanner = false
     @State private var saving = false
     @State private var errorMessage: String?
+    @State private var duplicateParcelID: UUID?
     @FocusState private var focusedField: Field?
 
     @ObservedObject private var catalog = CarrierCatalog.shared
@@ -26,7 +29,8 @@ struct AddParcelView: View {
         case deliveryPostcode
     }
 
-    init(draft: SharedParcelDraft?) {
+    init(draft: SharedParcelDraft?, onOpenParcel: @escaping (UUID) -> Void = { _ in }) {
+        self.onOpenParcel = onOpenParcel
         _label = State(initialValue: draft?.label ?? "")
         _trackingInput = State(initialValue: draft?.trackingInput ?? "")
     }
@@ -210,12 +214,18 @@ struct AddParcelView: View {
                 .submitLabel(.done)
                 .focused($focusedField, equals: .tracking)
                 .onSubmit(submitTracking)
+                .onChange(of: trackingInput) { _, _ in
+                    guard duplicateParcelID != nil else { return }
+                    duplicateParcelID = nil
+                    errorMessage = nil
+                }
 
                 if !cleanedInput.isEmpty {
                     Button {
                         withAnimation(reduceMotion ? nil : .snappy) {
                             trackingInput = ""
                             errorMessage = nil
+                            duplicateParcelID = nil
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -339,13 +349,25 @@ struct AddParcelView: View {
     }
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-            Text(message)
-                .font(.subheadline.weight(.medium))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                Text(message)
+                    .font(.subheadline.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            if let duplicateParcelID {
+                Button(localizer.text("add.openExisting")) {
+                    dismiss()
+                    onOpenParcel(duplicateParcelID)
+                }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.plain)
+                .foregroundStyle(Brand.ink)
+                .underline()
+            }
         }
         .padding(16)
         .experimentalSurface(tint: .red, cornerRadius: 20, shadow: false)
@@ -496,6 +518,7 @@ struct AddParcelView: View {
         focusedField = nil
         saving = true
         errorMessage = nil
+        duplicateParcelID = nil
 
         Task {
             do {
@@ -509,6 +532,10 @@ struct AddParcelView: View {
                 )
                 dismiss()
             } catch {
+                if let apiError = error as? DeliveryAPIError,
+                   case .duplicateTracking(let packageID) = apiError {
+                    duplicateParcelID = packageID
+                }
                 errorMessage = localizer.errorMessage(error)
                 saving = false
             }

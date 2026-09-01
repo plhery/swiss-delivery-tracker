@@ -159,6 +159,24 @@ begin
   end if;
   if not has_function_privilege(
     'authenticated',
+    'public.change_owned_package_carrier(uuid,text,text,text)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated cannot change an owned package carrier';
+  end if;
+  if has_function_privilege(
+    'anon',
+    'public.change_owned_package_carrier(uuid,text,text,text)',
+    'EXECUTE'
+  ) or has_function_privilege(
+    'service_role',
+    'public.change_owned_package_carrier(uuid,text,text,text)',
+    'EXECUTE'
+  ) then
+    raise exception 'non-user roles can change an owned package carrier';
+  end if;
+  if not has_function_privilege(
+    'authenticated',
     'public.set_owned_notification_preferences(text[],time,time,text)',
     'EXECUTE'
   ) or not has_function_privilege(
@@ -574,6 +592,33 @@ begin
     raise exception 'owner could not rename a package through the RPC';
   end if;
 
+  if not public.change_owned_package_carrier(
+    (select id from public.packages where tracking_number = 'CROSSTENANT9'),
+    'amazon-logistics',
+    null,
+    null
+  ) then
+    raise exception 'owner could not change a package carrier through the RPC';
+  end if;
+  if not exists (
+    select 1 from public.packages
+    where tracking_number = 'CROSSTENANT9'
+      and carrier = 'amazon-logistics'
+      and current_stage = 'pending'
+      and expected_delivery is null
+      and last_status_text is null
+      and sync_status = 'pending'
+      and carrier_data = '{}'::jsonb
+  ) or exists (
+    select 1 from public.tracking_events
+    where package_id = (
+      select id from public.packages where tracking_number = 'CROSSTENANT9'
+    )
+      and provider_event_id is distinct from 'app:pending'
+  ) then
+    raise exception 'changing a carrier did not reset stale tracking state';
+  end if;
+
   if not public.set_owned_package_archived(
     (select id from public.packages where tracking_number = '06086514587082'),
     true
@@ -708,6 +753,14 @@ begin
     true
   ) then
     raise exception 'second user muted a first-user package through the RPC';
+  end if;
+  if public.change_owned_package_carrier(
+    '40000000-0000-0000-0000-000000000004',
+    'ups',
+    null,
+    null
+  ) then
+    raise exception 'second user changed a first-user package carrier through the RPC';
   end if;
   if public.delete_owned_archived_package(
     '40000000-0000-0000-0000-000000000004'

@@ -218,6 +218,28 @@ struct RenamePackageRequest: Codable, Equatable, Hashable, Sendable {
     var label: String
 }
 
+struct ChangePackageCarrierRequest: Codable, Equatable, Hashable, Sendable {
+    var carrier: CarrierID
+    var trackingURL: String? = nil
+    var dpdPostcode: String? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case carrier
+        case trackingURL = "trackingUrl"
+        case dpdPostcode
+    }
+}
+
+struct ChangePackageCarrierResponse: Codable, Equatable, Hashable, Sendable {
+    var package: Parcel
+    var jobIDs: [UUID]
+
+    private enum CodingKeys: String, CodingKey {
+        case package
+        case jobIDs = "jobIds"
+    }
+}
+
 struct PackageNotificationRequest: Codable, Equatable, Hashable, Sendable {
     var muted: Bool
 }
@@ -240,6 +262,12 @@ struct OKResponse: Codable, Equatable, Hashable, Sendable {
 
 struct ErrorResponse: Codable, Equatable, Hashable, Sendable {
     var error: String
+    var packageID: UUID? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case error
+        case packageID = "packageId"
+    }
 }
 
 struct PushConfigResponse: Codable, Equatable, Hashable, Sendable {
