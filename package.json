@@ -17,6 +17,9 @@
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0",
     "npm": ">=10"
   },
+  "overrides": {
+    "browserslist": "4.28.8"
+  },
   "scripts": {
     "contract:generate": "node scripts/generate-api-contract.mjs",
     "dev": "next dev --webpack",
