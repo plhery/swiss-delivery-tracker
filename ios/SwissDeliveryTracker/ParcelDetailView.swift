@@ -15,7 +15,7 @@ struct ParcelDetailView: View {
     @State private var working = false
     @State private var errorMessage: String?
 
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         ZStack {

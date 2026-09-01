@@ -39,9 +39,13 @@ credentials. ShipUp can be kept as a manual record.
 
 Carrier names, adapter modes, tracking links, required inputs, timezones and
 detection rules are defined once in `contracts/openapi.json` under
-`x-carriers`, then generated for both the Next.js app and native iPhone app. Broad
-numeric formats are treated as suggestions and require manual confirmation;
-UPU S10 identifiers must pass their check digit before automatic detection.
+`x-carriers`. They are generated into the Next.js app and the iPhone's offline
+fallback, and are also published at `/api/carriers` for dynamic native refreshes.
+The iPhone caches validated responses and accepts future string carrier IDs, so
+backend additions using the existing input fields become visible without
+another native release. Broad numeric formats are treated as suggestions and
+require manual confirmation; UPU S10 identifiers must pass their check digit
+before automatic detection.
 
 ## French carrier handling and privacy
 

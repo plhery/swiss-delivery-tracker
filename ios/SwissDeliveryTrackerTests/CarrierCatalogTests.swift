@@ -139,4 +139,154 @@ final class CarrierCatalogTests: XCTestCase {
         XCTAssertTrue(CarrierCatalog.isValidS10("RA123456785CH"))
         XCTAssertFalse(CarrierCatalog.isValidS10("RA123456789CH"))
     }
+
+    func testAcceptsASelectableCarrierThatWasNotCompiledIntoTheApp() throws {
+        let dynamic = try CarrierCatalog(data: Self.futureCatalogData)
+        let futureCarrier = CarrierID(rawValue: "future-express")
+
+        XCTAssertFalse(CarrierID.allCases.contains(futureCarrier))
+        XCTAssertTrue(dynamic.selectableCarriers.contains(futureCarrier))
+        XCTAssertEqual(dynamic.info(for: futureCarrier).displayName, "Future Express")
+        XCTAssertEqual(dynamic.detect("FX12345678").carrier, futureCarrier)
+        XCTAssertEqual(
+            dynamic.parse("https://tracking.future.example/FX12345678").carrier,
+            futureCarrier
+        )
+    }
+
+    @MainActor
+    func testRefreshesCachesAndConditionallyRevalidatesTheRemoteCatalog() async throws {
+        let cacheURL = FileManager.default.temporaryDirectory
+            .appending(path: "carrier-catalog-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: cacheURL) }
+
+        let firstRecorder = CatalogRequestRecorder()
+        let first = try CarrierCatalog(
+            data: Self.bundledCatalogData,
+            cacheURL: cacheURL,
+            loader: { request in
+                await firstRecorder.record(request)
+                return (
+                    Self.futureCatalogData,
+                    Self.response(for: request, status: 200, headers: ["ETag": "\"future-v1\""])
+                )
+            }
+        )
+
+        let firstResult = await first.refresh(
+            from: URL(string: "https://delivery.example")!,
+            force: true
+        )
+        XCTAssertEqual(firstResult, .updated)
+        let futureCarrier = CarrierID(rawValue: "future-express")
+        XCTAssertEqual(first.info(for: futureCarrier).displayName, "Future Express")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cacheURL.path))
+        let firstRequest = await firstRecorder.lastRequest
+        XCTAssertEqual(firstRequest?.url?.absoluteString, "https://delivery.example/api/carriers")
+        XCTAssertNil(firstRequest?.value(forHTTPHeaderField: "If-None-Match"))
+
+        let revalidationRecorder = CatalogRequestRecorder()
+        let cached = CarrierCatalog(
+            bundle: .main,
+            cacheURL: cacheURL,
+            loader: { request in
+                await revalidationRecorder.record(request)
+                return (Data(), Self.response(for: request, status: 304))
+            }
+        )
+        XCTAssertEqual(cached.info(for: futureCarrier).displayName, "Future Express")
+        let cachedResult = await cached.refresh(
+            from: URL(string: "https://delivery.example")!,
+            force: true
+        )
+        XCTAssertEqual(cachedResult, .notModified)
+        let revalidationRequest = await revalidationRecorder.lastRequest
+        XCTAssertEqual(
+            revalidationRequest?.value(forHTTPHeaderField: "If-None-Match"),
+            "\"future-v1\""
+        )
+    }
+
+    @MainActor
+    func testRejectsAnInvalidRemoteCatalogAndKeepsTheBundledDefinitions() async throws {
+        let original = try CarrierCatalog(
+            data: Self.bundledCatalogData,
+            loader: { request in
+                let invalid = Data("{\"x-carriers\":{}}".utf8)
+                return (invalid, Self.response(for: request, status: 200))
+            }
+        )
+
+        let result = await original.refresh(
+            from: URL(string: "https://delivery.example")!,
+            force: true
+        )
+        XCTAssertEqual(result, .failed)
+        XCTAssertEqual(original.info(for: .amazonLogistics).displayName, "Amazon Shipping")
+    }
+
+    private static var bundledCatalogData: Data {
+        get throws {
+            let url = try XCTUnwrap(
+                Bundle.main.url(forResource: "CarrierCatalog", withExtension: "json")
+            )
+            return try Data(contentsOf: url)
+        }
+    }
+
+    private static let futureCatalogData = Data("""
+    {
+      "version": "test-v1",
+      "x-carriers": {
+        "future-express": {
+          "displayName": "Future Express",
+          "color": "#123456",
+          "selectable": true,
+          "timezone": "Europe/Paris",
+          "tracking": { "mode": "automatic", "adapter": "future-express" },
+          "trackingUrlTemplate": "https://tracking.future.example/{trackingNumber}",
+          "linkRules": [{
+            "domains": ["tracking.future.example"],
+            "path": "^/([^/?#]+)$"
+          }],
+          "detectionRules": [{
+            "pattern": "^FX\\\\d{8}$",
+            "confidence": "high"
+          }]
+        },
+        "unknown": {
+          "displayName": "Carrier",
+          "color": "#8e8e93",
+          "selectable": false,
+          "timezone": "UTC",
+          "tracking": { "mode": "link-only", "adapter": null },
+          "linkRules": [],
+          "detectionRules": []
+        }
+      }
+    }
+    """.utf8)
+
+    private static func response(
+        for request: URLRequest,
+        status: Int,
+        headers: [String: String]? = nil
+    ) -> HTTPURLResponse {
+        HTTPURLResponse(
+            url: request.url!,
+            statusCode: status,
+            httpVersion: "HTTP/1.1",
+            headerFields: headers
+        )!
+    }
+}
+
+private actor CatalogRequestRecorder {
+    private var requests: [URLRequest] = []
+
+    func record(_ request: URLRequest) {
+        requests.append(request)
+    }
+
+    var lastRequest: URLRequest? { requests.last }
 }

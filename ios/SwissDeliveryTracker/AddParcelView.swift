@@ -17,7 +17,7 @@ struct AddParcelView: View {
     @State private var errorMessage: String?
     @FocusState private var focusedField: Field?
 
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     private enum Field: Hashable {
         case label
@@ -598,7 +598,7 @@ struct ParcelFilterView: View {
     let carriers: [CarrierID]
     @EnvironmentObject private var localizer: Localizer
     @Environment(\.dismiss) private var dismiss
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         NavigationStack {

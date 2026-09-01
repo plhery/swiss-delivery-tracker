@@ -148,6 +148,41 @@ final class ParcelLogicTests: XCTestCase {
         XCTAssertEqual(liveJSON["activityId"] as? String, "activity-1")
     }
 
+    func testFutureCarrierIdentifierDecodesAndEncodesWithoutAnAppRelease() throws {
+        let packageID = UUID()
+        let response = try JSONDecoder.deliveryTracker.decode(
+            PackageListResponse.self,
+            from: Data("""
+            {
+              "packages": [{
+                "id": "\(packageID.uuidString)",
+                "tracking_number": "FX12345678",
+                "label": "Future parcel",
+                "carrier": "future-express",
+                "created_at": "2026-09-01T09:00:00Z",
+                "sync_status": "waiting",
+                "notifications_muted": false,
+                "tracking_events": []
+              }]
+            }
+            """.utf8)
+        )
+        let futureCarrier = try XCTUnwrap(response.packages.first?.carrier)
+        XCTAssertEqual(futureCarrier.rawValue, "future-express")
+        XCTAssertFalse(CarrierID.allCases.contains(futureCarrier))
+
+        let request = CreatePackageRequest(
+            trackingNumber: "FX12345678",
+            carrier: futureCarrier
+        )
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.deliveryTracker.encode(request)
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(object["carrier"] as? String, "future-express")
+    }
+
     func testWidgetPrioritizesOutForDeliveryThenKeepsNextUp() {
         let nextUp = widgetParcel(label: "Next up", outForDelivery: false)
         let outForDelivery = widgetParcel(label: "Courier", outForDelivery: true)

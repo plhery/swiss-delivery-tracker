@@ -12,40 +12,92 @@ struct DeleteAccountRequest: Codable, Equatable, Hashable, Sendable {
     var confirmation: String
 }
 
-enum CarrierID: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
-    case swissPost = "swiss-post"
-    case swissPostCargo = "swiss-post-cargo"
-    case quickpac
-    case planzer
-    case aliexpress
-    case sunyou
-    case hermes
-    case springGDS = "spring-gds"
-    case postlogistics
-    case dachser
-    case dhl
-    case ups
-    case amazonLogistics = "amazon-logistics"
-    case fedex
-    case glsCh = "gls-ch"
-    case dpd
-    case dpdFr = "dpd-fr"
-    case mondialRelay = "mondial-relay"
-    case relaisColis = "relais-colis"
-    case laPoste = "la-poste"
-    case chronopost
-    case glsFr = "gls-fr"
-    case colisPrive = "colis-prive"
-    case geodis
-    case colisweb
-    case cChezVous = "c-chez-vous"
-    case heppner
-    case ciblex
-    case paack
-    case asendia
-    case shipup
-    case internationalPost = "intl-post"
-    case unknown
+struct CarrierID: RawRepresentable, Codable, CaseIterable, Hashable, Sendable, Identifiable {
+    let rawValue: String
+
+    init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    static let swissPost = CarrierID(rawValue: "swiss-post")
+    static let swissPostCargo = CarrierID(rawValue: "swiss-post-cargo")
+    static let quickpac = CarrierID(rawValue: "quickpac")
+    static let planzer = CarrierID(rawValue: "planzer")
+    static let aliexpress = CarrierID(rawValue: "aliexpress")
+    static let sunyou = CarrierID(rawValue: "sunyou")
+    static let hermes = CarrierID(rawValue: "hermes")
+    static let springGDS = CarrierID(rawValue: "spring-gds")
+    static let postlogistics = CarrierID(rawValue: "postlogistics")
+    static let dachser = CarrierID(rawValue: "dachser")
+    static let dhl = CarrierID(rawValue: "dhl")
+    static let ups = CarrierID(rawValue: "ups")
+    static let amazonLogistics = CarrierID(rawValue: "amazon-logistics")
+    static let fedex = CarrierID(rawValue: "fedex")
+    static let glsCh = CarrierID(rawValue: "gls-ch")
+    static let dpd = CarrierID(rawValue: "dpd")
+    static let dpdFr = CarrierID(rawValue: "dpd-fr")
+    static let mondialRelay = CarrierID(rawValue: "mondial-relay")
+    static let relaisColis = CarrierID(rawValue: "relais-colis")
+    static let laPoste = CarrierID(rawValue: "la-poste")
+    static let chronopost = CarrierID(rawValue: "chronopost")
+    static let glsFr = CarrierID(rawValue: "gls-fr")
+    static let colisPrive = CarrierID(rawValue: "colis-prive")
+    static let geodis = CarrierID(rawValue: "geodis")
+    static let colisweb = CarrierID(rawValue: "colisweb")
+    static let cChezVous = CarrierID(rawValue: "c-chez-vous")
+    static let heppner = CarrierID(rawValue: "heppner")
+    static let ciblex = CarrierID(rawValue: "ciblex")
+    static let paack = CarrierID(rawValue: "paack")
+    static let asendia = CarrierID(rawValue: "asendia")
+    static let shipup = CarrierID(rawValue: "shipup")
+    static let internationalPost = CarrierID(rawValue: "intl-post")
+    static let unknown = CarrierID(rawValue: "unknown")
+
+    static let allCases: [CarrierID] = [
+        .swissPost,
+        .swissPostCargo,
+        .quickpac,
+        .planzer,
+        .aliexpress,
+        .sunyou,
+        .hermes,
+        .springGDS,
+        .postlogistics,
+        .dachser,
+        .dhl,
+        .ups,
+        .amazonLogistics,
+        .fedex,
+        .glsCh,
+        .dpd,
+        .dpdFr,
+        .mondialRelay,
+        .relaisColis,
+        .laPoste,
+        .chronopost,
+        .glsFr,
+        .colisPrive,
+        .geodis,
+        .colisweb,
+        .cChezVous,
+        .heppner,
+        .ciblex,
+        .paack,
+        .asendia,
+        .shipup,
+        .internationalPost,
+        .unknown,
+    ]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        rawValue = try container.decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 
     var id: String { rawValue }
 }

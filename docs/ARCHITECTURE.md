@@ -46,9 +46,12 @@ Next.js route handlers -- user token -----> PostgREST + Postgres RLS
   a fallback.
 - `supabase/migrations/` is the append-only database history;
   `supabase/tests/assertions.sql` exercises the RLS boundary in PostgreSQL.
-- `contracts/openapi.json` generates the TypeScript and Swift contract types.
-  `contracts/fixtures/delivery-api.json` is decoded in TypeScript and Swift
-  tests to catch cross-platform payload drift.
+- `contracts/openapi.json` generates the TypeScript and Swift contract types
+  and the native offline carrier fallback. The public `/api/carriers` resource
+  lets installed iPhone builds refresh carrier metadata with ETag revalidation;
+  native carrier identifiers remain string-backed so future values cannot break
+  parcel decoding. `contracts/fixtures/delivery-api.json` is decoded in
+  TypeScript and Swift tests to catch cross-platform payload drift.
 
 ## Trust boundaries
 

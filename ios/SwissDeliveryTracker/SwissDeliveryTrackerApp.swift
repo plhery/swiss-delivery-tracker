@@ -38,6 +38,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("sdt.notificationOnboardingCompleted.v1") private var notificationOnboardingCompleted = false
     @State private var showingNotificationOnboarding = false
+    private let carrierCatalog = CarrierCatalog.shared
 
     var body: some View {
         Group {
@@ -55,6 +56,11 @@ struct RootView: View {
             }
         }
         .task { await session.bootstrap() }
+        .task {
+            if await carrierCatalog.refresh(from: AppConfiguration.current.apiBaseURL) == .updated {
+                parcels.refreshDeliverySurfaces()
+            }
+        }
         .task(id: sessionIdentity) {
             guard session.isAuthenticated else {
                 showingNotificationOnboarding = false
@@ -73,6 +79,14 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             parcels.setActive(phase == .active)
+            guard phase == .active else { return }
+            Task {
+                if await carrierCatalog.refresh(
+                    from: AppConfiguration.current.apiBaseURL
+                ) == .updated {
+                    parcels.refreshDeliverySurfaces()
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didReceiveAPNSToken)) { notification in
             guard let token = notification.object as? String else { return }

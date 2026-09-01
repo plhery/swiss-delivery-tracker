@@ -881,6 +881,45 @@
     }
   ],
   "paths": {
+    "/api/carriers": {
+      "get": {
+        "operationId": "getCarrierCatalog",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Versioned public carrier catalog used by native clients",
+            "headers": {
+              "ETag": {
+                "description": "Content fingerprint for conditional refreshes",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["version", "x-carriers"],
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "x-carriers": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The cached catalog is current"
+          }
+        }
+      }
+    },
     "/api/openapi.json": {
       "get": {
         "operationId": "getApiContract",

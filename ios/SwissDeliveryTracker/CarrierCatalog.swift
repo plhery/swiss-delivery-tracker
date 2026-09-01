@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 struct CarrierRequirement: Codable, Hashable, Sendable {
@@ -115,32 +116,112 @@ struct ParcelTrackingLink: Identifiable, Sendable {
     var id: CarrierID { carrier }
 }
 
-final class CarrierCatalog: @unchecked Sendable {
-    private struct Contract: Decodable {
+enum CarrierCatalogRefreshResult: Equatable, Sendable {
+    case updated
+    case notModified
+    case skipped
+    case failed
+}
+
+final class CarrierCatalog: ObservableObject, @unchecked Sendable {
+    typealias Loader = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+    private struct Contract: Codable {
         let carriers: [String: CarrierDefinition]
         enum CodingKeys: String, CodingKey { case carriers = "x-carriers" }
     }
 
-    static let shared = CarrierCatalog()
-    private(set) var definitions: [CarrierID: CarrierDefinition]
-
-    init(bundle: Bundle = .main) {
-        guard let url = bundle.url(forResource: "CarrierCatalog", withExtension: "json"),
-              let data = try? Data(contentsOf: url),
-              let contract = try? JSONDecoder().decode(Contract.self, from: data) else {
-            definitions = Self.fallbackDefinitions
-            return
-        }
-        definitions = Dictionary(uniqueKeysWithValues: contract.carriers.compactMap { key, value in
-            CarrierID(rawValue: key).map { ($0, value) }
-        })
+    private struct CacheRecord: Codable {
+        let etag: String?
+        let contract: Contract
     }
 
-    init(data: Data) throws {
+    private enum CatalogError: Error {
+        case invalidContract
+    }
+
+    static let shared = CarrierCatalog()
+    @Published private(set) var definitions: [CarrierID: CarrierDefinition]
+
+    private static let refreshInterval: TimeInterval = 15 * 60
+    private static let maximumResponseBytes = 512 * 1_024
+    private static let defaultLoader: Loader = { request in
+        try await URLSession.shared.data(for: request)
+    }
+
+    private let cacheURL: URL?
+    private let loader: Loader
+    private var cachedETag: String?
+    private var lastRefreshAttempt: Date?
+
+    init(
+        bundle: Bundle = .main,
+        cacheURL: URL? = CarrierCatalog.defaultCacheURL(),
+        loader: @escaping Loader = CarrierCatalog.defaultLoader
+    ) {
+        self.cacheURL = cacheURL
+        self.loader = loader
+
+        if let cacheURL,
+           let cached = Self.cachedContract(at: cacheURL) {
+            definitions = cached.definitions
+            cachedETag = cached.etag
+        } else {
+            definitions = Self.bundledDefinitions(in: bundle)
+            cachedETag = nil
+        }
+    }
+
+    init(
+        data: Data,
+        cacheURL: URL? = nil,
+        loader: @escaping Loader = CarrierCatalog.defaultLoader
+    ) throws {
         let contract = try JSONDecoder().decode(Contract.self, from: data)
-        definitions = Dictionary(uniqueKeysWithValues: contract.carriers.compactMap { key, value in
-            CarrierID(rawValue: key).map { ($0, value) }
-        })
+        definitions = try Self.validatedDefinitions(contract)
+        self.cacheURL = cacheURL
+        self.loader = loader
+        cachedETag = nil
+    }
+
+    @MainActor
+    func refresh(
+        from apiBaseURL: URL,
+        force: Bool = false,
+        now: Date = Date()
+    ) async -> CarrierCatalogRefreshResult {
+        if !force,
+           let lastRefreshAttempt,
+           now.timeIntervalSince(lastRefreshAttempt) < Self.refreshInterval {
+            return .skipped
+        }
+        lastRefreshAttempt = now
+
+        var request = URLRequest(url: apiBaseURL.appending(path: "api/carriers"))
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let cachedETag {
+            request.setValue(cachedETag, forHTTPHeaderField: "If-None-Match")
+        }
+
+        do {
+            let (data, response) = try await loader(request)
+            guard let response = response as? HTTPURLResponse else { return .failed }
+            if response.statusCode == 304 { return .notModified }
+            guard response.statusCode == 200,
+                  data.count <= Self.maximumResponseBytes else { return .failed }
+
+            let contract = try JSONDecoder().decode(Contract.self, from: data)
+            let refreshed = try Self.validatedDefinitions(contract)
+            let etag = response.value(forHTTPHeaderField: "ETag")
+            definitions = refreshed
+            cachedETag = etag
+            saveCache(contract: contract, etag: etag)
+            return .updated
+        } catch {
+            return .failed
+        }
     }
 
     func info(for carrier: CarrierID) -> CarrierDefinition {
@@ -432,6 +513,60 @@ final class CarrierCatalog: @unchecked Sendable {
             of: "{trackingNumber}",
             with: urlEncode(linkNumber)
         )
+    }
+
+    private static func bundledDefinitions(in bundle: Bundle) -> [CarrierID: CarrierDefinition] {
+        guard let url = bundle.url(forResource: "CarrierCatalog", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let contract = try? JSONDecoder().decode(Contract.self, from: data),
+              let definitions = try? validatedDefinitions(contract) else {
+            return fallbackDefinitions
+        }
+        return definitions
+    }
+
+    private static func cachedContract(
+        at url: URL
+    ) -> (definitions: [CarrierID: CarrierDefinition], etag: String?)? {
+        guard let data = try? Data(contentsOf: url),
+              let record = try? JSONDecoder().decode(CacheRecord.self, from: data),
+              let definitions = try? validatedDefinitions(record.contract) else { return nil }
+        return (definitions, record.etag)
+    }
+
+    private static func validatedDefinitions(
+        _ contract: Contract
+    ) throws -> [CarrierID: CarrierDefinition] {
+        let validEntries = contract.carriers.filter { key, _ in
+            matches(key, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$") && key.count <= 64
+        }
+        let definitions = Dictionary(uniqueKeysWithValues: validEntries.map { key, value in
+            (CarrierID(rawValue: key), value)
+        })
+        guard definitions[.unknown] != nil,
+              definitions.values.contains(where: \.selectable) else {
+            throw CatalogError.invalidContract
+        }
+        return definitions
+    }
+
+    private func saveCache(contract: Contract, etag: String?) {
+        guard let cacheURL,
+              let data = try? JSONEncoder().encode(CacheRecord(etag: etag, contract: contract)) else {
+            return
+        }
+        let directory = cacheURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        try? data.write(to: cacheURL, options: .atomic)
+    }
+
+    private static func defaultCacheURL() -> URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appending(path: "delivery-tracker", directoryHint: .isDirectory)
+            .appending(path: "carrier-catalog-v1.json")
     }
 
     private static let emptyMatch = TrackingInputMatch(

@@ -25,6 +25,14 @@ Supabase URL and publishable key are used only for Google OAuth or email OTP;
 all parcel mutations still go through the application API and its ownership
 checks.
 
+Carrier metadata is refreshed from the public `/api/carriers` endpoint at
+launch and when the app returns to the foreground. The response is validated,
+cached with its ETag, and observed by the native pickers and parcel views. The
+generated catalog remains bundled as an offline fallback. Carrier identifiers
+decode as extensible strings, so a backend carrier addition that uses the
+existing catalog fields does not require a new iOS release after this version
+has been installed.
+
 For Google sign-in, add this app’s callback URL to Supabase Auth:
 
 ```text
@@ -81,7 +89,7 @@ ActivityKit updates while closed. A paid-team build enables both.
 | --- | --- |
 | Google OAuth, email OTP, session refresh, sign-out | Authentication Services, native OTP form, Keychain session |
 | Paste number, carrier URL, shipping text, or scan a barcode | Native add sheet with the shared carrier parser and camera scanner |
-| All contract-defined carriers and special Planzer, Dachser, DPD, S10, and handoff rules | Catalog generated from `contracts/openapi.json` |
+| All contract-defined carriers and special Planzer, Dachser, DPD, S10, and handoff rules | Dynamically refreshed catalog with a generated offline fallback |
 | Authenticated API request/response models | Swift Codable models generated from every OpenAPI schema |
 | Search, status/carrier filters, priority/date sorting | Searchable native list, pickers, and sections |
 | Refresh all or one parcel and live updates | Pull to refresh, toolbar/detail actions, lightweight sync-job polling |

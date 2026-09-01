@@ -365,6 +365,45 @@ function generatedSwiftEnum(schemaName, swiftName, schema) {
   return lines;
 }
 
+function generatedSwiftCarrierIdentifier(schema) {
+  const cases = schema.enum.map((value) => ({
+    name: swiftEnumCase('CarrierId', value),
+    value,
+  }));
+  const lines = [
+    'struct CarrierID: RawRepresentable, Codable, CaseIterable, Hashable, Sendable, Identifiable {',
+    '    let rawValue: String',
+    '',
+    '    init(rawValue: String) {',
+    '        self.rawValue = rawValue',
+    '    }',
+    '',
+  ];
+  for (const item of cases) {
+    lines.push(`    static let ${item.name} = CarrierID(rawValue: ${JSON.stringify(item.value)})`);
+  }
+  lines.push(
+    '',
+    '    static let allCases: [CarrierID] = [',
+    ...cases.map((item) => `        .${item.name},`),
+    '    ]',
+    '',
+    '    init(from decoder: Decoder) throws {',
+    '        let container = try decoder.singleValueContainer()',
+    '        rawValue = try container.decode(String.self)',
+    '    }',
+    '',
+    '    func encode(to encoder: Encoder) throws {',
+    '        var container = encoder.singleValueContainer()',
+    '        try container.encode(rawValue)',
+    '    }',
+    '',
+    '    var id: String { rawValue }',
+    '}',
+  );
+  return lines;
+}
+
 function generatedSwiftStruct(schemaName, swiftName, schema) {
   const required = new Set(schema.required ?? []);
   const properties = Object.entries(schema.properties ?? {}).map(([name, value]) =>
@@ -420,7 +459,10 @@ function generatedSwift() {
   for (const [schemaName, schema] of Object.entries(schemas)) {
     const swiftName = swiftTypeName(schemaName);
     if (schema.enum) {
-      lines.push(...generatedSwiftEnum(schemaName, swiftName, schema), '');
+      const generated = schemaName === 'CarrierId'
+        ? generatedSwiftCarrierIdentifier(schema)
+        : generatedSwiftEnum(schemaName, swiftName, schema);
+      lines.push(...generated, '');
     } else if (schema.type === 'object' && schema.properties) {
       const generated = generatedSwiftStruct(schemaName, swiftName, schema);
       lines.push(...generated.lines, '');

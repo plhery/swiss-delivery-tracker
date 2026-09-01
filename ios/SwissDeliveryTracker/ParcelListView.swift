@@ -43,7 +43,7 @@ private struct DeliveryListView: View {
     @State private var actionMessage: String?
     @State private var actionError: String?
 
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -498,7 +498,7 @@ private struct ExperimentalNextDeliveryPass: View {
     @EnvironmentObject private var localizer: Localizer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         let tint = ExperimentalPalette.tint(for: parcel)
@@ -583,7 +583,7 @@ private struct ExperimentalParcelPassCard: View {
     let onArchive: (() -> Void)?
 
     @EnvironmentObject private var localizer: Localizer
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         let tint = ExperimentalPalette.tint(for: parcel)
@@ -679,7 +679,7 @@ private struct ExperimentalDeliveredParcelCard: View {
     let onArchive: (() -> Void)?
 
     @EnvironmentObject private var localizer: Localizer
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         let tint = ExperimentalPalette.delivered
@@ -1035,7 +1035,7 @@ private struct ExperimentalArchivedParcelRow: View {
     let onOpen: () -> Void
 
     @EnvironmentObject private var localizer: Localizer
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         let tint = ExperimentalPalette.tint(for: parcel)
@@ -1096,7 +1096,7 @@ private struct PassportView: View {
     @EnvironmentObject private var store: ParcelStore
     @EnvironmentObject private var localizer: Localizer
 
-    private let catalog = CarrierCatalog.shared
+    @ObservedObject private var catalog = CarrierCatalog.shared
 
     var body: some View {
         let copy = ExperimentalCopy(language: localizer.language)
