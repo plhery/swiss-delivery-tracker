@@ -24,6 +24,7 @@ describe('public carrier catalog route', () => {
     };
     expect(body.version).toBe(`sha256-${etag?.slice(1, -1)}`);
     expect(body['x-carriers']['amazon-logistics']?.displayName).toBe('Amazon Shipping');
+    expect(body['x-carriers']['india-post']?.displayName).toBe('India Post');
     expect(body['x-carriers'].unknown).toBeDefined();
 
     const cached = await GET(

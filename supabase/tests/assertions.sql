@@ -30,6 +30,54 @@ $$;
 delete from public.packages
 where id = '80000000-0000-0000-0000-000000000008';
 
+-- India-issued S10 shipments leave the generic fallback with stale state and
+-- in-flight work cleared before the normal automatic scheduler picks them up.
+do $$
+begin
+  if not exists (
+    select 1
+    from public.packages
+    where id = '81000000-0000-0000-0000-000000000081'
+      and carrier = 'india-post'
+      and current_stage = 'pending'
+      and sync_status = 'pending'
+      and last_synced_at is null
+      and carrier_data = '{}'::jsonb
+  ) then
+    raise exception 'existing India Post package was not migrated';
+  end if;
+
+  if exists (
+    select 1
+    from public.tracking_events
+    where package_id = '81000000-0000-0000-0000-000000000081'
+      and provider_event_id <> 'app:pending'
+  ) or not exists (
+    select 1
+    from public.tracking_events
+    where package_id = '81000000-0000-0000-0000-000000000081'
+      and provider_event_id = 'app:pending'
+      and stage = 'pending'
+  ) then
+    raise exception 'India Post migration retained stale tracking events';
+  end if;
+
+  if not exists (
+    select 1
+    from public.sync_jobs
+    where id = '82000000-0000-0000-0000-000000000082'
+      and state = 'failed'
+      and dedupe_key is null
+      and completed_at is not null
+  ) then
+    raise exception 'India Post migration retained stale sync work';
+  end if;
+end;
+$$;
+
+delete from public.packages
+where id = '81000000-0000-0000-0000-000000000081';
+
 -- Account-owned data and shared-backend data both survive the migration. Only
 -- the account-owned row is public through RLS; the unowned row awaits cutover.
 do $$
@@ -363,6 +411,10 @@ select public.create_owned_package(
 );
 
 select public.create_owned_package(
+  'RR000000005IN', 'India Post parcel', 'india-post', null, null
+);
+
+select public.create_owned_package(
   '9010000001234',
   'Dachser parcel',
   'dachser',
@@ -484,9 +536,10 @@ begin
         ('23456789', 'heppner'),
         ('12345678901234', 'ciblex'),
         ('PAACK12345', 'paack'),
-        ('ASE12345678', 'asendia')
+        ('ASE12345678', 'asendia'),
+        ('RR000000005IN', 'india-post')
       )
-  ) <> 8 then
+  ) <> 9 then
     raise exception 'regional carrier identifiers were not accepted by the package RPC';
   end if;
 

@@ -24,6 +24,7 @@ import { GLSFranceTracker } from './glsFrance';
 import { GLSSwitzerlandTracker } from './glsSwitzerland';
 import { HeppnerTracker } from './heppner';
 import { HermesTracker } from './hermes';
+import { IndiaPostTracker } from './indiaPost';
 import { LaPosteTracker } from './laPoste';
 import { MondialRelayTracker } from './mondialRelay';
 import { captureOperationalError, errorType } from './observability';
@@ -78,6 +79,7 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
     readonly ciblex = new CiblexTracker(),
     readonly paack = new PaackTracker(),
     readonly amazonLogistics = new AmazonLogisticsTracker(),
+    readonly indiaPost = new IndiaPostTracker(),
   ) {}
 
   async fetch(
@@ -129,6 +131,8 @@ export class CarrierTrackingAdapter implements TrackingAdapter {
       result = await this.paack.fetch(trackingNumber, dpdPostcode ?? '');
     } else if (adapter === 'amazon-logistics') {
       result = await this.amazonLogistics.fetch(trackingNumber);
+    } else if (adapter === 'india-post') {
+      result = await this.indiaPost.fetch(trackingNumber);
     } else if (adapter === 'planzer' && trackingUrl) {
       result = await this.planzerShared.fetch(trackingNumber, trackingUrl);
     } else {

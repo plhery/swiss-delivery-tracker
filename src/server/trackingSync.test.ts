@@ -11,6 +11,7 @@ import { GeodisTracker } from './geodis';
 import { GLSFranceTracker } from './glsFrance';
 import { GLSSwitzerlandTracker } from './glsSwitzerland';
 import { HeppnerTracker } from './heppner';
+import { IndiaPostTracker } from './indiaPost';
 import { LaPosteTracker } from './laPoste';
 import { MondialRelayTracker } from './mondialRelay';
 import { PaackTracker } from './paack';
@@ -35,8 +36,8 @@ import type { JsonObject } from './types';
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('regional carrier dispatch', () => {
-  it('routes every dedicated French and Swiss carrier to its isolated adapter', async () => {
+describe('dedicated carrier dispatch', () => {
+  it('routes every dedicated regional carrier to its isolated adapter', async () => {
     const laPoste = vi.spyOn(LaPosteTracker.prototype, 'fetch')
       .mockResolvedValue({ status: 'in_transit' });
     const glsFrance = vi.spyOn(GLSFranceTracker.prototype, 'fetch')
@@ -67,6 +68,8 @@ describe('regional carrier dispatch', () => {
       .mockResolvedValue({ status: 'in_transit' });
     const amazonLogistics = vi.spyOn(AmazonLogisticsTracker.prototype, 'fetch')
       .mockResolvedValue({ status: 'in_transit' });
+    const indiaPost = vi.spyOn(IndiaPostTracker.prototype, 'fetch')
+      .mockResolvedValue({ status: 'in_transit' });
     const adapter = new CarrierTrackingAdapter();
 
     await adapter.fetch('la-poste', '8G12345678901', null);
@@ -85,6 +88,7 @@ describe('regional carrier dispatch', () => {
     await adapter.fetch('ciblex', '12345678901234', null);
     await adapter.fetch('paack', 'ORDER1234', null, '75001');
     await adapter.fetch('amazon-logistics', 'FR1234567890', null);
+    await adapter.fetch('india-post', 'JN067614884IN', null);
 
     expect(laPoste).toHaveBeenNthCalledWith(1, '8G12345678901');
     expect(laPoste).toHaveBeenNthCalledWith(2, 'PZ123456785JF');
@@ -102,6 +106,7 @@ describe('regional carrier dispatch', () => {
     expect(ciblex).toHaveBeenCalledWith('12345678901234');
     expect(paack).toHaveBeenCalledWith('ORDER1234', '75001');
     expect(amazonLogistics).toHaveBeenCalledWith('FR1234567890');
+    expect(indiaPost).toHaveBeenCalledWith('JN067614884IN');
   });
 });
 

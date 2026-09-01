@@ -103,6 +103,12 @@ describe('detectCarrier', () => {
     expect(detectCarrier('CN987654326US')).toBe('intl-post');
   });
 
+  it('recognises valid India-issued S10 identifiers as India Post', () => {
+    expect(detectCarrier('JN067614884IN')).toBe('india-post');
+    expect(detectCarrier('jn 067.614-884 in')).toBe('india-post');
+    expect(detectCarrier('JN067614885IN')).toBe('unknown');
+  });
+
   it('recognises French postal and Chronopost identifiers', () => {
     expect(detectCarrier('8G12345678901')).toBe('la-poste');
     expect(detectCarrier('RA123456785FR')).toBe('la-poste');
@@ -442,6 +448,7 @@ describe('carrier metadata', () => {
     const selectable = SELECTABLE_CARRIERS.map((carrier) => carrier.id);
     expect(selectable).not.toContain('unknown');
     expect(selectable).not.toContain('intl-post');
+    expect(selectable).toContain('india-post');
     expect(selectable).toEqual(expect.arrayContaining([
       'dpd-fr',
       'mondial-relay',
@@ -460,6 +467,7 @@ describe('carrier metadata', () => {
     expect(tracksAutomatically('dpd-fr')).toBe(true);
     expect(tracksAutomatically('mondial-relay')).toBe(true);
     expect(tracksAutomatically('relais-colis')).toBe(true);
+    expect(tracksAutomatically('india-post')).toBe(true);
     expect(carrierInfo('planzer')).toBe(CARRIERS.planzer);
   });
 });

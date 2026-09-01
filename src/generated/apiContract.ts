@@ -961,6 +961,36 @@ export const CARRIER_CAPABILITIES = {
     "linkRules": [],
     "detectionRules": []
   },
+  "india-post": {
+    "displayName": "India Post",
+    "color": "#b82025",
+    "selectable": true,
+    "timezone": "Asia/Kolkata",
+    "tracking": {
+      "mode": "automatic",
+      "adapter": "india-post"
+    },
+    "canaryUrl": "https://myspeedpost.com/track",
+    "trackingUrlTemplate": "https://myspeedpost.com/track?n={trackingNumber}&sync=true",
+    "linkRules": [
+      {
+        "domains": [
+          "myspeedpost.com"
+        ],
+        "params": [
+          "n"
+        ],
+        "path": "^/s/([^/?#]+)/?$"
+      }
+    ],
+    "detectionRules": [
+      {
+        "pattern": "^[A-Z]{2}\\d{9}IN$",
+        "confidence": "high",
+        "checksum": "s10"
+      }
+    ]
+  },
   "intl-post": {
     "displayName": "International Post",
     "color": "#2c6fb5",
@@ -974,7 +1004,7 @@ export const CARRIER_CAPABILITIES = {
     "linkRules": [],
     "detectionRules": [
       {
-        "pattern": "^(?!(?:PZ|XU|XW|XY))[A-Z]{2}\\d{9}(?!CH$|FR$)[A-Z]{2}$",
+        "pattern": "^(?!(?:PZ|XU|XW|XY))[A-Z]{2}\\d{9}(?!CH$|FR$|IN$)[A-Z]{2}$",
         "confidence": "high",
         "checksum": "s10"
       }
@@ -1039,6 +1069,7 @@ export const CARRIER_IDS = [
   "paack",
   "asendia",
   "shipup",
+  "india-post",
   "intl-post",
   "unknown"
 ] as const;
