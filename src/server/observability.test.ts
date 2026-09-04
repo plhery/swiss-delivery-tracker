@@ -3,11 +3,14 @@ import type { ErrorEvent } from '@sentry/node';
 import {
   errorType,
   logOperationalEvent,
+  operationalErrorMetadata,
   parseSampleRate,
   resolveSentryRelease,
   scrubSentryEvent,
   shouldReportRepeatedFailure,
 } from './observability';
+import { UpstreamHttpError } from './boundedFetch';
+import { SupabaseError } from './supabase';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -28,7 +31,10 @@ describe('Sentry privacy boundary', () => {
       },
       tags: {
         carrier: 'dpd-fr',
+        database_code: 'PGRST116',
+        database_status: '503',
         tracking_number: 'private',
+        upstream_status: '502',
       },
       extra: {
         attempt_id: 'opaque-attempt',
@@ -59,7 +65,12 @@ describe('Sentry privacy boundary', () => {
     expect(scrubbed.server_name).toBeUndefined();
     expect(scrubbed.breadcrumbs).toEqual([]);
     expect(scrubbed.contexts).toEqual({ runtime: { name: 'node' } });
-    expect(scrubbed.tags).toEqual({ carrier: 'dpd-fr' });
+    expect(scrubbed.tags).toEqual({
+      carrier: 'dpd-fr',
+      database_code: 'PGRST116',
+      database_status: '503',
+      upstream_status: '502',
+    });
     expect(scrubbed.extra).toEqual({ attempt_id: 'opaque-attempt' });
     expect(scrubbed.transaction).toBeUndefined();
     expect(scrubbed.message).toBe('Operational failure');
@@ -122,5 +133,23 @@ describe('observability configuration', () => {
     expect(errorType(error)).toBe('Error');
     error.name = 'CarrierTimeoutError';
     expect(errorType(error)).toBe('CarrierTimeoutError');
+  });
+
+  it('extracts only bounded status and database code metadata from known errors', () => {
+    expect(operationalErrorMetadata(new UpstreamHttpError('Carrier', 503))).toEqual({
+      upstreamStatus: 503,
+    });
+
+    const database = new SupabaseError('private response', 502, 'PGRST000');
+    expect(operationalErrorMetadata(new Error('wrapper', { cause: database }))).toEqual({
+      databaseStatus: 502,
+      databaseCode: 'PGRST000',
+    });
+
+    expect(operationalErrorMetadata(new SupabaseError(
+      'private response',
+      999,
+      'private response text',
+    ))).toEqual({});
   });
 });

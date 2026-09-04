@@ -26,6 +26,7 @@ FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a5
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
+    NODE_OPTIONS=--enable-source-maps \
     HOSTNAME=0.0.0.0 \
     PORT=3000
 # Coolify probes Dockerfile applications with curl from inside the container.

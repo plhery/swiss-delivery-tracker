@@ -9,6 +9,8 @@ const SAFE_TAG_KEYS = new Set([
   'attempt_id',
   'carrier',
   'component',
+  'database_code',
+  'database_status',
   'error_type',
   'job_id',
   'operation',
@@ -16,6 +18,7 @@ const SAFE_TAG_KEYS = new Set([
   'route',
   'route_type',
   'trigger',
+  'upstream_status',
 ]);
 const SAFE_EXTRA_KEYS = new Set([
   'attempt_id',
@@ -62,6 +65,12 @@ export interface ScheduledCheckIn {
   startedAt: number;
 }
 
+export interface OperationalErrorMetadata {
+  upstreamStatus?: number;
+  databaseStatus?: number;
+  databaseCode?: string;
+}
+
 export function errorType(error: unknown): string {
   if (
     error instanceof Error
@@ -103,6 +112,45 @@ function safeRoute(value: string | null | undefined): string | undefined {
 
 function safeNumber(value: number | null | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function safeHttpStatus(value: unknown): number | undefined {
+  return typeof value === 'number'
+    && Number.isInteger(value)
+    && value >= 100
+    && value <= 599
+    ? value
+    : undefined;
+}
+
+function safeDatabaseCode(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(value)
+    ? value
+    : undefined;
+}
+
+export function operationalErrorMetadata(error: unknown): OperationalErrorMetadata {
+  const metadata: OperationalErrorMetadata = {};
+  const seen = new Set<Error>();
+  let current = error;
+  for (let depth = 0; current instanceof Error && depth < 8; depth += 1) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    const details = current as Error & { status?: unknown; code?: unknown };
+    if (current.name === 'UpstreamHttpError' && metadata.upstreamStatus === undefined) {
+      metadata.upstreamStatus = safeHttpStatus(details.status);
+    }
+    if (current.name === 'SupabaseError') {
+      if (metadata.databaseStatus === undefined) {
+        metadata.databaseStatus = safeHttpStatus(details.status);
+      }
+      if (metadata.databaseCode === undefined) {
+        metadata.databaseCode = safeDatabaseCode(details.code);
+      }
+    }
+    current = current.cause;
+  }
+  return metadata;
 }
 
 function scrubStack(event: ErrorEvent): void {
@@ -197,12 +245,15 @@ function applyContext(
   scope: Sentry.Scope,
   context: OperationalContext,
   capturedErrorType?: string,
+  errorMetadata: OperationalErrorMetadata = {},
 ): void {
   const tags: Record<string, string | undefined> = {
     anomaly_code: safeText(context.anomalyCode, 100),
     attempt_id: safeText(context.attemptId, 100),
     carrier: safeText(context.carrier, 100),
     component: safeText(context.component, 100),
+    database_code: safeText(errorMetadata.databaseCode, 40),
+    database_status: safeText(errorMetadata.databaseStatus, 3),
     error_type: safeText(capturedErrorType, 100),
     job_id: safeText(context.jobId, 100),
     operation: safeText(context.operation, 100),
@@ -210,6 +261,7 @@ function applyContext(
     route: safeRoute(context.route),
     route_type: safeText(context.routeType, 100),
     trigger: safeText(context.trigger, 100),
+    upstream_status: safeText(errorMetadata.upstreamStatus, 3),
   };
   for (const [key, value] of Object.entries(tags)) {
     if (value) scope.setTag(key, value);
@@ -238,9 +290,10 @@ export function captureOperationalError(
 ): string | null {
   if (!initObservability()) return null;
   const capturedErrorType = errorType(error);
+  const errorMetadata = operationalErrorMetadata(error);
   let eventId: string | null = null;
   Sentry.withScope((scope) => {
-    applyContext(scope, context, capturedErrorType);
+    applyContext(scope, context, capturedErrorType, errorMetadata);
     scope.setFingerprint([
       'delivery-tracker',
       context.component,

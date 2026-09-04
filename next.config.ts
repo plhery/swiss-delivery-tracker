@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   poweredByHeader: false,
   reactStrictMode: true,
+  experimental: {
+    // Keep production stack traces actionable without exposing browser maps.
+    serverSourceMaps: true,
+  },
   async headers() {
     return [
       {

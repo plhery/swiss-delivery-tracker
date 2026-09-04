@@ -134,9 +134,13 @@ local variables, source context, arbitrary extras, and exception messages.
 
 Issue fingerprints group by component, operation, carrier, anomaly/error type.
 Opaque `attempt_id`, `job_id`, and `request_id` tags make individual executions
-searchable. Daytime and overnight scheduled jobs send Sentry Cron check-ins;
-the SDK creates monitors for the Zurich schedules and reports a missed or
-failed run after one occurrence.
+searchable. Known upstream HTTP failures also include `upstream_status`; known
+database failures include `database_status` and a strictly validated
+`database_code`. Production builds retain source maps only in the standalone
+server image, where Node uses them to produce source-level stack traces; they
+are never copied to browser assets or `public`. Daytime and overnight scheduled
+jobs send Sentry Cron check-ins; the SDK creates monitors for the Zurich
+schedules and reports a missed or failed run after one occurrence.
 
 Recommended project alerts:
 
